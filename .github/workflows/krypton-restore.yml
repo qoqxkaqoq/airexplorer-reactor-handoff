@@ -82,6 +82,9 @@ jobs:
           KRYPTON_ALLOW_PARTIAL_OUTPUT: 1
           KRYPTON_ALLOW_STABILIZATION_ONLY_OUTPUT: 1
           KRYPTON_NO_PAUSE: 1
+          # 首次跑的日志明确点了这一项: 有 5 个窗体的 UI 没从运行时快照恢复,
+          # 需要打开合成回退才能生成 InitializeComponent
+          KRYPTON_WINFORMS_HEURISTIC_FALLBACK: 1
         run: |
           cd krypton
           $dll = "Krypton/bin/Release/net8.0/Krypton.dll"
