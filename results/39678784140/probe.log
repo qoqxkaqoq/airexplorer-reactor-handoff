@@ -1,0 +1,7 @@
+[21:26:46.578] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[21:26:46.609] size = 7837184  md5 = F8CA87F6CA279B5D3228312D4DB57178
+[21:26:46.616] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[21:26:47.171] started pid = 6536
+[21:26:48.679] process EXITED early, code = -532462766
+[21:26:48.982] EVENT [10/21/2026 9:26:47 PM] .NET Runtime: Application: AirExplorer.exe | Framework Version: v4.0.30319 | Description: The process was terminated due to an unhandled exception. | Exception Info: exception code e0434352, exception address 00007FFF46DE7D9A | Stack: | 
+[21:26:48.984] done
