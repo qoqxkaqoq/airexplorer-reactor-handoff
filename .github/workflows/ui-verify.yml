@@ -1,0 +1,64 @@
+name: ui-verify
+
+# Acceptance (user-defined): the program starts and a normal main window shows up.
+#   alive process but no window == FAIL
+#
+# Each job downloads only the one exe it needs (~9MB) plus the official installer,
+# and runs the candidate by overwriting app\AirExplorer.exe inside the unpacked
+# official install. Bare exes are missing runtime neighbours, which can make a
+# good candidate look broken.
+on:
+  workflow_dispatch:
+    inputs:
+      exes:
+        description: 'exe name list (JSON array, without AirExplorer_ prefix and .exe)'
+        required: false
+        default: '["depfix2","depfix","nb_original"]'
+      wait:
+        description: 'seconds to observe each exe'
+        required: false
+        default: '60'
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        exe: ${{ fromJSON(inputs.exes) }}
+    steps:
+      - name: 准备运行目录 (官方安装包 + 覆盖候选 exe)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $base = "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main"
+          New-Item -ItemType Directory -Force -Path ci, app | Out-Null
+          Invoke-WebRequest -Uri "$base/ci/probe.ps1" -OutFile "ci/probe.ps1"
+          $cand = "AirExplorer_${{ matrix.exe }}.exe"
+          Invoke-WebRequest -Uri "$base/exes/$cand" -OutFile $cand
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { throw "installer extract failed" }
+          Copy-Item -LiteralPath $cand -Destination "app\AirExplorer.exe" -Force
+          Write-Host ("candidate = " + $cand + "  md5 = " + (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)
+
+      - name: UI 探针
+        shell: pwsh
+        run: |
+          ./ci/probe.ps1 -ExePath "app\AirExplorer.exe" -WaitSec ${{ inputs.wait }} -OutDir "probe_${{ matrix.exe }}"
+
+      - name: 汇总
+        if: always()
+        shell: pwsh
+        run: |
+          Get-Content "probe_${{ matrix.exe }}/probe.log" -ErrorAction SilentlyContinue
+
+      - name: 上传产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-${{ matrix.exe }}
+          path: probe_${{ matrix.exe }}/
+          if-no-files-found: warn

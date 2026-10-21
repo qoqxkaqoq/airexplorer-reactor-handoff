@@ -1,1 +1,7 @@
+# 本文件存推送用的 GitHub token（纯文本一行），不要提交
+.gh_token
+# 工具中间产物
+bin/
+obj/
+# CI 探针结果（提交在 ci-<run_id> 分支，不进工作分支）
 results/
