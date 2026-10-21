@@ -1,0 +1,53 @@
+[20:30:42.355] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[20:30:42.387] size = 9668976  md5 = A12B5C573E1B54E98CCCC29351EAA066
+[20:30:42.395] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[20:30:42.428] started pid = 4360
+[20:30:43.984] WINDOW hwnd=0x40028 visible=False class='WindowsForms10.Window.8.app.0.25bb5ff_r6_ad1' title='Air Explorer v5.11.0' rect=78,78,1023,678
+[20:30:43.986] WINDOW hwnd=0x20098 visible=False class='GDI+ Hook Window Class' title='GDI+ Window (AirExplorer.exe)' rect=0,0,1,1
+[20:30:43.987] WINDOW hwnd=0x30148 visible=False class='.NET-BroadcastEventWindow.4.0.0.0.25bb5ff.0' title='.NET-BroadcastEventWindow.4.0.0.0.25bb5ff.0' rect=0,0,0,0
+[20:30:43.988] WINDOW hwnd=0x2009A visible=False class='IME' title='Default IME' rect=0,0,0,0
+[20:30:43.989] WINDOW hwnd=0x800B6 visible=False class='IME' title='Default IME' rect=0,0,0,0
+[20:30:45.491] WINDOW hwnd=0x2022E visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[20:30:47.001] WINDOW hwnd=0x10278 visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[20:30:47.003] WINDOW hwnd=0x10280 visible=False class='HwndWrapper[AirExplorer.exe;;360d7ab6-6c12-40a1-a039-68f6016824b1]' title='' rect=0,0,136,39
+[20:30:47.004] WINDOW hwnd=0x10268 visible=False class='HwndWrapper[AirExplorer.exe;;66265793-af38-4861-ad39-1f39e6c9c258]' title='SystemResourceNotifyWindow' rect=0,0,0,0
+[20:30:47.005] WINDOW hwnd=0x20262 visible=False class='HwndWrapper[AirExplorer.exe;;24f5eb0f-e90c-4ab6-9f3a-813d8902264d]' title='MediaContextNotificationWindow' rect=0,0,0,0
+[20:30:48.508] WINDOW hwnd=0x10290 visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[20:30:48.510] WINDOW hwnd=0x102C4 visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[20:30:48.511] WINDOW hwnd=0x10286 visible=False class='WindowsForms10.tooltips_class32.app.0.25bb5ff_r6_ad1' title='' rect=0,0,136,39
+[20:30:48.511] WINDOW hwnd=0x202AC visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[20:30:48.512] WINDOW hwnd=0x5029A visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[20:30:48.513] WINDOW hwnd=0x302A4 visible=False class='ComboLBox' title='' rect=0,24,200,24
+[20:30:48.513] WINDOW hwnd=0x102BE visible=False class='CiceroUIWndFrame' title='CiceroUIWndFrame' rect=200,200,400,400
+[20:30:48.514] WINDOW hwnd=0x102B0 visible=False class='MSCTFIME UI' title='MSCTFIME UI' rect=0,0,0,0
+[20:30:48.515] WINDOW hwnd=0x102BC visible=False class='CiceroUIWndFrame' title='CiceroUIWndFrame' rect=0,0,0,0
+[20:30:50.015] WINDOW hwnd=0x102C6 visible=True class='WindowsForms10.Window.8.app.0.25bb5ff_r6_ad1' title='Register account' rect=150,164,950,720
+[20:30:50.144]   screenshot -> probe\window1_hwnd66246.png (PrintWindow=True)
+[20:31:12.728] still alive, windows = 20
+[20:31:12.738] responding = True  threads = 26  WS(MB) = 182.6  CPU = 00:00:02.0937500
+[20:31:12.765] modules(head40) = AirExplorer.exe,ntdll.dll,MSCOREE.DLL,KERNEL32.dll,KERNELBASE.dll,ADVAPI32.dll,msvcrt.dll,sechost.dll,RPCRT4.dll,mscoreei.dll,SHLWAPI.dll,ucrtbase.dll,kernel.appcore.dll,VERSION.dll,clr.dll,USER32.dll,win32u.dll,VCRUNTIME140_1_CLR0400.dll,GDI32.dll,VCRUNTIME140_CLR0400.dll,gdi32full.dll,ucrtbase_clr0400.dll,msvcp_win.dll,IMM32.DLL,mscorlib.ni.dll,ole32.dll,combase.dll,bcryptPrimitives.dll,uxtheme.dll,clrjit.dll,System.ni.dll,shell32.dll,wintypes.dll,windows.storage.dll,SHCORE.dll,profapi.dll,bcrypt.dll,CRYPTSP.dll,rsaenh.dll,CRYPTBASE.dll
+[20:31:12.769]   hwnd=0x10290 visible=False class='tooltips_class32' title=''
+[20:31:12.770]   hwnd=0x10278 visible=False class='tooltips_class32' title=''
+[20:31:12.771]   hwnd=0x102C6 visible=True class='WindowsForms10.Window.8.app.0.25bb5ff_r6_ad1' title='Register account'
+[20:31:12.771]   hwnd=0x102C4 visible=False class='tooltips_class32' title=''
+[20:31:12.772]   hwnd=0x10286 visible=False class='WindowsForms10.tooltips_class32.app.0.25bb5ff_r6_ad1' title=''
+[20:31:12.773]   hwnd=0x40028 visible=True class='WindowsForms10.Window.8.app.0.25bb5ff_r6_ad1' title='Air Explorer v5.11.0'
+[20:31:12.773]   hwnd=0x202AC visible=False class='tooltips_class32' title=''
+[20:31:12.774]   hwnd=0x5029A visible=False class='tooltips_class32' title=''
+[20:31:12.775]   hwnd=0x10280 visible=False class='HwndWrapper[AirExplorer.exe;;360d7ab6-6c12-40a1-a039-68f6016824b1]' title=''
+[20:31:12.775]   hwnd=0x10268 visible=False class='HwndWrapper[AirExplorer.exe;;66265793-af38-4861-ad39-1f39e6c9c258]' title='SystemResourceNotifyWindow'
+[20:31:12.776]   hwnd=0x20262 visible=False class='HwndWrapper[AirExplorer.exe;;24f5eb0f-e90c-4ab6-9f3a-813d8902264d]' title='MediaContextNotificationWindow'
+[20:31:12.777]   hwnd=0x2022E visible=False class='tooltips_class32' title=''
+[20:31:12.777]   hwnd=0x20098 visible=False class='GDI+ Hook Window Class' title='GDI+ Window (AirExplorer.exe)'
+[20:31:12.778]   hwnd=0x30148 visible=False class='.NET-BroadcastEventWindow.4.0.0.0.25bb5ff.0' title='.NET-BroadcastEventWindow.4.0.0.0.25bb5ff.0'
+[20:31:12.779]   hwnd=0x302A4 visible=False class='ComboLBox' title=''
+[20:31:12.789]   hwnd=0x102BE visible=False class='CiceroUIWndFrame' title='CiceroUIWndFrame'
+[20:31:12.790]   hwnd=0x102B0 visible=False class='MSCTFIME UI' title='MSCTFIME UI'
+[20:31:12.790]   hwnd=0x800B6 visible=False class='IME' title='Default IME'
+[20:31:12.791]   hwnd=0x102BC visible=False class='CiceroUIWndFrame' title='CiceroUIWndFrame'
+[20:31:12.792]   hwnd=0x2009A visible=False class='IME' title='Default IME'
+[20:31:12.793] close dialog: 'Register account'
+[20:31:16.805] MAIN hwnd=0x40028 visible=True rect=78,78,1023,866
+[20:31:16.848]   main screenshot -> probe\mainwindow.png (PrintWindow=True, visible=True)
+[20:31:16.851] killed
+[20:31:17.170] done
