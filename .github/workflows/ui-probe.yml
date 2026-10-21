@@ -14,6 +14,9 @@ on:
   push:
     branches: ["main", "work"]
 
+permissions:
+  contents: write
+
 jobs:
   probe:
     runs-on: windows-2025
@@ -56,3 +59,17 @@ jobs:
           name: ui-probe
           path: probe
           retention-days: 7
+
+      - name: 回传结果到 ci-results 分支
+        if: always()
+        shell: pwsh
+        run: |
+          git config user.email "ci@local"
+          git config user.name "ci"
+          New-Item -ItemType Directory -Force -Path results | Out-Null
+          Copy-Item probe/* results/ -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item app/_candidate.txt results/ -Force -ErrorAction SilentlyContinue
+          git checkout -B ci-results
+          git add -f results
+          git commit -m "probe run $env:GITHUB_RUN_ID (${{ github.event.inputs.candidate }})" -q
+          git push -f origin ci-results
