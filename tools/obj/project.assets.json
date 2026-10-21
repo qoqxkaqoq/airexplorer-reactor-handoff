@@ -182,9 +182,9 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/workspace/airexplorer-reactor-handoff/tools/bodytrans8.csproj",
-      "projectName": "bodytrans8",
-      "projectPath": "/workspace/airexplorer-reactor-handoff/tools/bodytrans8.csproj",
+      "projectUniqueName": "/workspace/airexplorer-reactor-handoff/tools/cmpasm8.csproj",
+      "projectName": "cmpasm8",
+      "projectPath": "/workspace/airexplorer-reactor-handoff/tools/cmpasm8.csproj",
       "packagesPath": "/root/.nuget/packages/",
       "outputPath": "/workspace/airexplorer-reactor-handoff/tools/obj/",
       "projectStyle": "PackageReference",

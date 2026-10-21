@@ -1,0 +1,25 @@
+[host] loaded AirExplorer, Version=5.11.0.0, Culture=neutral, PublicKeyToken=null
+[host] entry CloudClient.Models.StatelessModel::SearchAdapter
+=== EXCEPTION CHAIN ===
+System.TypeInitializationException: The type initializer for '<Module>' threw an exception. ---> System.BadImageFormatException: Bad IL range.
+   at CloudClient.Templating.DispatcherInitializer.VerifyProcessor(IntPtr var1)
+   at CloudClient.Templating.DispatcherInitializer.ObserveConverter(IntPtr var1)
+   at CloudClient.Templating.DispatcherInitializer.DefineEfficientProfiler()
+   at .cctor()
+   --- End of inner exception stack trace ---
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor)
+   at System.Reflection.RuntimeMethodInfo.UnsafeInvokeInternal(Object obj, Object[] parameters, Object[] arguments)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at Host.Main(String[] a)
+=== INNER FLAT ===
+EX System.TypeInitializationException: The type initializer for '<Module>' threw an exception.
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor)
+   at System.Reflection.RuntimeMethodInfo.UnsafeInvokeInternal(Object obj, Object[] parameters, Object[] arguments)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at Host.Main(String[] a)
+EX System.BadImageFormatException: Bad IL range.
+   at CloudClient.Templating.DispatcherInitializer.VerifyProcessor(IntPtr var1)
+   at CloudClient.Templating.DispatcherInitializer.ObserveConverter(IntPtr var1)
+   at CloudClient.Templating.DispatcherInitializer.DefineEfficientProfiler()
+   at .cctor()
+host exit code: 1

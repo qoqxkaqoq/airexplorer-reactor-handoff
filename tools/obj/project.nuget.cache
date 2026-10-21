@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "9r1N2mpIQXU=",
+  "dgSpecHash": "m3qvCbnAhSI=",
   "success": true,
-  "projectFilePath": "/workspace/airexplorer-reactor-handoff/tools/bodytrans8.csproj",
+  "projectFilePath": "/workspace/airexplorer-reactor-handoff/tools/cmpasm8.csproj",
   "expectedPackageFiles": [
     "/root/.nuget/packages/dnlib/3.3.4/dnlib.3.3.4.nupkg.sha512",
     "/root/.nuget/packages/system.reflection.emit/4.7.0/system.reflection.emit.4.7.0.nupkg.sha512",
