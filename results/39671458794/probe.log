@@ -1,0 +1,25 @@
+[20:34:44.964] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[20:34:45.000] size = 9968640  md5 = C2AE2A775B2BA131E4B86AC56ED217BA
+[20:34:45.008] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[20:34:45.043] started pid = 8408
+[20:34:46.577] WINDOW hwnd=0x10216 visible=False class='GDI+ Hook Window Class' title='GDI+ Window (AirExplorer.exe)' rect=0,0,1,1
+[20:34:46.578] WINDOW hwnd=0x201F4 visible=True class='WindowsForms10.Window.8.app.0.141b42a_r6_ad1' title='Air Explorer v5.11.0' rect=78,78,378,378
+[20:34:46.739]   screenshot -> probe\window1_hwnd131572.png (PrintWindow=True)
+[20:34:46.744] WINDOW hwnd=0x30200 visible=False class='.NET-BroadcastEventWindow.4.0.0.0.141b42a.0' title='.NET-BroadcastEventWindow.4.0.0.0.141b42a.0' rect=0,0,0,0
+[20:34:46.745] WINDOW hwnd=0x10218 visible=False class='IME' title='Default IME' rect=0,0,0,0
+[20:34:46.746] WINDOW hwnd=0x10212 visible=False class='MSCTFIME UI' title='MSCTFIME UI' rect=0,0,0,0
+[20:34:46.747] WINDOW hwnd=0x400FE visible=False class='IME' title='Default IME' rect=0,0,0,0
+[20:35:10.792] still alive, windows = 6
+[20:35:10.802] responding = True  threads = 7  WS(MB) = 27.9  CPU = 00:00:00.0625000
+[20:35:10.811] modules(head40) = AirExplorer.exe,ntdll.dll,MSCOREE.DLL,KERNEL32.dll,KERNELBASE.dll,ADVAPI32.dll,msvcrt.dll,sechost.dll,RPCRT4.dll,mscoreei.dll,SHLWAPI.dll,ucrtbase.dll,kernel.appcore.dll,VERSION.dll,clr.dll,USER32.dll,VCRUNTIME140_1_CLR0400.dll,win32u.dll,VCRUNTIME140_CLR0400.dll,GDI32.dll,ucrtbase_clr0400.dll,gdi32full.dll,msvcp_win.dll,IMM32.DLL,mscorlib.ni.dll,ole32.dll,combase.dll,bcryptPrimitives.dll,uxtheme.dll,clrjit.dll,System.ni.dll,System.Drawing.ni.dll,System.Windows.Forms.ni.dll,System.Core.ni.dll,System.Configuration.ni.dll,System.Xml.ni.dll,shell32.dll,wintypes.dll,windows.storage.dll,SHCORE.dll
+[20:35:10.815]   hwnd=0x10216 visible=False class='GDI+ Hook Window Class' title='GDI+ Window (AirExplorer.exe)'
+[20:35:10.816]   hwnd=0x201F4 visible=True class='WindowsForms10.Window.8.app.0.141b42a_r6_ad1' title='Air Explorer v5.11.0'
+[20:35:10.817]   hwnd=0x30200 visible=False class='.NET-BroadcastEventWindow.4.0.0.0.141b42a.0' title='.NET-BroadcastEventWindow.4.0.0.0.141b42a.0'
+[20:35:10.817]   hwnd=0x10218 visible=False class='IME' title='Default IME'
+[20:35:10.818]   hwnd=0x10212 visible=False class='MSCTFIME UI' title='MSCTFIME UI'
+[20:35:10.819]   hwnd=0x400FE visible=False class='IME' title='Default IME'
+[20:35:14.820] MAIN hwnd=0x201F4 visible=True rect=78,78,378,378
+[20:35:14.917]   main screenshot -> probe\mainwindow.png (PrintWindow=True, visible=True)
+[20:35:14.973]   MAIN_CONTENT=CONTENT variance=3,936.7 uniqueColors=8 size=300x300
+[20:35:14.977] killed
+[20:35:15.642] done
