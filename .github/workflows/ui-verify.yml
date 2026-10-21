@@ -1,18 +1,23 @@
 name: ui-verify
 
-# 验收口径(用户明确): 程序启动后出现正常主窗口 UI。进程存活但无窗口 = 失败。
-# 只下载需要的那一个 exe(每个 ~9MB),不做全量 clone(仓库 72MB)。
+# Acceptance (user-defined): the program starts and a normal main window shows up.
+#   alive process but no window == FAIL
+#
+# Each job downloads only the one exe it needs (~9MB) plus the official installer,
+# and runs the candidate by overwriting app\AirExplorer.exe inside the unpacked
+# official install. Bare exes are missing runtime neighbours, which can make a
+# good candidate look broken.
 on:
   workflow_dispatch:
     inputs:
       exes:
-        description: 'exe 名列表(JSON 数组, 不含 AirExplorer_ 前缀与 .exe 后缀)'
+        description: 'exe name list (JSON array, without AirExplorer_ prefix and .exe)'
         required: false
-        default: '["depfix","depfix_stubbed","nb_original","e8runnable","cilantro"]'
-      seconds:
-        description: '每个 exe 观察秒数'
+        default: '["depfix2","depfix","nb_original"]'
+      wait:
+        description: 'seconds to observe each exe'
         required: false
-        default: '90'
+        default: '60'
 
 jobs:
   probe:
@@ -24,32 +29,36 @@ jobs:
       matrix:
         exe: ${{ fromJSON(inputs.exes) }}
     steps:
-      - name: 下载验证脚本与待测 exe
+      - name: 准备运行目录 (官方安装包 + 覆盖候选 exe)
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $base = "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main"
-          New-Item -ItemType Directory -Force -Path ci | Out-Null
+          New-Item -ItemType Directory -Force -Path ci, app | Out-Null
           Invoke-WebRequest -Uri "$base/ci/probe.ps1" -OutFile "ci/probe.ps1"
-          $exe = "AirExplorer_${{ matrix.exe }}.exe"
-          Write-Output "下载 $exe ..."
-          Invoke-WebRequest -Uri "$base/exes/$exe" -OutFile $exe
-          (Get-Item $exe).Length
+          $cand = "AirExplorer_${{ matrix.exe }}.exe"
+          Invoke-WebRequest -Uri "$base/exes/$cand" -OutFile $cand
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { throw "installer extract failed" }
+          Copy-Item -LiteralPath $cand -Destination "app\AirExplorer.exe" -Force
+          Write-Host ("candidate = " + $cand + "  md5 = " + (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)
 
-      - name: 运行 probe
+      - name: UI 探针
         shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File ci/probe.ps1 -Exe "AirExplorer_${{ matrix.exe }}.exe" -Seconds ${{ inputs.seconds }}
+        run: |
+          ./ci/probe.ps1 -ExePath "app\AirExplorer.exe" -WaitSec ${{ inputs.wait }} -OutDir "probe_${{ matrix.exe }}"
 
       - name: 汇总
+        if: always()
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse -Filter result.json | ForEach-Object {
-            Get-Content $_.FullName | ConvertFrom-Json | Format-List
-          }
+          Get-Content "probe_${{ matrix.exe }}/probe.log" -ErrorAction SilentlyContinue
 
       - name: 上传产物
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: probe-${{ matrix.exe }}
-          path: probe_AirExplorer_${{ matrix.exe }}/
+          path: probe_${{ matrix.exe }}/
           if-no-files-found: warn

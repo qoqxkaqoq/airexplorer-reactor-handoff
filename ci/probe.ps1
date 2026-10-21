@@ -1,79 +1,93 @@
-# probe.ps1 — 在 Windows runner 上验证某个 exe 是否真的出现了主窗口
+# probe.ps1 -- verify on Windows runner whether an exe really shows a main window.
 #
-# 验收口径(用户明确): 程序启动后出现正常主窗口 UI。
-#   进程存活但无窗口 = 失败
-# 本脚本同时记录 CPU 时间,用来区分两种"没 UI":
-#   CPU 持续走高  -> 死循环卡住(本工程的已知病灶)
-#   CPU 几乎不动  -> 没卡死,但是没走到建窗体那一步(别的原因)
+# Acceptance (user-defined): the program starts and a normal main window appears.
+#   alive process but no window == FAIL
+# CPU time is recorded to tell the two kinds of "no UI" apart:
+#   CPU keeps climbing -> stuck in an infinite loop (the known disease here)
+#   CPU nearly idle    -> not stuck, just never reaches window creation
 #
-# 用法: powershell -File probe.ps1 -Exe X.exe [-Seconds 90] [-Out result.json]
+# NOTE: keep this file pure ASCII. PowerShell 5.1 on Windows runners parses
+# UTF-8-without-BOM scripts using the legacy codepage, which corrupts non-ASCII
+# bytes and can break parsing entirely.
+#
+# usage: powershell -File probe.ps1 -ExePath X.exe [-WaitSec 90] [-OutDir out]
 param(
-    [Parameter(Mandatory = $true)] [string] $Exe,
-    [int] $Seconds = 90,
-    [string] $Out = ""
+    [Parameter(Mandatory = $true)] [string] $ExePath,
+    [int] $WaitSec = 60,
+    [string] $OutDir = "probe"
 )
 
-$name = [System.IO.Path]::GetFileNameWithoutExtension($Exe)
-$logDir = "probe_$name"
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+$log = Join-Path $OutDir "probe.log"
+function W([string]$m) { $t = (Get-Date).ToString("HH:mm:ss.fff"); "$t $m" | Out-File -Append -FilePath $log -Encoding ascii; Write-Host "$t $m" }
 
-$stdoutLog = Join-Path $logDir "stdout.log"
-$stderrLog = Join-Path $logDir "stderr.log"
-
-"=== probe: $Exe ===" | Out-File -FilePath (Join-Path $logDir "summary.txt") -Encoding utf8
+W ("exe = " + (Resolve-Path $ExePath).Path)
+$fi = Get-Item $ExePath
+W ("size = " + $fi.Length + "  md5 = " + (Get-FileHash $ExePath -Algorithm MD5).Hash)
+W ("OS = " + [System.Environment]::OSVersion.VersionString + "  SessionId = " + [System.Diagnostics.Process]::GetCurrentProcess().SessionId)
 
 $psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = (Resolve-Path $Exe).Path
+$psi.FileName = (Resolve-Path $ExePath).Path
 $psi.UseShellExecute = $false
 $psi.RedirectStandardOutput = $true
 $psi.RedirectStandardError = $true
-$psi.WorkingDirectory = (Get-Location).Path
+$psi.WorkingDirectory = (Resolve-Path (Split-Path $ExePath -Parent)).Path
 
 $proc = [System.Diagnostics.Process]::Start($psi)
-# 后台异步读取标准输出,防止管道写满把进程堵住
+W ("started pid = " + $proc.Id)
 $so = $proc.StandardOutput.ReadToEndAsync()
 $se = $proc.StandardError.ReadToEndAsync()
 
-$deadline = (Get-Date).AddSeconds($Seconds)
+$deadline = (Get-Date).AddSeconds($WaitSec)
 $handle = 0
 $title = ""
-$samples = @()
-$prevCpu = 0.0
-$firstWindowAt = -1
-$elapsed = 0
+$firstAt = -1
+$maxCpu = 0.0
+$busy = 0
+$samples = 0
 
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 2500
-    $elapsed = [int]((Get-Date) - $proc.StartTime).TotalSeconds
     if ($proc.HasExited) { break }
     $proc.Refresh()
+    $samples++
     $cpu = $proc.CPU
-    $delta = $cpu - $prevCpu
-    $prevCpu = $cpu
-    $samples += [PSCustomObject]@{ t = $elapsed; cpu = [math]::Round($cpu, 2); dcpu = [math]::Round($delta, 2); hWnd = $proc.MainWindowHandle; title = $proc.MainWindowTitle }
+    $elapsed = [int]((Get-Date) - $proc.StartTime).TotalSeconds
+    if ($cpu -gt $maxCpu) { $maxCpu = $cpu }
+    if ($elapsed -gt 0) {
+        $rate = $cpu / $elapsed
+        if ($rate -gt 0.6) { $busy++ }
+    }
     if ($proc.MainWindowHandle -ne 0 -and $handle -eq 0) {
         $handle = $proc.MainWindowHandle
         $title = $proc.MainWindowTitle
-        $firstWindowAt = $elapsed
+        $firstAt = $elapsed
+        W ("WINDOW at " + $elapsed + "s  handle=" + $handle + "  title=[" + $title + "]")
         break
     }
 }
 
 $proc.Refresh()
 $exited = $proc.HasExited
-$exitCode = if ($exited) { $proc.ExitCode } else { -1 }
+$exitCode = -1
+if ($exited) { $exitCode = $proc.ExitCode }
+
 if (-not $exited) {
-    # 再采样一次最终状态
-    $samples += [PSCustomObject]@{ t = $elapsed; cpu = [math]::Round($proc.CPU, 2); dcpu = 0; hWnd = $proc.MainWindowHandle; title = $proc.MainWindowTitle }
-    if ($proc.MainWindowHandle -ne 0 -and $handle -eq 0) {
-        $handle = $proc.MainWindowHandle
-        $title = $proc.MainWindowTitle
-        $firstWindowAt = $elapsed
-    }
+    Start-Sleep -Seconds 2
+    $proc.Refresh()
+    W ("still alive, windows = " + $(if ($proc.MainWindowHandle -ne 0) { 1 } else { 0 }))
+    try {
+        W ("responding = " + $proc.Responding + "  threads = " + $proc.Threads.Count +
+           "  WS(MB) = " + [math]::Round($proc.WorkingSet64 / 1MB, 1) + "  CPU = " + $proc.CPU)
+        $mods = @()
+        foreach ($m in $proc.Modules) { $mods += $m.ModuleName }
+        W ("modules(count) = " + $mods.Count)
+        $forms = $mods | Where-Object { $_ -like "*Windows.Forms*" }
+        if ($forms) { W ("WinForms loaded: YES") } else { W ("WinForms loaded: NO") }
+    } catch { W ("proc info failed: " + $_.Exception.Message) }
 }
 
-# ---- 有窗口就截图 ----
-$shot = ""
+# screenshot only when a window actually exists
 if ($handle -ne 0) {
     try {
         Add-Type -AssemblyName System.Windows.Forms
@@ -83,55 +97,44 @@ if ($handle -ne 0) {
         $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
         $g = [System.Drawing.Graphics]::FromImage($bmp)
         $g.CopyFromScreen($b.Location, ([System.Drawing.Point]::Empty), $b.Size)
-        $shot = Join-Path $logDir "screen.png"
+        $shot = Join-Path $OutDir "screen.png"
         $bmp.Save($shot, [System.Drawing.Imaging.ImageFormat]::Png)
         $g.Dispose(); $bmp.Dispose()
+        W ("screenshot saved")
     } catch {
-        $shot = "screenshot-failed: " + $_.Exception.Message
+        W ("screenshot failed: " + $_.Exception.Message)
     }
 }
 
-if (-not $exited) { $proc.Kill() }
+if (-not $exited) { $proc.Kill(); W ("killed") }
+$stdout = $so.Result
+$stderr = $se.Result
+if ($stdout) { $stdout | Out-File (Join-Path $OutDir "stdout.log") -Encoding ascii }
+if ($stderr) { $stderr | Out-File (Join-Path $OutDir "stderr.log") -Encoding ascii }
+if ($stderr) { W ("stderr head: " + $stderr.Substring(0, [Math]::Min(900, $stderr.Length))) }
 
-$outText = $so.Result
-$errText = $se.Result
-if ($outText) { $outText | Out-File -FilePath $stdoutLog -Encoding utf8 }
-if ($errText) { $errText | Out-File -FilePath $stderrLog -Encoding utf8 }
+$verdict = "FAIL"
+if ($handle -ne 0) { $verdict = "PASS" }
+elseif ($busy -gt 3) { $verdict = "FAIL-INFINITE-LOOP" }
+elseif ($exited) { $verdict = "FAIL-EXITED(code=$exitCode)" }
+else { $verdict = "FAIL-NO-WINDOW-IDLE" }
 
-$maxCpu = 0.0
-foreach ($s in $samples) { if ($s.cpu -gt $maxCpu) { $maxCpu = $s.cpu } }
-$busy = 0
-foreach ($s in $samples) { if ($s.dcpu -gt 1.0) { $busy++ } }
+W ("VERDICT = " + $verdict + "  (window=" + ($handle -ne 0) + " cpu=" + [math]::Round($maxCpu, 1) +
+   "s busySamples=" + $busy + "/" + $samples + " title=[" + $title + "])")
+W ("done")
 
 $result = [PSCustomObject]@{
-    exe            = $name
-    exited         = $exited
-    exitCode       = $exitCode
-    hasWindow      = ($handle -ne 0)
-    windowTitle    = $title
-    firstWindowSec = $firstWindowAt
-    maxCpuSec      = [math]::Round($maxCpu, 2)
-    busySamples    = $busy
-    totalSamples   = $samples.Count
-    screenshot     = $shot
-    stdoutLen      = if ($outText) { $outText.Length } else { 0 }
-    stderrLen      = if ($errText) { $errText.Length } else { 0 }
+    exe        = $fi.Name
+    md5        = (Get-FileHash $ExePath -Algorithm MD5).Hash
+    hasWindow  = ($handle -ne 0)
+    windowTitle = $title
+    firstWindowSec = $firstAt
+    exited     = $exited
+    exitCode   = $exitCode
+    maxCpuSec  = [math]::Round($maxCpu, 2)
+    busySamples = $busy
+    totalSamples = $samples
+    verdict    = $verdict
 }
-
-$result | ConvertTo-Json -Depth 5 | Out-File -FilePath (Join-Path $logDir "result.json") -Encoding utf8
-$samples | ConvertTo-Json -Depth 5 | Out-File -FilePath (Join-Path $logDir "samples.json") -Encoding utf8
-
-$verdict = if ($result.hasWindow) { "PASS(有主窗口)" }
-           elseif ($busy -gt 3) { "FAIL(疑似死循环, CPU 持续占用)" }
-           elseif ($exited) { "FAIL(进程退出, exit=$exitCode)" }
-           else { "FAIL(存活但无窗口, CPU 空闲)" }
-
-$line = "{0,-28} {1}" -f $name, $verdict
-$line | Tee-Object -FilePath (Join-Path $logDir "summary.txt") -Append
-Write-Output ("RESULT|" + $name + "|" + $result.hasWindow + "|" + $verdict + "|cpu=" + $result.maxCpuSec + "|title=" + $title)
-
-if ($result.hasWindow) { Write-Output "  >>> 有 UI! 标题: $title (第 $($result.firstWindowSec) 秒出现)" }
-else {
-    Write-Output "  >>> 无 UI。CPU 峰值 $($result.maxCpuSec)s / 忙碌采样 $busy/$($samples.Count)"
-    if ($errText) { Write-Output ("  stderr 前 800 字: " + $errText.Substring(0, [Math]::Min(800, $errText.Length))) }
-}
+$result | ConvertTo-Json -Depth 5 | Out-File (Join-Path $OutDir "result.json") -Encoding ascii
+Write-Output ("RESULT_JSON " + ($result | ConvertTo-Json -Compress -Depth 5))
