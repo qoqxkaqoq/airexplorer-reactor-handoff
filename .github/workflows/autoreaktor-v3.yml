@@ -77,6 +77,9 @@ jobs:
           if (-not (Test-Path "..\nbout\nb-inventory.json")) { throw "inventory 未生成, 真失败" }
           Write-Host "inventory ok"
           Get-ChildItem ..\nbout -Recurse | Select-Object FullName,Length | Format-Table | Out-String | Write-Host
+          # pwsh 步骤的退出码取 $LASTEXITCODE(=python 的 1), 必须显式归零,
+          # 否则后面"构建 nbrebuild / 回填"会被 skip
+          exit 0
 
       - name: 构建 nbrebuild
         shell: pwsh
