@@ -46,6 +46,18 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($w)) { $w = "35" }
           ./tools/ci/probe.ps1 -ExePath "app\AirExplorer.exe" -WaitSec $w -OutDir probe
 
+      - name: 受控宿主重跑 (抓异常堆栈)
+        if: always()
+        shell: pwsh
+        run: |
+          $env:COMPLUS_ReadyToRun = "0"
+          $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru -RedirectStandardOutput "probe\host_stdout.txt" -RedirectStandardError "probe\host_stderr.txt" -NoNewWindow
+          $deadline = (Get-Date).AddSeconds(25)
+          while ((Get-Date) -lt $deadline -and -not $hp.HasExited) { Start-Sleep -Milliseconds 500 }
+          if (-not $hp.HasExited) { try { $hp.Kill() } catch {} ; "host still running (UI alive) - killed" | Out-File -Append -Encoding utf8 "probe\host_stdout.txt" }
+          else { "host exit code: $($hp.ExitCode)" | Out-File -Append -Encoding utf8 "probe\host_stdout.txt" }
+          Get-Content "probe\host_stdout.txt" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+
       - name: 收集日志
         if: always()
         shell: pwsh
