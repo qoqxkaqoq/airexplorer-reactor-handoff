@@ -49,6 +49,14 @@ jobs:
           }
           Write-Host ("input md5 = " + (Get-FileHash 'input\AirExplorer.exe' -Algorithm MD5).Hash)
 
+      - name: 构建 nbwalk（nbdump.py 依赖它，走反射遍历）
+        shell: pwsh
+        run: |
+          cd ar\v3\nbwalk
+          dotnet build -c Release 2>&1 | Tee-Object -FilePath ..\..\..\build_nbwalk.log
+          $p = "bin\Release\net48\nbwalk.exe"
+          if (Test-Path $p) { Write-Host "nbwalk ok: $p" } else { Get-ChildItem -Recurse bin | Select-Object FullName }
+
       - name: 反射收割 NecroBit 真体
         shell: pwsh
         run: |
@@ -109,4 +117,5 @@ jobs:
             build_nb.log
             probe_nbrebuild/
             nbout/
+            build_nbwalk.log
           if-no-files-found: warn
