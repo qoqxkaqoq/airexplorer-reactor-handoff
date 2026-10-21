@@ -57,7 +57,7 @@ jobs:
           python build_hook.py 2>&1 | Tee-Object -FilePath ..\..\..\build_hook.log
           Get-ChildItem -Recurse -Filter "clrjit_dump*.dll" | Select-Object FullName,Length | Format-Table | Out-String | Write-Host
 
-      - name: JIT 入口收割 (--force: 遍历所有 MethodDef)
+      - name: JIT 入口收割 (--force 遍历所有 MethodDef)
         shell: pwsh
         run: |
           cd ar
