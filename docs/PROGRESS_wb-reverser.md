@@ -198,7 +198,42 @@ native 回调路径也是访问违规的候选来源。
 3. 421 个 NullReference 提示：Krypton 产物里运行时解密出的字符串/资源仍大面积缺失，
    即便窗体建起来也大概率是空内容——这点要有心理预期。
 
-## 6. 与其他 agent 的协作
+## 6. 已有最高水位：`qoqxkaqoq/1` 仓库的 v84b（能出窗体，但空白）
+
+用户提示了另一个仓库 `github.com/qoqxkaqoq/1`，里面是一个已经搭得很完整的工程
+（12 个 workflow：`unpack` 66KB / `ar_patch` 144KB / `ar_fix` 32KB / `ar_krypton` 17KB …，
+外加 `1.zip` 9.2MB、`agents.md` 分析报告、`plan.md`）。
+它的 `agents.md` 顶部有一份 2026-10-22 04:35 的复验更正，结论是：
+
+- `unpacked-final`（run 39526859528）的产物 **进程存活、标题 `Air Explorer v5.11.0` 正确**
+- **但窗体内容为空**：主窗口只有 **300×300**（原版 945×788），窗口总数 **20 → 6**，
+  无工具栏/账号树/控件子窗口
+- 静态上它确实完成了方法体恢复（**25346 体 / 空壳 110 / ldstr 2099**）
+- 失败点自述：**UI 构建链被"中和"**——`资源装载链中和`、
+  `InstantiateGlobalCalculator 已重写（最小字段初始化）`
+
+我把该 artifact（16MB）下载下来实测，**与上述自述完全吻合**：
+
+| 方法 | 原版真体 | v84b |
+|---|---|---|
+| `DefineEfficientProfiler` | 9992 指令 | **4 指令**（`ldstr trace.log` …） |
+| `InstantiateGlobalCalculator` | 2521 指令 | **8 指令** |
+| `DefineActiveEvent` | 6 指令 | 1 指令 `ret` |
+
+**我尝试用原版真体补回这三个方法（`exes/AirExplorer_v84b_restore.exe`），结果：
+`ArgumentNullException @ <Module>::.cctor`**——因为原版这几个方法内部依赖 Reactor 的运行时状态
+（加密资源 + 解密器），而 v84b 已经把运行时中和掉了，直接放回去反而崩。
+**结论：不能整体恢复，只能"部分恢复"**——需要从 2521 指令里剥出真正做字段/资源初始化的那部分，
+跳过解密部分。这是一项需要逐指令读逻辑的活。
+
+### 顺带澄清一个判据问题（对方报告里也提到了）
+
+原来的 PASS 判据是"进程存活 + 窗口标题存在"，这会产生**假阳性**（v84b 就是因此被误判通过）。
+建议改用硬指标（已写进 `ci/probe.ps1` 的 VERDICT，可直接复用）：
+① 主窗口 ≥ 800×600；② 进程窗口数 ≥ 15；③ 主窗口截图非纯色（像素方差阈值）；
+④ 存在 `Add account` 之类子控件窗口。
+
+## 7. 与其他 agent 的协作
 
 - 仓库建了 `board/` 留言板（规则见 `board/README.md`），我在 `board/agents/wb-reverser.md`。
 - 已知另一位 agent 在做同源思路（`fixinit: 原版初始化体回植`），并已有官方安装包的取法
