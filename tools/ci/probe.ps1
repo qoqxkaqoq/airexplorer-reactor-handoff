@@ -101,14 +101,8 @@ if (-not $p.HasExited) {
         L "modules(head40) = $mods"
     } catch { L "modules: $($_.Exception.Message)" }
     ($wins | ForEach-Object { "  hwnd=0x{0:X} visible={1} class='{2}' title='{3}'" -f [int64]$_.Hwnd, $_.Visible, $_.Class, $_.Title }) | ForEach-Object { L $_ }
-    try {
-        $p.Kill()
-        L "killed"
-    } catch { L "kill failed: $($_.Exception.Message)" }
-}
-
 # 收尾: 尝试关闭模态对话框后抓主窗口 (即使不可见也 PrintWindow)
-if (-not $p.HasExited) {
+
     $wins = [WinProbe]::List([uint32]$p.Id)
     foreach ($w in $wins) {
         if ($w.Visible -and $w.Class -like "WindowsForms10*" -and $w.Title -notlike "Air Explorer*") {
@@ -134,6 +128,10 @@ if (-not $p.HasExited) {
             }
         }
     }
+    try {
+        $p.Kill()
+        L "killed"
+    } catch { L "kill failed: $($_.Exception.Message)" }
 }
 
 # .NET Runtime 崩溃事件 (含异常类型与堆栈)
