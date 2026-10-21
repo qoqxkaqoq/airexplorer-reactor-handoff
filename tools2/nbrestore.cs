@@ -23,6 +23,7 @@ using dnlib.DotNet.Emit;
 class NbRestore {
     static Dictionary<ushort, OpCode> opMap;
     static ModuleDef mod;
+    static Importer imp;
 
     static void Main(string[] a) {
         string origPath = a[0], dumpDir = a[1], outPath = a[2];
@@ -40,6 +41,7 @@ class NbRestore {
             foreach (var t in localsMod.GetTypes())
                 foreach (var mm in t.Methods)
                     if (mm.HasBody) localsByName[t.FullName + "::" + mm.Name.String] = mm;
+        imp = new Importer(mod);
         BuildOpMap();
 
         var files = Directory.GetFiles(dumpDir, "m_*.bin");
@@ -225,8 +227,11 @@ class NbRestore {
                 }
                 case OperandType.InlineString: {
                     uint t = BitConverter.ToUInt32(il, p); p += 4;
-                    var str = ((ModuleDefMD)mod).StringsStream.Read(t & 0x00FFFFFF);
-                    operand = str ?? ""; break;
+                    // 注意: StringsStream.Read 返回 dnlib 的 UTF8String, 不是 string。
+                    // WriteInlineString 只认 string, 直接塞 UTF8String 会
+                    // "Invalid instruction operand" / "InlineString got UTF8String"。
+                    var u8 = ((ModuleDefMD)mod).StringsStream.Read(t & 0x00FFFFFF);
+                    operand = (u8.String == null) ? "" : u8.String; break;
                 }
                 case OperandType.InlineMethod:
                 case OperandType.InlineField:
