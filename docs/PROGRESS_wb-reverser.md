@@ -161,6 +161,35 @@ System.TypeInitializationException: '<Module>' 的类型初始值设定项引发
 附带结论：补 `<PrivateImplementationDetails>` 字段时，字段类型 `__StaticArrayInitTypeSize=N`
 必须显式带上 `ClassLayout.Size=N`，否则 dnlib 写盘会报 `initial value size != size of field type`。
 
+### 追加：Reactor 把初始化注入进了成百上千个类型的 .cctor
+
+用 `neutralize2`（判据：`.cctor` 里调用了 `DispatcherInitializer` / `WrapperProvider` 的静态方法）实测：
+
+| 版本 | 被注入的 .cctor 数 |
+|---|---|
+| Krypton 产物 | **1214** |
+| depfix2 | **4633** |
+
+Krypton 只清了 `<Module>::.cctor`，`StatelessModel::.cctor` 里仍完整保留着
+`ValidateAccessibleResponderManager → DefineEfficientProfiler → InstantiateGlobalCalculator(重复两次) → DefineActiveEvent`。
+把这两者的 cctor 都中和掉之后，`krypton_merge4` 从 `Bad IL range` 前进到了 `NullReferenceException`——
+**说明 cctor 残留确实是 Bad IL range 的成因之一**。
+
+### 当前：所有路线收敛到同一个错误
+
+| 版本 | 启动错误 |
+|---|---|
+| krypton（纯） / krypton_fix9 / krypton_fix9_eh / krypton_neutral | `NullReferenceException` → **0xC0000005** |
+| krypton_merge4（回填+补字段+修EH+中和cctor） | `NullReferenceException` → **0xC0000005** |
+| depfix5（完整真体+中和4633 cctor+hook置空） | `NullReferenceException` → **0xC0000005** |
+
+共同特征：2~3 秒内退出、`cpu=0`、无窗口。也就是说**启动早期的某个静态依赖是 null**。
+这与 Krypton `standalone-check` 报告的 **421 个 NullReferenceException** 吻合：
+它把还原不了的方法桩化成了 `ret`（回填前就有 2560 个这类桩），返回 null 后下游就炸了。
+另外它报告 `DllNotFoundException total=1 (ConfigViewer::ReadIterator)`，
+以及 `StatelessModel::.cctor` 里用 `ldnull + ldftn ModelConnectedMap(IntPtr,IntPtr)` 构造委托——
+native 回调路径也是访问违规的候选来源。
+
 ### 下一步（按性价比）
 
 1. **桩化那 9 个 InvalidProgram 方法**再跑一次纯 Krypton 产物（最快，能验证 0xC0000005 是否由它们引起）。
