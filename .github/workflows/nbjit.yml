@@ -73,6 +73,33 @@ jobs:
           }
           exit 0
 
+      - name: 写回方法体 (nbilmerge)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          cd ar\v3\jitdump
+          dotnet build nbilmerge.csproj -c Release 2>&1 | Tee-Object -FilePath ..\..\..\build_merge.log
+          New-Item -ItemType Directory -Force -Path ..\..\..\out | Out-Null
+          & bin\Release\nbilmerge.exe "..\..\..\input\AirExplorer.exe" "..\..\..\jitout" "..\..\..\out\AirExplorer_nb.exe" 2>&1 | Tee-Object -FilePath ..\..\..\nbilmerge.log
+          $rc = $LASTEXITCODE
+          Write-Host "=== nbilmerge rc=$rc ==="
+          if (Test-Path "..\..\..\out\AirExplorer_nb.exe") {
+            Write-Host ("out md5 = " + (Get-FileHash '..\..\..\out\AirExplorer_nb.exe' -Algorithm MD5).Hash)
+            Write-Host ("out size = " + (Get-Item '..\..\..\out\AirExplorer_nb.exe').Length)
+          }
+          exit 0
+
+      - name: 跑 UI 探针
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "out\AirExplorer_nb.exe")) { Write-Host "无产物, 跳过"; exit 0 }
+          New-Item -ItemType Directory -Force -Path run | Out-Null
+          Copy-Item input\* run\ -Recurse -Force
+          Copy-Item out\AirExplorer_nb.exe run\AirExplorer.exe -Force
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/ci/probe.ps1" -OutFile ci_probe.ps1
+          ./ci_probe.ps1 -ExePath "run\AirExplorer.exe" -WaitSec 90 -OutDir probe_nb
+
       - name: 汇总
         if: always()
         shell: pwsh
@@ -89,4 +116,8 @@ jobs:
             jitout/
             jitdump.log
             build_hook.log
+            build_merge.log
+            nbilmerge.log
+            out/
+            probe_nb/
           if-no-files-found: warn
