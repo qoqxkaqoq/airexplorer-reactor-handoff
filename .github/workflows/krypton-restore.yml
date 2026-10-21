@@ -1,0 +1,139 @@
+name: krypton-restore
+
+# 用 Krypton (.NET Reactor devirtualizer) 直接处理 Reactor 保护的**原版** AirExplorer.exe。
+#
+# 为什么输入必须是原版: Krypton 靠识别磁盘上的 stub-shaped method body
+# (原版里 22926 个方法就是 nop;nop;nop;ret 桩), 再用 net48 沙箱宿主把真实方法体
+# captured 回来重建。喂 nb_original 那种"已经有体"的版本反而匹配不上它的分类逻辑。
+# 仓库里 exes/AirExplorer_e8runnable.exe 的 md5 与官方原版一致, 可直接当输入。
+#
+# Krypton: https://github.com/dawwinci/krypton-devirtualizer
+# 它的 v1.0.0 明确修的问题与本项目当前卡点一致:
+#   - reinjected body 的 maxstack 用 captured 值而不是自动重算(自动重算会低估 -> InvalidProgramException)
+#   - 一次性 NecroBit body 还原
+#   - --standalone-check 逐类型初始化器 + 逐方法 JIT 预热的回归验证
+on:
+  workflow_dispatch:
+    inputs:
+      input:
+        description: '输入 exe 来源: official=下载官方安装包解压; e8runnable=用仓库里的(即原版副本)'
+        required: false
+        default: 'official'
+      string_decrypt:
+        description: '是否顺带解字符串表'
+        required: false
+        default: '1'
+
+jobs:
+  restore:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 拉取 Krypton 源码
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/dawwinci/krypton-devirtualizer.git krypton
+          Get-ChildItem krypton | Select-Object Name
+
+      - name: 构建 Krypton (Core + Pipeline + 启动器 + net48 沙箱宿主)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          cd krypton
+          dotnet build Krypton.Core/Krypton.Core.csproj     -c Release -v m
+          dotnet build Krypton.Pipeline/Krypton.Pipeline.csproj -c Release -v m
+          dotnet build Krypton/Krypton.csproj               -c Release -v m
+          dotnet build Krypton.Runner/Krypton.Runner.csproj -c Release -v m
+          Get-ChildItem -Recurse -Filter "*.exe" -Path Krypton/bin/Release, Krypton.Runner/bin/Release |
+            Select-Object FullName | Format-Table | Out-String | Write-Host
+
+      - name: 准备输入 exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path input | Out-Null
+          if ("${{ github.event.inputs.input }}" -eq "e8runnable") {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/exes/AirExplorer_e8runnable.exe" -OutFile "input/AirExplorer.exe"
+          } else {
+            Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+            & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+            if (-not (Test-Path "app\AirExplorer.exe")) { throw "installer extract failed" }
+            Copy-Item app\AirExplorer.exe input\AirExplorer.exe -Force
+            # 保留官方运行时的邻居依赖, 后面跑 UI 验证要用
+            New-Item -ItemType Directory -Force -Path runtime | Out-Null
+            Copy-Item app\* runtime\ -Recurse -Force
+          }
+          Write-Host ("input md5 = " + (Get-FileHash 'input\AirExplorer.exe' -Algorithm MD5).Hash)
+
+      - name: 运行 Krypton 还原
+        shell: pwsh
+        env:
+          KRYPTON_ENABLE_NECROBIT_BODY_RESTORE: 1
+          KRYPTON_STRING_DECRYPT: ${{ github.event.inputs.string_decrypt }}
+          KRYPTON_RESOURCE_DECRYPT: 1
+          KRYPTON_LOG_EXCEPTIONS: 1
+          KRYPTON_ALLOW_PARTIAL_OUTPUT: 1
+          KRYPTON_ALLOW_STABILIZATION_ONLY_OUTPUT: 1
+          KRYPTON_NO_PAUSE: 1
+        run: |
+          cd krypton
+          $dll = "Krypton/bin/Release/net8.0/Krypton.dll"
+          if (-not (Test-Path $dll)) { throw "Krypton launcher not built" }
+          $ErrorActionPreference = "Continue"
+          dotnet $dll "..\input\AirExplorer.exe" --no-pause 2>&1 | Tee-Object -FilePath ../krypton.log
+          Write-Host "=== exit=$LASTEXITCODE ==="
+
+      - name: 定位产物并做 standalone-check
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Filter "*-Devirtualized*.exe" -Path input,krypton -ErrorAction SilentlyContinue |
+            Select-Object FullName,Length | Format-Table | Out-String | Write-Host
+          $out = Get-ChildItem -Recurse -Filter "*-Devirtualized*.exe" -Path input,krypton -ErrorAction SilentlyContinue | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          if ($out) {
+            Copy-Item $out.FullName "out\AirExplorer_krypton.exe" -Force
+            Write-Host ("krypton output md5 = " + (Get-FileHash 'out\AirExplorer_krypton.exe' -Algorithm MD5).Hash)
+            $runner = Get-ChildItem -Recurse -Filter "Krypton.Runner.exe" -Path krypton | Select-Object -First 1
+            if ($runner) {
+              & $runner.FullName --standalone-check "out\AirExplorer_krypton.exe" 2>&1 | Tee-Object -FilePath ../standalone.log
+            }
+          } else {
+            Write-Host "!! 没找到 Krypton 产物"
+          }
+          Get-ChildItem input -Filter "*.txt" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("--- " + $_.Name); Get-Content $_.FullName | Select-Object -First 40 }
+
+      - name: 用还原产物跑 UI 探针
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "out\AirExplorer_krypton.exe") {
+            New-Item -ItemType Directory -Force -Path run | Out-Null
+            Copy-Item runtime\* run\ -Recurse -Force -ErrorAction SilentlyContinue
+            if (-not (Test-Path "run\AirExplorer.exe")) {
+              Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae2.exe
+              & "C:\Program Files\7-Zip\7z.exe" x -y -orun ae2.exe | Out-Null
+            }
+            Copy-Item out\AirExplorer_krypton.exe run\AirExplorer.exe -Force
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/ci/probe.ps1" -OutFile ci_probe.ps1
+            ./ci_probe.ps1 -ExePath "run\AirExplorer.exe" -WaitSec 90 -OutDir probe_krypton
+          }
+
+      - name: 上传全部产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: krypton-restore
+          path: |
+            out/
+            krypton.log
+            standalone.log
+            probe_krypton/
+            input/*.txt
+          if-no-files-found: warn
