@@ -123,8 +123,22 @@ if (-not $p.HasExited) {
                 $ok = [WinProbe]::PrintWindow($w.Hwnd, $hdc, 2)
                 $g.ReleaseHdc($hdc); $g.Dispose()
                 $file = Join-Path $OutDir "mainwindow.png"
-                $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+                $bmp2 = [System.Drawing.Bitmap]$bmp.Clone()
+                $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
                 L "  main screenshot -> $file (PrintWindow=$ok, visible=$($w.Visible))"
+                # 内容判据: 采样像素方差, 纯色=空白窗体 (防止"标题在、内容空"的假阳性)
+                try {
+                    $sx = [Math]::Max(1, [int]($wd / 40)); $sy = [Math]::Max(1, [int]($ht / 40))
+                    $vals = New-Object System.Collections.Generic.List[int]
+                    for ($yy = 0; $yy -lt $ht; $yy += $sy) { for ($xx = 0; $xx -lt $wd; $xx += $sx) { $c = $bmp2.GetPixel($xx, $yy); $vals.Add([int](($c.R + $c.G + $c.B) / 3)) } }
+                    $mean = ($vals | Measure-Object -Average).Average
+                    $var = 0.0; foreach ($v in $vals) { $var += [Math]::Pow($v - $mean, 2) }; $var = $var / [Math]::Max(1, $vals.Count)
+                    $uniq = ($vals | Sort-Object -Unique).Count
+                    $verdict = if ($var -lt 50 -and $uniq -lt 8) { "BLANK" } else { "CONTENT" }
+                    L ("  MAIN_CONTENT={0} variance={1:N1} uniqueColors={2} size={3}x{4}" -f $verdict, $var, $uniq, $wd, $ht)
+                } catch { L "  content-check failed: $($_.Exception.Message)" }
+                if ($bmp2) { $bmp2.Dispose(); $bmp2 = $null }
+                $bmp.Dispose()
             }
         }
     }
