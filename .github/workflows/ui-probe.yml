@@ -51,7 +51,7 @@ jobs:
         shell: pwsh
         run: |
           $env:COMPLUS_ReadyToRun = "0"
-          $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru -RedirectStandardOutput "probe\host_stdout.txt" -RedirectStandardError "probe\host_stderr.txt" -NoNewWindow
+          $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "AirExplorer.exe" -WorkingDirectory "app" -PassThru -RedirectStandardOutput "probe\host_stdout.txt" -RedirectStandardError "probe\host_stderr.txt" -NoNewWindow
           $deadline = (Get-Date).AddSeconds(25)
           while ((Get-Date) -lt $deadline -and -not $hp.HasExited) { Start-Sleep -Milliseconds 500 }
           if (-not $hp.HasExited) { try { $hp.Kill() } catch {} ; "host still running (UI alive) - killed" | Out-File -Append -Encoding utf8 "probe\host_stdout.txt" }
