@@ -92,13 +92,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Continue"
-          $rebuilt = Get-ChildItem -Recurse -Filter "nbrebuild.dll" -Path ar\v3\nbrebuild\bin | Select-Object -First 1
+          $rebuilt = Get-ChildItem -Recurse -Filter "nbrebuild.exe" -Path ar\v3\nbrebuild\bin | Select-Object -First 1
           if (-not $rebuilt) { Write-Host "!! nbrebuild 没编译出来"; exit 0 }
           $inv = Get-ChildItem -Recurse -Filter "*.json" -Path nbout | Select-Object -First 1
           if (-not $inv) { Write-Host "!! 没收到 inventory json"; exit 0 }
           Write-Host ("inventory = " + $inv.FullName + "  size=" + $inv.Length)
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          dotnet $rebuilt.FullName "input\AirExplorer.exe" $inv.FullName "out\AirExplorer_nbrebuild.exe" 2>&1 | Tee-Object -FilePath nbrebuild.log
+          & $rebuilt.FullName "input\AirExplorer.exe" $inv.FullName "out\AirExplorer_nbrebuild.exe" 2>&1 | Tee-Object -FilePath nbrebuild.log
           Write-Host "=== exit=$LASTEXITCODE ==="
           if (Test-Path "out\AirExplorer_nbrebuild.exe") {
             Write-Host ("output md5 = " + (Get-FileHash 'out\AirExplorer_nbrebuild.exe' -Algorithm MD5).Hash)
