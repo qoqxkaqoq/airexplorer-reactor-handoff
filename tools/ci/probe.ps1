@@ -26,6 +26,7 @@ public class WinProbe {
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
     [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wp, IntPtr lp, uint flags, uint timeout, out IntPtr res);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wp, IntPtr lp);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] public static extern IntPtr GetWindowDC(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
@@ -104,6 +105,35 @@ if (-not $p.HasExited) {
         $p.Kill()
         L "killed"
     } catch { L "kill failed: $($_.Exception.Message)" }
+}
+
+# 收尾: 尝试关闭模态对话框后抓主窗口 (即使不可见也 PrintWindow)
+if (-not $p.HasExited) {
+    $wins = [WinProbe]::List([uint32]$p.Id)
+    foreach ($w in $wins) {
+        if ($w.Visible -and $w.Class -like "WindowsForms10*" -and $w.Title -notlike "Air Explorer*") {
+            L "close dialog: '$($w.Title)'"
+            [WinProbe]::PostMessage($w.Hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+        }
+    }
+    Start-Sleep -Seconds 4
+    $wins = [WinProbe]::List([uint32]$p.Id)
+    foreach ($w in $wins) {
+        if ($w.Title -like "Air Explorer*") {
+            $wd = $w.Rect.Right - $w.Rect.Left; $ht = $w.Rect.Bottom - $w.Rect.Top
+            L ("MAIN hwnd=0x{0:X} visible={1} rect={2},{3},{4},{5}" -f [int64]$w.Hwnd, $w.Visible, $w.Rect.Left, $w.Rect.Top, $w.Rect.Right, $w.Rect.Bottom)
+            if ($wd -gt 50 -and $ht -gt 50) {
+                $bmp = New-Object System.Drawing.Bitmap($wd, $ht)
+                $g = [System.Drawing.Graphics]::FromImage($bmp)
+                $hdc = $g.GetHdc()
+                $ok = [WinProbe]::PrintWindow($w.Hwnd, $hdc, 2)
+                $g.ReleaseHdc($hdc); $g.Dispose()
+                $file = Join-Path $OutDir "mainwindow.png"
+                $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+                L "  main screenshot -> $file (PrintWindow=$ok, visible=$($w.Visible))"
+            }
+        }
+    }
 }
 
 # .NET Runtime 崩溃事件 (含异常类型与堆栈)

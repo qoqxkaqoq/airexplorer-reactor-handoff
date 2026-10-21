@@ -66,9 +66,9 @@ jobs:
         run: |
           git config user.email "ci@local"
           git config user.name "ci"
-          New-Item -ItemType Directory -Force -Path results | Out-Null
-          Copy-Item probe/* results/ -Recurse -Force -ErrorAction SilentlyContinue
-          Copy-Item app/_candidate.txt results/ -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path "results/$env:GITHUB_RUN_ID" | Out-Null
+          Copy-Item probe/* "results/$env:GITHUB_RUN_ID/" -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item app/_candidate.txt "results/$env:GITHUB_RUN_ID/" -Force -ErrorAction SilentlyContinue
           git checkout -B ci-results
           git add -f results
           git commit -m "probe run $env:GITHUB_RUN_ID (${{ github.event.inputs.candidate }})" -q
