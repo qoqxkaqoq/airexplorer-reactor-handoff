@@ -233,7 +233,79 @@ native 回调路径也是访问违规的候选来源。
 ① 主窗口 ≥ 800×600；② 进程窗口数 ≥ 15；③ 主窗口截图非纯色（像素方差阈值）；
 ④ 存在 `Add account` 之类子控件窗口。
 
-## 7. 与其他 agent 的协作
+## 7. 本轮的最大突破：16586 个 NecroBit 真体全部收割成功
+
+在 `qoqxkaqoq/1` 与联网检索的指引下，改用 **JIT 入口收割**（AutoReaktor v3 的 `v3/jitdump`）：
+进程挂起 → APC 注入 `clrjit_dump.dll` → 在 `clrjit.dll` 加载时装 `ICorJitCompiler::compileMethod` 的 VMT hook，
+把**运行时亲手交给 JIT 的那份 CIL** 直接落盘。`--force` 会先跑完模块初始化器（让 anti-tamper 干净结束），
+再用 `RuntimeHelpers.PrepareMethod` 遍历每一个可解析的 MethodDef。
+
+CI 实测（`.github/workflows/nbjit.yml`）：
+
+```
+[fd] done: prepared=16040 failed=693 skipped=4613 eh=2127 dumped=16586
+status: body=16586 | eh=2218 | 总 IL 字节=3,820,742
+```
+
+**16586 个方法体**——与 HANDOFF 里"16586 个方法体 RVA=0 加密存储"的数量完全一致。
+每个 dump 落成 `m_<token>.bin`：
+
+| 偏移 | 字段 |
+|---|---|
+| 0 | token (u32) |
+| 4 | ilSize (u32) |
+| 8 | maxStack (u32) |
+| 12 | ehCount (u32) |
+| 16 | options (u32) |
+| 20 | localsTok (u32) —— **恒为 0** |
+| 24 | raw CIL 字节 |
+
+`m_<token>.eh` = `[u32 count][count × 28B CORINFO_EH_CLAUSE]`，
+clause = 7×u32: flags(0=Catch/1=Filter/2=Finally/4=Fault), tryOff, tryLen, hOff, hLen, classTok|filterOff, reserved。
+
+### 污染问题解决了
+
+`m_0600419C.bin`（DefineEfficientProfiler）实测：
+
+```
+ilSize=37072  maxStack=8  ehCount=9
+stloc V_72 (fe 0e 48 00) 出现 741 次     ← 真体
+stloc V_104 (fe 0e 68 00) 出现 0 次      ← 无陷阱特征
+```
+
+对比 nb_original 的 1 次。**JIT 入口拿到的确实是未被反篡改污染的体**——
+因为反篡改在"正常初始化后"就没有理由再替换 IL 了，这条路在结构上绕开了它。
+
+### 写回：`tools2/nbrestore.cs`（12052 个方法写回成功）
+
+自己实现的写回器，关键设计：
+
+1. **token 认原版、locals 认 nb_original**：原版 NecroBit 方法是空壳（locals=0），
+   而 nb_original 的 locals 签名完好但 token 布局被 nb_slayer 改过 → 按 `FullName::MethodName` 跨模块取 locals。
+2. 自己解析 IL（opcode 表 + 操作数类型 + 两遍法回填跳转/switch 目标），不依赖 `CreateCilBody`。
+3. EH 按 IL offset 映射回指令；`TryEnd/HandlerEnd` 落在方法末尾时置 null。
+4. 写盘前做操作数类型校验（`Validate`），不合格的方法跳过而不是写坏文件。
+5. 写盘用 `MetadataFlags.PreserveAll | KeepOldMaxStack`。
+
+结果：**12052 个方法写回，确证陷阱体 114 → 13**，控制流平坦化 3182 → 2428。
+`DefineEfficientProfiler` 的 `stloc V_72` 从 1 次变成 741 次。
+
+### 当前卡点：`BadImageFormatException: Bad method token`
+
+`nbjit_restored2` 启动即 `<Module>::.cctor` 抛 `Bad method token`。
+已排查：
+- cctor 本身 IL 正常（5 条指令，call 的 token 0x0600419C/0x06004192/0x06004194/0x06000001 都对）
+- 用 `Importer.Import` 重绑操作数无效——**对本模块 MethodDef 它是原样返回，等于没重绑**
+- 4534 个方法未能写回（3818 个因原版/nb_original 两侧都取不到 locals，其余为 token 解析不到）
+
+**下一步建议（按可行性）**
+1. 对写回的每个操作数做**按名字+签名重建 MemberRef**（不是 Importer），把 dump 的 rdts 彻底洗一遍；
+   可复用 `tools2/merge2.cs` 里的 `RebindRefs` 思路。
+2. 只写回"体内不引用任何外部 token"的方法（保守集），先验证这条路能否启动，
+   再逐步放开——可快速判断 `Bad method token` 是否只来自少数方法。
+3. 用 v84b 的元数据做基座（它的 token 布局与 Reactor 运行时一致），把 nbjit 的真体灌进去。
+
+## 8. 与其他 agent 的协作
 
 - 仓库建了 `board/` 留言板（规则见 `board/README.md`），我在 `board/agents/wb-reverser.md`。
 - 已知另一位 agent 在做同源思路（`fixinit: 原版初始化体回植`），并已有官方安装包的取法
