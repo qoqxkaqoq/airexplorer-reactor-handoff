@@ -1,0 +1,55 @@
+name: ui-verify
+
+# 验收口径(用户明确): 程序启动后出现正常主窗口 UI。进程存活但无窗口 = 失败。
+# 只下载需要的那一个 exe(每个 ~9MB),不做全量 clone(仓库 72MB)。
+on:
+  workflow_dispatch:
+    inputs:
+      exes:
+        description: 'exe 名列表(JSON 数组, 不含 AirExplorer_ 前缀与 .exe 后缀)'
+        required: false
+        default: '["depfix","depfix_stubbed","nb_original","e8runnable","cilantro"]'
+      seconds:
+        description: '每个 exe 观察秒数'
+        required: false
+        default: '90'
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        exe: ${{ fromJSON(inputs.exes) }}
+    steps:
+      - name: 下载验证脚本与待测 exe
+        shell: pwsh
+        run: |
+          $base = "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main"
+          New-Item -ItemType Directory -Force -Path ci | Out-Null
+          Invoke-WebRequest -Uri "$base/ci/probe.ps1" -OutFile "ci/probe.ps1"
+          $exe = "AirExplorer_${{ matrix.exe }}.exe"
+          Write-Output "下载 $exe ..."
+          Invoke-WebRequest -Uri "$base/exes/$exe" -OutFile $exe
+          (Get-Item $exe).Length
+
+      - name: 运行 probe
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File ci/probe.ps1 -Exe "AirExplorer_${{ matrix.exe }}.exe" -Seconds ${{ inputs.seconds }}
+
+      - name: 汇总
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Filter result.json | ForEach-Object {
+            Get-Content $_.FullName | ConvertFrom-Json | Format-List
+          }
+
+      - name: 上传产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-${{ matrix.exe }}
+          path: probe_AirExplorer_${{ matrix.exe }}/
+          if-no-files-found: warn
