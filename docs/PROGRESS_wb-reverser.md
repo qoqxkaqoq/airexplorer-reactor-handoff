@@ -125,7 +125,51 @@ System.TypeInitializationException: '<Module>' 的类型初始值设定项引发
    - 不要基于陷阱体做移植/修复（陷阱体的 case 块内容已被整体替换成垃圾，真逻辑不在里面，反推不回来）
    - 不要再用裸 exe 直接跑来验证（缺运行时依赖，结论不可靠）
 
-## 5. 与其他 agent 的协作
+## 5. Krypton 实测结果（2026-10-22 05:0x，第二轮）
+
+| 指标 | Krypton 产物 |
+|---|---|
+| 方法数 | 23009（0 无体） |
+| 确证死循环陷阱体 | **0**（nb_original 是 114） |
+| 含大 switch（控制流平坦化残留） | 15（nb_original 是 3182） |
+| 体积 | 5.3MB（原版 9.6MB，加密数据与 native stub 已清） |
+| `standalone-check` CCTOR | **ok=4797 / fail=50**（TypeLoad 6 / FileNotFound 5 / NullRef 39） |
+| standalone-check 其它 | NullRef 421、FileNotFound 217、TypeLoad 37、**InvalidProgram 9**、DllNotFound 1 |
+| 已重建 | 27 个 WinForms 窗体构造函数、74 个 Dispose(bool)、80 个 hidden call |
+| UI 探针 | `FAIL-EXITED(code=-1073741819)` = **0xC0000005 访问违规**，无窗口 |
+
+开了 `KRYPTON_WINFORMS_HEURISTIC_FALLBACK=1` 重跑，结果与首轮一致（27 个窗体重建数不变），
+说明那 5 个"`UI for X was not recovered`"的窗体靠这个开关补不回来。
+
+**9 个 InvalidProgram 方法（Krypton 直接给了名字，可精准修）**：
+`StatelessSenderAggregator::AggregateSymbolicProc`、`StatelessSenderAggregator::DirectNotifier`、
+`StatelessSenderAggregator::ReflectConnection`、`AggregatorEvaluator::Start`、
+`VisualElementValue::ValidateVirtualCommand`、`CommandTransmitterMap::RunCommonChain`（另 3 个未列出）。
+
+### 组合路线的错误推进链（每一层都是可定位的具体错误，不是玄学）
+
+| 版本 | 启动错误 |
+|---|---|
+| nb_original | 死循环，CPU 100%，无窗口 |
+| depfix2（真体回植） | `InvalidProgramException` @ `VerifyCombinedStateRequest` |
+| depfix3（MaxStack 抬到 512） | 同上（说明不只是 MaxStack 数值小，是 CFG 汇合处栈深不一致） |
+| depfix4（中和保护运行时） | 前进一层：`InvalidProgramException` @ `StatelessModel::.cctor` |
+| krypton（纯） | `NullReferenceException` → `0xC0000005` |
+| krypton_merge（回填 2560 真体） | `MissingFieldException: <PrivateImplementationDetails>{A53A4920-...}.D5B7247C...` |
+| krypton_merge2（补回 8 个静态数据字段） | `BadImageFormatException: Bad IL range` |
+
+附带结论：补 `<PrivateImplementationDetails>` 字段时，字段类型 `__StaticArrayInitTypeSize=N`
+必须显式带上 `ClassLayout.Size=N`，否则 dnlib 写盘会报 `initial value size != size of field type`。
+
+### 下一步（按性价比）
+
+1. **桩化那 9 个 InvalidProgram 方法**再跑一次纯 Krypton 产物（最快，能验证 0xC0000005 是否由它们引起）。
+2. **修 Bad IL range**：是 EH 表的嵌套/顺序问题（跳转与 switch 目标越界已排查为 0），
+   需要做 EH 区间排序与嵌套校验。
+3. 421 个 NullReference 提示：Krypton 产物里运行时解密出的字符串/资源仍大面积缺失，
+   即便窗体建起来也大概率是空内容——这点要有心理预期。
+
+## 6. 与其他 agent 的协作
 
 - 仓库建了 `board/` 留言板（规则见 `board/README.md`），我在 `board/agents/wb-reverser.md`。
 - 已知另一位 agent 在做同源思路（`fixinit: 原版初始化体回植`），并已有官方安装包的取法
