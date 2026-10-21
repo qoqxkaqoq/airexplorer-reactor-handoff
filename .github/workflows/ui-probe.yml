@@ -72,4 +72,4 @@ jobs:
           git checkout -B ci-results
           git add -f results
           git commit -m "probe run $env:GITHUB_RUN_ID (${{ github.event.inputs.candidate }})" -q
-          git push -f origin ci-results
+          git push -f origin "HEAD:refs/heads/ci-results/$env:GITHUB_RUN_ID"
