@@ -24,10 +24,11 @@ class Host {
             return 0;
         } catch (Exception ex) {
             Console.WriteLine("=== EXCEPTION CHAIN ===");
+            Console.WriteLine(ex.ToString());
+            Console.WriteLine("=== INNER FLAT ===");
             for (Exception e = ex; e != null; e = e.InnerException) {
                 Console.WriteLine("EX " + e.GetType().FullName + ": " + e.Message);
                 Console.WriteLine(e.StackTrace);
-                if (!(e is TargetInvocationException)) break;
             }
             Console.Out.Flush();
             return 1;
