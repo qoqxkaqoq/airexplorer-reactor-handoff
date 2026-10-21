@@ -7,6 +7,7 @@
 > - `analysis/dep_il.txt` 与 `nb_original.exe` 落盘的方法体一致，其「死循环」实为**局部变量索引被改坏导致的非法 IL**（Mono: `Invalid IL code ... IL_09EE: add`），原版同名方法可正常执行。
 > - 真正根因：Reactor 运行时依赖 `.text` 尾部 3.2MB 加密负载 + **绝对 RVA**；**任何 dnlib 全量重写**都会破坏之——「原样 resave」这个阴性对照都会崩（`InvalidProgramException`）。
 > - 结论：不要再基于 `nb_original`/`dep_il.txt` 做移植；改造必须走「布局保持型」路线，或直接使用原版。
+> - **`qoqxkaqoq/1` 的 v84b「终局交付」已复验：不通过**——窗口标题对，但窗体 300×300 全空白（窗口数 20→6）。见 `docs/复验_qoqxkaqoq1_v84b_不通过.md`。
 
 
 > 交接时间：2026-10-22 00:31 (Asia/Shanghai)
