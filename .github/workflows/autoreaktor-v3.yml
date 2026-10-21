@@ -49,13 +49,19 @@ jobs:
           }
           Write-Host ("input md5 = " + (Get-FileHash 'input\AirExplorer.exe' -Algorithm MD5).Hash)
 
-      - name: 构建 nbwalk（nbdump.py 依赖它，走反射遍历）
+      - name: 构建 nbwalk 与 Krypton.Runner（nbdump.py 两个依赖）
         shell: pwsh
         run: |
           cd ar\v3\nbwalk
           dotnet build -c Release 2>&1 | Tee-Object -FilePath ..\..\..\build_nbwalk.log
-          $p = "bin\Release\net48\nbwalk.exe"
-          if (Test-Path $p) { Write-Host "nbwalk ok: $p" } else { Get-ChildItem -Recurse bin | Select-Object FullName }
+          if (Test-Path "bin\Release\net48\nbwalk.exe") { Write-Host "nbwalk ok" }
+          # nbdump.py 通过 _find_runner() 在 tools/krypton 下找 Krypton.Runner.exe
+          cd ..\..\..
+          if (-not (Test-Path "tools\krypton")) {
+            git clone --depth 1 https://github.com/dawwinci/krypton-devirtualizer.git tools\krypton
+          }
+          dotnet build tools\krypton\Krypton.Runner\Krypton.Runner.csproj -c Release 2>&1 | Tee-Object -FilePath build_runner.log
+          Get-ChildItem -Recurse -Filter "Krypton.Runner.exe" -Path tools\krypton | Select-Object FullName
 
       - name: 反射收割 NecroBit 真体
         shell: pwsh
@@ -118,4 +124,5 @@ jobs:
             probe_nbrebuild/
             nbout/
             build_nbwalk.log
+            build_runner.log
           if-no-files-found: warn
