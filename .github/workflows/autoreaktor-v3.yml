@@ -70,7 +70,12 @@ jobs:
           python --version
           cd ar
           python v3/nbdump.py ..\input\AirExplorer.exe ..\nbout 2>&1 | Tee-Object -FilePath ..\nbdump.log
-          Write-Host "=== exit=$LASTEXITCODE ==="
+          # 注意: nbdump.py 末尾是 `return 0 if matched == len(dic_map) else 1`,
+          # 覆盖率不到 100% 就返回 1, 但 inventory 已经正常写出了 —— 不能当失败处理。
+          $rc = $LASTEXITCODE
+          Write-Host "=== nbdump rc=$rc (1 仅表示覆盖率<100%) ==="
+          if (-not (Test-Path "..\nbout\nb-inventory.json")) { throw "inventory 未生成, 真失败" }
+          Write-Host "inventory ok"
           Get-ChildItem ..\nbout -Recurse | Select-Object FullName,Length | Format-Table | Out-String | Write-Host
 
       - name: 构建 nbrebuild
