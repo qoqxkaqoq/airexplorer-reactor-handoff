@@ -45,6 +45,19 @@ class NbRestore {
         BuildOpMap();
 
         var files = Directory.GetFiles(dumpDir, "m_*.bin");
+        // --onlylist <file>: 只处理清单里列出的 token(每行一个十六进制 RID),
+        // 省掉每次调用都遍历上万个 dump 文件的开销
+        for (int i = 3; i < a.Length - 1; i++) {
+            if (a[i] == "--onlylist") {
+                var set = new HashSet<string>();
+                foreach (var ln in File.ReadAllLines(a[i + 1]))
+                    if (!string.IsNullOrWhiteSpace(ln)) set.Add(ln.Trim().TrimStart('0').ToUpperInvariant());
+                files = files.Where(f => set.Contains(
+                    Path.GetFileNameWithoutExtension(f).Substring(2).TrimStart('0').ToUpperInvariant())).ToArray();
+                Console.WriteLine("[nbrestore] onlylist -> " + files.Length + " files");
+                break;
+            }
+        }
         int ok = 0, skipNoMethod = 0, skipParse = 0, skipNoLocals = 0;
 
         foreach (var f in files.OrderBy(x => x)) {
