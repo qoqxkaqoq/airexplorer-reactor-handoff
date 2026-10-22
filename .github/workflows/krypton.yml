@@ -17,6 +17,14 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: 部署官方安装(依赖 DLL 齐全)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          Write-Host ("app 内容: " + (Get-ChildItem app | Measure-Object).Count + " 项")
+          Get-ChildItem app -Filter "*.dll" | Select-Object -First 8 | ForEach-Object { Write-Host $_.Name }
+
       - name: 拉取 dawwinci Krypton fork
         shell: pwsh
         run: |
@@ -46,6 +54,10 @@ jobs:
           Write-Host "runner = $($runner.FullName)"
           $env:KRYPTON_ALLOW_PARTIAL_OUTPUT = "1"
           & $runner.FullName --standalone-check $exe 2>&1 | Tee-Object -FilePath out\standalone-check.txt | Select-Object -Last 40
+          Write-Host "=== necrobit-body-dump-all ==="
+          # true = 不 throw(报告落盘即可); body dump 输出 json
+          & $runner.FullName --necrobit-body-dump-all $exe out\necrobit-bodies.json 2>&1 | Tee-Object -FilePath out\bodydump.log | Select-Object -Last 25
+          if (Test-Path "out\necrobit-bodies.json") { Write-Host ("bodies.json = " + (Get-Item "out\necrobit-bodies.json").Length + " 字节") }
 
       - name: 主流程 devirtualize
         shell: pwsh
@@ -58,12 +70,13 @@ jobs:
           $env:KRYPTON_ALLOW_PARTIAL_OUTPUT = "1"
           $work = "kryptwork"
           New-Item -ItemType Directory -Force -Path $work | Out-Null
-          Copy-Item $exe "$work\input.exe"
+          # 整个 app 目录复制(依赖齐全), 目标改名 input.exe 会导致依赖解析失败 -> 保留原名
+          Copy-Item app\* $work\ -Recurse -Force
           # 30 分钟上限, 卡住就结束(报告仍会落盘)
-          $p = Start-Process -FilePath $krypton.FullName -ArgumentList @("$work\input.exe", "--no-pause") -WorkingDirectory $work -PassThru -NoNewWindow -RedirectStandardOutput out\krypton-stdout.txt -RedirectStandardError out\krypton-stderr.txt
+          $p = Start-Process -FilePath $krypton.FullName -ArgumentList @("$work\AirExplorer.exe", "--no-pause") -WorkingDirectory $work -PassThru -NoNewWindow -RedirectStandardOutput out\krypton-stdout.txt -RedirectStandardError out\krypton-stderr.txt
           if (-not $p.WaitForExit(1800000)) { $p.Kill(); Write-Host "[timeout] 30min 超时, 保留部分产物" }
           Get-ChildItem $work | ForEach-Object { Write-Host ("  " + $_.Name + "  " + $_.Length) }
-          Get-ChildItem $work -Filter "*.exe" | Where-Object { $_.Name -ne "input.exe" } | ForEach-Object { Copy-Item $_.FullName "out\" }
+          Get-ChildItem $work -Filter "*.exe" | Where-Object { $_.Name -ne "AirExplorer.exe" } | ForEach-Object { Copy-Item $_.FullName "out\" -ErrorAction SilentlyContinue }
           Get-ChildItem $work -Filter "*report*" | ForEach-Object { Copy-Item $_.FullName "out\" }
 
       - uses: actions/upload-artifact@v4

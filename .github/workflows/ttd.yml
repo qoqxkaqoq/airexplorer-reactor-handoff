@@ -13,26 +13,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 安装 WinDbg 并复制包目录 (绕过 WindowsApps ACL)
+      - name: 下载并解包 WinDbg (绕开 winget 与 WindowsApps ACL)
         shell: pwsh
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          winget install --id Microsoft.WinDbg -e --source winget --accept-source-agreements --accept-package-agreements --silent
-          # 定位包目录(两种方式都试)
-          $pkg = Get-ChildItem "$env:ProgramFiles\WindowsApps" -Directory -Filter "Microsoft.WinDbg_*" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $pkg) {
-            $ttdAny = Get-ChildItem "$env:ProgramFiles\WindowsApps" -Recurse -Filter "TTD.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($ttdAny) { $pkg = $ttdAny.Directory.Parent.Parent.Parent.Parent }
-          }
-          if (-not $pkg) { Write-Host "WinDbg 包未找到"; winget list --name WinDbg; exit 1 }
-          Write-Host "pkg = $($pkg.FullName)"
-          # WindowsApps 有执行 ACL, 复制出来后从工作目录跑
-          Copy-Item "$($pkg.FullName)\amd64" "D:\wd" -Recurse -Force
-          $ttd = "D:\wd\ttd\TTD.exe"
-          $cdb = "D:\wd\cdb.exe"
-          Write-Host "TTD = $ttd  exists=$(Test-Path $ttd)"
-          Write-Host "cdb = $cdb  exists=$(Test-Path $cdb)"
-          if (-not (Test-Path $ttd)) { exit 1 }
+          # microsoft/WinDbg releases 提供 msixbundle(zip 容器), 7z 直接解包
+          $rel = Invoke-RestMethod "https://api.github.com/repos/microsoft/WinDbg/releases/latest" -Headers @{ "User-Agent" = "ci" }
+          $asset = $rel.assets | Where-Object { $_.name -match "msixbundle$" } | Select-Object -First 1
+          if (-not $asset) { Write-Host "no msixbundle asset"; $rel.assets | ForEach-Object { Write-Host $_.name }; exit 1 }
+          Write-Host "asset = $($asset.name)  $($asset.size) bytes"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile D:\windbg.msixbundle
+          New-Item -ItemType Directory -Force -Path D:\wd | Out-Null
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\windbg.msixbundle | Out-Null
+          # msixbundle 解出的是 msix 包(x64), 再解一层
+          $pkg = Get-ChildItem D:\wd -Filter "*.msix" | Select-Object -First 1
+          if ($pkg) { & "C:\Program Files\7-Zip\7z.exe" x -y "-oD:\wd\x" $pkg.FullName | Out-Null }
+          $ttd = @(D:\wd\x\amd64\ttd\TTD.exe, D:\wd\amd64\ttd\TTD.exe, D:\wd\ttd\TTD.exe) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $cdb = @(D:\wd\x\amd64\cdb.exe, D:\wd\amd64\cdb.exe, D:\wd\cdb.exe) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          Write-Host "TTD = $ttd"
+          Write-Host "cdb = $cdb"
+          if (-not $ttd) { Get-ChildItem -Recurse D:\wd -Filter "TTD.exe" | Select-Object -First 3 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
           "TTDEXE=$ttd" | Out-File $env:GITHUB_ENV -Append utf8
           "CDbEXE=$cdb" | Out-File $env:GITHUB_ENV -Append utf8
 
