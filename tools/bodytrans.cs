@@ -10,6 +10,7 @@ using dnlib.DotNet.Emit;
 class BodyTrans {
     static ModuleDef curDstMod;   // 当前目标模块 (ImportSmart 全局成员重定向用)
     static int Main(string[] a) {
+        if (a.Length > 4 && a[0] == "fromlist") return FromList(a);
         if (a.Length > 5 && a[0] == "trace") return Trace(a);
         if (a.Length > 4 && a[0] == "clonetree") return CloneTree(a);
         if (a.Length > 2 && a[0] == "rbindall") return RbindAll(a);
@@ -530,6 +531,40 @@ class BodyTrans {
             } catch (Exception ex) { Console.WriteLine("[jit] 解码失败 " + mname + ": " + ex.GetType().Name + ": " + ex.Message); }
         }
         return WriteOut(dstMod, outPath, n);
+    }
+
+    // ===== fromlist: 按 stubscan 产出的清单批量移植 (T|type|method|...)
+    // 用法: bodytrans fromlist <src> <dst> <out> <listfile>
+    static int FromList(string[] a) {
+        var srcMod = ModuleDefMD.Load(a[1]);
+        var dstMod = ModuleDefMD.Load(a[2]);
+        var importer = new Importer(dstMod);
+        curDstMod = dstMod;
+        var lines = System.IO.File.ReadAllLines(a[4]);
+        int ok = 0, skip = 0, fail = 0;
+        foreach (var line in lines) {
+            if (!line.StartsWith("T|")) continue;
+            var p = line.Split('|');
+            if (p.Length < 3) continue;
+            string tfull = p[1], mname = p[2];
+            var srcM = FindMethod(srcMod, tfull, mname);
+            var dstM = FindMethod(dstMod, tfull, mname);
+            if (srcM == null || !srcM.HasBody || dstM == null || !dstM.HasBody) { skip++; continue; }
+            var codes = dstM.Body.Instructions.Select(x => x.OpCode.Code).ToList();
+            // 授权桩 (ldc.i4.1; ret) 不要动
+            if (codes.Count <= 4 && codes.Contains(Code.Ldc_I4_1)) { skip++; continue; }
+            if (srcM.Body.Instructions.Count <= 6) { skip++; continue; }
+            try {
+                TransplantBody(dstM, srcM, importer);
+                RebindRefs(dstM, dstMod);
+                ok++;
+            } catch (Exception ex) {
+                fail++;
+                if (fail <= 10) Console.WriteLine("[fail] " + tfull + "::" + mname + "  " + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+        Console.WriteLine("[fromlist] ok=" + ok + " skip=" + skip + " fail=" + fail);
+        return WriteOut(dstMod, a[3], ok);
     }
 
     static int WriteOut(ModuleDef dstMod, string path, int n) {

@@ -37,6 +37,33 @@ class FixGen {
         var map = new Dictionary<string, TypeDef>();
         foreach (var kv in aliases) {
             var fp = Fingerprint(kv.Value);
+            // 先试"同父类型下按嵌套序号"——文档实证: 同一父类型下 cilantro 与官方的
+            // NestedTypes 顺序一致, 这比全局指纹唯一匹配可靠得多。
+            var srcT = kv.Value;
+            if (srcT.DeclaringType != null) {
+                var parentName = srcT.DeclaringType.FullName;
+                var dstParent = dstTypes.FirstOrDefault(x => x.FullName == parentName);
+                if (dstParent != null) {
+                    int idx = -1;
+                    for (int i = 0; i < srcT.DeclaringType.NestedTypes.Count; i++)
+                        if (srcT.DeclaringType.NestedTypes[i] == srcT) { idx = i; break; }
+                    if (idx >= 0 && idx < dstParent.NestedTypes.Count) {
+                        var cand = dstParent.NestedTypes[idx];
+                        if (Fingerprint(cand) == fp) {
+                            map[kv.Key] = cand;
+                            Console.WriteLine("[mapN] " + kv.Key + "  ->  " + cand.FullName + "  (idx " + idx + ")");
+                            continue;
+                        }
+                        // 序号不对就退回到"同父下唯一指纹"
+                        var sib = dstParent.NestedTypes.Where(x => Fingerprint(x) == fp).ToList();
+                        if (sib.Count == 1) {
+                            map[kv.Key] = sib[0];
+                            Console.WriteLine("[mapP] " + kv.Key + "  ->  " + sib[0].FullName);
+                            continue;
+                        }
+                    }
+                }
+            }
             var cands = dstTypes.Where(x => Fingerprint(x) == fp).ToList();
             if (cands.Count == 1) {
                 map[kv.Key] = cands[0];
