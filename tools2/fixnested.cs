@@ -36,7 +36,35 @@ class FixNested {
             return t;
         }
 
-        int nMr = 0, nTs = 0, nFieldSig = 0;
+        // 递归修任意 TypeSig 里的"顶层 TypeRef"（数组/byref/泛型实例/泛型实参）
+        TypeSig FixSig2(TypeSig sig) {
+            if (sig == null) return null;
+            if (sig is TypeDefOrRefSig tds) {
+                if (tds.TypeDefOrRef is TypeRef trx) {
+                    var ft = FixTdor(trx, "sig");
+                    if (!ReferenceEquals(ft, trx)) return ((ITypeDefOrRef)ft).ToTypeSig(tds is ValueTypeSig);
+                }
+                return sig;
+            }
+            if (sig is GenericInstSig gi) {
+                bool ch = false;
+                var gt = gi.GenericType;
+                ClassOrValueTypeSig ngt = gt;
+                if (gt != null && gt.TypeDefOrRef is TypeRef gtr) {
+                    var ft = FixTdor(gtr, "gasig");
+                    if (!ReferenceEquals(ft, gtr)) { ngt = new ClassSig((ITypeDefOrRef)ft); ch = true; }
+                }
+                var args = new List<TypeSig>();
+                foreach (var g in gi.GenericArguments) { var x = FixSig2(g); if (!ReferenceEquals(x, g)) ch = true; args.Add(x); }
+                return ch ? new GenericInstSig(ngt, args) : sig;
+            }
+            if (sig is SZArraySig sa) { var e = FixSig2(sa.Next); return ReferenceEquals(e, sa.Next) ? sig : new SZArraySig(e); }
+            if (sig is ByRefSig br) { var e = FixSig2(br.Next); return ReferenceEquals(e, br.Next) ? sig : new ByRefSig(e); }
+            if (sig is PtrSig pp) { var e = FixSig2(pp.Next); return ReferenceEquals(e, pp.Next) ? sig : new PtrSig(e); }
+            return sig;
+        }
+
+        int nMr = 0, nTs = 0, nFieldSig = 0, nThis = 0;
         foreach (var mr in mod.GetMemberRefs().ToList()) {
             var cls = mr.Class;
             if (cls is TypeSpec ts && ts.TypeSig is GenericInstSig gi) {
@@ -57,23 +85,41 @@ class FixNested {
         // 字段/方法签名里的 TypeRef 也要修（locals 走固定 sig 时）
         foreach (var t in mod.GetTypes()) {
             foreach (var f in t.Fields) {
-                var ft = f.FieldType;
-                if (ft is ClassSig cs && cs.TypeDefOrRef is TypeRef tr) {
-                    var fixedT = FixTdor(tr, "F " + t.Name + "::" + f.Name);
-                    if (!ReferenceEquals(fixedT, tr)) { f.FieldSig.Type = new ClassSig((ITypeDefOrRef)fixedT); nFieldSig++; }
+                var nf = FixSig2(f.FieldType);
+                if (nf != null && !ReferenceEquals(nf, f.FieldType)) { f.FieldSig.Type = nf; nFieldSig++; }
+            }
+            // 泛型类型的实例方法: this 参数类型若是"顶层 TypeRef", 运行时解析会 TypeLoad
+            if (t.GenericParameters.Count > 0) {
+                foreach (var m in t.Methods) {
+                    if (!m.HasThis || m.Parameters.Count == 0) continue;
+                    var p0 = m.Parameters[0];
+                    if (p0.Type is ClassSig pcs && pcs.TypeDefOrRef is TypeRef ptr
+                        && byName.TryGetValue(ptr.Name.String, out var pcands) && pcands.Count == 1
+                        && pcands[0] == t) {
+                        var gargs = new List<TypeSig>();
+                        for (int gi = 0; gi < t.GenericParameters.Count; gi++) gargs.Add(new GenericVar(gi, t));
+                        p0.Type = new GenericInstSig(new ClassSig(t), gargs);
+                        nThis++;
+                    }
                 }
             }
             foreach (var m in t.Methods) {
                 if (!m.HasBody) continue;
                 foreach (var v in m.Body.Variables) {
-                    if (v.Type is ClassSig cs2 && cs2.TypeDefOrRef is TypeRef tr3) {
-                        var fixedT = FixTdor(tr3, "L " + t.Name + "::" + m.Name);
-                        if (!ReferenceEquals(fixedT, tr3)) { v.Type = new ClassSig((ITypeDefOrRef)fixedT); nFieldSig++; }
+                    var nv = FixSig2(v.Type);
+                    if (nv != null && !ReferenceEquals(nv, v.Type)) { v.Type = nv; nFieldSig++; }
+                }
+                if (m.MethodSig != null) {
+                    for (int pi = 0; pi < m.MethodSig.Params.Count; pi++) {
+                        var np = FixSig2(m.MethodSig.Params[pi]);
+                        if (np != null && !ReferenceEquals(np, m.MethodSig.Params[pi])) { m.MethodSig.Params[pi] = np; nFieldSig++; }
                     }
+                    var nr = FixSig2(m.MethodSig.RetType);
+                    if (nr != null && !ReferenceEquals(nr, m.MethodSig.RetType)) { m.MethodSig.RetType = nr; nFieldSig++; }
                 }
             }
         }
-        Console.WriteLine("[fixnested] memberref=" + nMr + " typespec=" + nTs + " sigs=" + nFieldSig);
+        Console.WriteLine("[fixnested] memberref=" + nMr + " typespec=" + nTs + " sigs=" + nFieldSig + " this=" + nThis);
         var wopt = new ModuleWriterOptions(mod);
         wopt.MetadataOptions.Flags |= MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack;
         mod.Write(a[1], wopt);

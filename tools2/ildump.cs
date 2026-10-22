@@ -15,11 +15,13 @@ class IlDump {
         foreach (var t in mod.GetTypes()) {
             if (t.FullName.IndexOf(ts, StringComparison.Ordinal) < 0) continue;
             nt++;
-            Console.WriteLine("### TYPE " + t.FullName + "  (fields=" + t.Fields.Count + ", methods=" + t.Methods.Count + ")");
+            Console.WriteLine("### TYPE " + t.FullName + "  (fields=" + t.Fields.Count + ", methods=" + t.Methods.Count + ", gparams=" + t.GenericParameters.Count + ", base=" + (t.BaseType == null ? "null" : t.BaseType.FullName) + ")");
             foreach (var m in t.Methods) {
                 if (ms != null && m.Name.String.IndexOf(ms, StringComparison.Ordinal) < 0) continue;
                 Console.WriteLine("  --- " + Sig(m) + (m.HasBody ? "  [" + m.Body.Instructions.Count + " insn, maxstack=" + m.Body.MaxStack + "]" : "  [no body]"));
                 if (!m.HasBody) continue;
+                if (m.Body.Variables.Count > 0)
+                    Console.WriteLine("    LOCALS(" + m.Body.Variables.Count + "): " + string.Join(" | ", m.Body.Variables.Select(v => v.Type.FullName)));
                 foreach (var ins in m.Body.Instructions) {
                     Console.WriteLine("    " + ins.Offset.ToString("X4") + "  " + ins.OpCode.Name.PadRight(12) + Fmt(ins));
                 }
