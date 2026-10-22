@@ -706,3 +706,30 @@ v40 的 NRE 在 `WrapperEnumerator.PatchCommand`：`m_ProfileWrapperList` 为 nu
   `patchsort` / `nestedchk` / `lvchk`
 - **1 个语法扩展**：`bodytrans DstName@SrcName`（源方法被改名时显式映射）
 - **错误层级**：`TypeLoad` → `AV` → `MissingField` → `NRE`（元数据问题基本清完）
+
+### 11.8 v45：阈值修正后批量补 305 个
+
+`stubscan`/`fromlist` 的源真体阈值 `>6` 改成 `>4` 后重扫：
+
+```
+total=30886 stub=1346 transplantable=422 noSrcBody=924
+[fromlist] ok=305 skip=117 fail=0
+```
+
+再跑 fixgen(133 fields/127 locals) + fixnested(10/3/7) + fixfieldidx(10)。
+
+**v45 仍然 NRE 在 `TemplateThread.InstantiateSymbolicTransmitter(Boolean)`（1060 指令），
+但调用栈已经稳定在最内层**：
+
+```
+TemplateThread.InstantiateSymbolicTransmitter(Boolean)
+  DefineSetSet(HandlerPublisher)
+    GenerateAdaptableExtractor(Boolean&)
+      PlanRunner()
+        InstantiateStatelessUser<T>(...)
+          InstantiateAccessibleProcessor(43, ...)
+            ModelTracer.JoinExecutor(String[])
+```
+
+下一轮：在 `InstantiateSymbolicTransmitter` 里找 `ldfld` 的 null 目标（1060 条指令，
+但控制流平坦化后真正的直线逻辑不多），或者继续按"缺方法体"补。
