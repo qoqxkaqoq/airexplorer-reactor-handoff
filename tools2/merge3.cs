@@ -64,7 +64,11 @@ class Merge3 {
                           " / dst 无此成员 " + noSrc + " / 失败 " + failed);
         if (list || filled == 0) return;
         var wopt = new dnlib.DotNet.Writer.ModuleWriterOptions(dst);
-        wopt.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack;
+        // PreserveAll 很关键: dnlib 默认写入会重排元数据行号(RID), 而 Reactor 的
+            // VM/解密 blob 里存的是**原始** token, 运行时靠 ResolveMethod/ResolveField 解析。
+            // 一旦重排, 就会解析到错误成员并触发 anti-tamper 异常(AutoReaktor v3 记的头号坑)。
+            wopt.MetadataOptions.Flags = dnlib.DotNet.Writer.MetadataFlags.PreserveAll
+                                       | dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack;
         dst.Write(outPath, wopt);
         Console.WriteLine("[merge3] 写出: " + outPath);
     }

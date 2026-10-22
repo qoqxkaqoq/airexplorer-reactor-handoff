@@ -1,0 +1,27 @@
+0000|ldc.i4|690493658
+0005|stloc|V_0
+0009|ldc.i4|1
+000E|stloc|V_3
+0012|ldloc|V_3
+0016|switch|[2目标]
+0023|nop|
+0024|ldc.i4|0
+0029|newarr|System.Object
+002E|stloc.s|V_2
+0030|ldloc|V_0
+0034|ldc.i4|-690493658
+0039|add|
+003A|stloc|V_3
+003E|ldloc|V_0
+0042|ldc.i4|-418477643
+0047|add|
+0048|stloc|V_0
+004C|br|->0012
+0051|ldc.i4|45
+0056|ldloc.s|V_2
+0058|ldnull|
+0059|call|System.Object[] CloudClient.Templating.TemplateArgument::InstantiateAccessibleProcessor(System.Int32,System.Object[],System.Object)
+005E|pop|
+005F|br|->0064
+0064|ret|
+SWITCH@0016|0051,0023

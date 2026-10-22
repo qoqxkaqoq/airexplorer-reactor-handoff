@@ -15,7 +15,7 @@ class IlDump {
         foreach (var t in mod.GetTypes()) {
             if (t.FullName.IndexOf(ts, StringComparison.Ordinal) < 0) continue;
             nt++;
-            Console.WriteLine("### TYPE " + t.FullName + "  (fields=" + t.Fields.Count + ", methods=" + t.Methods.Count + ", gparams=" + t.GenericParameters.Count + ", base=" + (t.BaseType == null ? "null" : t.BaseType.FullName) + ")");
+            Console.WriteLine("### TYPE " + t.FullName + "  (fields=" + t.Fields.Count + ", methods=" + t.Methods.Count + ", gparams=" + t.GenericParameters.Count + ", base=" + (t.BaseType == null ? "null" : t.BaseType.FullName) + ", attrs=0x" + ((int)t.Attributes).ToString("X") + ", nested=" + (t.DeclaringType != null) + ", gpc=" + t.GenericParameters.Count + ", nestedTypes=" + t.NestedTypes.Count + ")");
             foreach (var m in t.Methods) {
                 if (ms != null && m.Name.String.IndexOf(ms, StringComparison.Ordinal) < 0) continue;
                 Console.WriteLine("  --- " + Sig(m) + (m.HasBody ? "  [" + m.Body.Instructions.Count + " insn, maxstack=" + m.Body.MaxStack + "]" : "  [no body]"));

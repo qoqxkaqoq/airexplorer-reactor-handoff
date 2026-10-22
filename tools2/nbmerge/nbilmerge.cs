@@ -1,0 +1,875 @@
+// nbilmerge.cs v6 — token filter fixed: large rids
+// (MethodDesc chunk artifacts) are skipped, but the ones inside the module
+// all tokens are tried; real problem: the byToken lookup misses 108's
+// all miss: dump tokens are & 0xFFFFFF while the module's
+// rids may not line up. full scan first:
+// for every dump token: exists in module, else write without rid.
+// Also log the exception messages from the CreateCilBody calls.
+using System;
+using System.Collections.Generic;
+using System.IO;
+using dnlib.DotNet;
+using dnlib.DotNet.Emit;
+using dnlib.DotNet.Writer;
+
+class NBIlMerge {
+    // CIL opcode operand sizes derived from System.Reflection.Emit.OpCodes —
+    // no hand-maintained tables, no wrong skips. ScanLocalIndices walks a raw
+    // body with exact instruction boundaries.
+    static Dictionary<byte, int> _opLen1;
+    static Dictionary<byte, int> _opLen2;   // second byte after 0xFE
+    static Dictionary<byte, int> _tokOps1;  // single-byte token consumers
+    static Dictionary<byte, int> _tokOps2;  // 0xFE-prefixed token consumers
+
+    static void EnsureOpTables() {
+        if (_opLen1 != null) return;
+        _opLen1 = new Dictionary<byte, int>();
+        _opLen2 = new Dictionary<byte, int>();
+        _tokOps1 = new Dictionary<byte, int>();
+        _tokOps2 = new Dictionary<byte, int>();
+        foreach (var f in typeof(System.Reflection.Emit.OpCodes).GetFields()) {
+            if (!f.IsStatic || f.FieldType != typeof(System.Reflection.Emit.OpCode)) continue;
+            var op = (System.Reflection.Emit.OpCode)f.GetValue(null);
+            int sz;
+            switch (op.OperandType) {
+                case System.Reflection.Emit.OperandType.InlineNone: sz = 0; break;
+                case System.Reflection.Emit.OperandType.ShortInlineBrTarget:
+                case System.Reflection.Emit.OperandType.ShortInlineI:
+                case System.Reflection.Emit.OperandType.ShortInlineVar: sz = 1; break;
+                case System.Reflection.Emit.OperandType.InlineVar: sz = 2; break;
+                case System.Reflection.Emit.OperandType.InlineI8: sz = 8; break;
+                case System.Reflection.Emit.OperandType.InlineR:
+                    // net48 name: ldc.r4 AND ldc.r8 share one operand type —
+                    // the opcode decides the size (0x22 = ldc.r4).
+                    sz = (ushort)op.Value == 0x22 ? 4 : 8; break;
+                case System.Reflection.Emit.OperandType.InlineSwitch: sz = 0; break;   // handled specially
+                default: sz = 4; break; // InlineMethod/Field/Tok/String/Sig/BrTarget/I/R4
+            }
+            bool isTok = op.OperandType == System.Reflection.Emit.OperandType.InlineMethod ||
+                         op.OperandType == System.Reflection.Emit.OperandType.InlineField ||
+                         op.OperandType == System.Reflection.Emit.OperandType.InlineType ||
+                         op.OperandType == System.Reflection.Emit.OperandType.InlineTok ||
+                         op.OperandType == System.Reflection.Emit.OperandType.InlineString ||
+                         op.OperandType == System.Reflection.Emit.OperandType.InlineSig;
+            if (!isTok) continue;
+            ushort v = (ushort)op.Value;
+            if (v < 0x100) _tokOps1[(byte)v] = sz;
+            else _tokOps2[(byte)(v & 0xFF)] = sz;
+        }
+    }
+
+    static int OpLen(byte b0, byte[] cil, int i, int n) {
+        if (b0 == 0xFE) {
+            if (i + 1 >= n) return n - i;
+            int sz;
+            if (!_opLen2.TryGetValue(cil[i + 1], out sz)) sz = 0;
+            return 2 + sz;
+        }
+        if (b0 == 0x43) {   // switch: 1 + u32 count + count*4 targets
+            if (i + 5 > n) return n - i;
+            uint cnt = BitConverter.ToUInt32(cil, i + 1);
+            long len = 5 + (long)cnt * 4;
+            return (int)Math.Min(len, n - i);
+        }
+        int sz2;
+        if (_opLen1.TryGetValue(b0, out sz2)) return 1 + sz2;
+        return 1;   // unknown byte: treat as operandless, keep walking
+    }
+
+    // Walk the raw CIL with exact instruction boundaries and record every
+    // local-variable instruction as offset -> index. Fixes three defects of
+    // the old CountLocalsFromCil: (a) the 0xFE prefix advanced by 2 instead
+    // of the true opcode length, re-scanning operand bytes as opcodes;
+    // (b) the FE family was matched against wrong second bytes (0x06/0x09/
+    // 0x0D are ldftn/ldarg/ldloca — ldloc/ldloca/stloc are 0x0C/0x0D/0x0E),
+    // so long-form locals were never recorded; (c) the 2-byte operand read
+    // lacked a bounds check and could throw on a trailing instruction.
+    // Returns the offset->index map; localCount = max index + 1 (>= 1).
+    static Dictionary<uint, int> ScanLocalIndices(byte[] cil, out int localCount) {
+        var map = new Dictionary<uint, int>();
+        EnsureOpTables();
+        int maxIdx = -1;
+        int i = 0, n = cil.Length;
+        while (i < n) {
+            byte b0 = cil[i];
+            int idx = -1, len;
+            if (b0 == 0xFE) {
+                len = OpLen(b0, cil, i, n);
+                if (i + 1 < n) {
+                    byte b1 = cil[i + 1];
+                    if ((b1 == 0x0C || b1 == 0x0D || b1 == 0x0E) && i + 4 <= n)
+                        idx = cil[i + 2] | (cil[i + 3] << 8);   // ldloc/ldloca/stloc
+                }
+            } else if (b0 >= 0x06 && b0 <= 0x09) { idx = b0 - 0x06; len = 1; }  // ldloc.0-3
+            else if (b0 >= 0x0A && b0 <= 0x0D) { idx = b0 - 0x0A; len = 1; }    // stloc.0-3
+            else if (b0 == 0x11 || b0 == 0x12 || b0 == 0x13) {                  // ldloc.s/ldloca.s/stloc.s
+                if (i + 2 <= n) { idx = cil[i + 1]; len = 2; } else len = n - i;
+            } else {
+                len = OpLen(b0, cil, i, n);
+            }
+            if (idx >= 0 && !map.ContainsKey((uint)i)) {
+                map[(uint)i] = idx;
+                if (idx > maxIdx) maxIdx = idx;
+            }
+            if (len < 1) len = 1;
+            i += len;
+        }
+        localCount = maxIdx + 1;
+        if (localCount < 1) localCount = 1;
+        return map;
+    }
+
+    // Rewrite token operands of a raw body through the translation map.
+    // Walks with exact instruction boundaries (opcode tables) and patches
+    // every 4-byte operand of a token-consuming instruction. Unmapped tokens
+    // stay as-is and are reported.
+    static bool Resolves(ModuleDefMD baseMod, uint tok)
+    {
+        try
+        {
+            var r = ((ITokenResolver)baseMod).ResolveToken(tok, new GenericParamContext());
+            return r != null;
+        }
+        catch { return false; }
+    }
+
+    static void Zero(byte[] outp, int i, int len, bool isStore)
+    {
+        for (int k = 0; k < len; k++) outp[i + k] = 0x00;
+        if (isStore) { if (len >= 1) outp[i] = 0x26; if (len >= 2) outp[i + 1] = 0x26; }
+        else outp[i] = 0x14;
+    }
+
+    static byte[] RewriteTokens(ModuleDefMD baseMod, byte[] cil, Dictionary<uint, uint> map, out int unmapped)
+    {
+        unmapped = 0; int zeroed = 0;
+        var outp = (byte[])cil.Clone();
+        EnsureOpTables();
+        int i = 0, n = cil.Length;
+        while (i < n)
+        {
+            byte b0 = cil[i];
+            int tokOff = -1, len;
+            if (b0 == 0xFE)
+            {
+                if (i + 1 >= n) break;
+                byte b1 = cil[i + 1];
+                int sz; if (!_opLen2.TryGetValue(b1, out sz)) sz = 0;
+                len = 2 + sz;
+                if (_tokOps2.ContainsKey(b1) && i + 2 + 4 <= n) tokOff = i + 2;
+            }
+            else
+            {
+                len = OpLen(b0, cil, i, n);
+                if (_tokOps1.ContainsKey(b0) && i + 1 + 4 <= n) tokOff = i + 1;
+            }
+            if (tokOff >= 0)
+            {
+                uint tok = BitConverter.ToUInt32(cil, tokOff);
+                uint nt;
+                uint finalTok = tok;
+                if (map.TryGetValue(tok, out nt)) { BitConverter.GetBytes(nt).CopyTo(outp, tokOff); finalTok = nt; }
+                else unmapped++;
+                if (!Resolves(baseMod, finalTok))
+                {
+                    bool isStore = b0 == 0x80 || b0 == 0x7D || b0 == 0xA1;
+                    Zero(outp, i, len, isStore);
+                    zeroed++;
+                }
+                else
+                {
+                    Console.WriteLine("    [tok-unmapped] " + ((tok >> 24).ToString("X2")) +
+                        " rid=" + (tok & 0xFFFFFF).ToString("X"));
+                }
+            }
+            if (len < 1) len = 1;
+            i += len;
+        }
+        if (zeroed > 0) Console.WriteLine("    [zero] " + zeroed + " dangling ref(s) zero-pushed");
+        return outp;
+    }
+
+    // Exclusive end offset -> first instruction starting AFTER the region.
+    // null (= end of method) is dnlib's convention for a region that runs to
+    // the end of the body.
+    static Instruction RegionEnd(Dictionary<uint, Instruction> map, IList<Instruction> body, uint endOff) {
+        Instruction ins;
+        if (map.TryGetValue(endOff, out ins)) return ins;
+        for (int k = 0; k < body.Count; k++)
+            if ((uint)body[k].Offset > endOff) return body[k];
+        return null;
+    }
+
+    static int Main(string[] a) {
+        if (a.Length >= 3 && a[0] == "map")
+        {
+            // Build an original->slayer MethodDef token map by matching
+            // (declaring type full name, method name, signature). Slayer does
+            // not rename symbols, but it can shift rids — dumping tokens are
+            // original-module rids, so binding into the slayer base needs
+            // this translation. Lines: <origHex> <slayerHex>
+            var orig = ModuleDefMD.Load(a[1]);
+            var slay = ModuleDefMD.Load(a[2]);
+            var lines = new List<string>();
+            var slayTypes = new Dictionary<string, TypeDef>();
+            foreach (var t in slay.GetTypes())
+                slayTypes[t.FullName] = t;
+            foreach (var t in orig.GetTypes())
+            {
+                TypeDef st;
+                if (!slayTypes.TryGetValue(t.FullName, out st)) continue;
+                var sm = new Dictionary<string, MethodDef>();
+                foreach (var m in st.Methods)
+                    sm[m.Name.String + "#" + m.MethodSig.ToString()] = m;
+                foreach (var m in t.Methods)
+                {
+                    MethodDef hit;
+                    if (sm.TryGetValue(m.Name.String + "#" + m.MethodSig.ToString(), out hit))
+                        lines.Add(((uint)m.MDToken.Raw).ToString("X8") + " " +
+                                  ((uint)hit.MDToken.Raw).ToString("X8"));
+                }
+            }
+            // entry-point anchor: slayer renames symbols but the entry
+            // point survives as THE entry point on both sides
+            if (orig.EntryPoint != null && slay.EntryPoint != null)
+                lines.Add(((uint)orig.EntryPoint.MDToken.Raw).ToString("X8") + " " +
+                          ((uint)slay.EntryPoint.MDToken.Raw).ToString("X8"));
+            File.WriteAllLines(a[3], lines);
+            Console.WriteLine("[map] " + lines.Count + " tokens (entry anchor: " +
+                (orig.EntryPoint != null ? ((uint)orig.EntryPoint.MDToken.Raw).ToString("X6") : "none") +
+                ") -> " + a[3]);
+            return 0;
+        }
+        if (a.Length < 3) { Console.WriteLine("usage: nbilmerge map <orig> <slayer> <out.map> | nbilmerge <in.exe> <dumpdir> <out.exe>"); return 1; }
+        var mod = ModuleDefMD.Load(a[0]);
+
+        var files = Directory.GetFiles(a[1], "m_*.bin");
+        var bodies = new List<byte[]>();
+        var toks = new List<uint>();
+        var localsToks = new List<uint>();
+        foreach (var f in files) {
+            var d = File.ReadAllBytes(f);
+            uint tok = BitConverter.ToUInt32(d, 0);
+            uint il = BitConverter.ToUInt32(d, 4);
+            uint localsTok = d.Length >= 24 ? BitConverter.ToUInt32(d, 20) : 0;
+            var body = new byte[d.Length - 24];
+            Array.Copy(d, 24, body, 0, body.Length);
+            toks.Add(tok); bodies.Add(body); localsToks.Add(localsTok);
+        }
+        Console.WriteLine("dump body: " + toks.Count);
+
+        // EH clauses captured by the clrjit_hook getEHinfo slot (NB_EHSLOT):
+        // m_XXXXXXXX.eh = [u32 count][count x 28B CORINFO_EH_CLAUSE]. Attached
+        // back onto the merged body so try/catch/finally survives write-back.
+        var ehMap = new Dictionary<string, uint[]>();
+        foreach (var ef in Directory.GetFiles(a[1], "m_*.eh")) {
+            var d = File.ReadAllBytes(ef);
+            if (d.Length < 4) continue;
+            uint cnt = BitConverter.ToUInt32(d, 0);
+            if (cnt == 0 || d.Length < 4L + cnt * 28) continue;
+            var flat = new uint[cnt * 7];
+            for (int k = 0; k < cnt * 7; k++)
+                flat[k] = BitConverter.ToUInt32(d, 4 + k * 4);
+            ehMap[System.IO.Path.GetFileNameWithoutExtension(ef)] = flat;
+        }
+        var ehNames = new Dictionary<string, Dictionary<int, string>>();
+        foreach (var ef in Directory.GetFiles(a[1], "m_*.ehn"))
+        {
+            var stem = System.IO.Path.GetFileNameWithoutExtension(ef);
+            var nm = new Dictionary<int, string>();
+            foreach (var ln in File.ReadAllLines(ef))
+            {
+                var parts = ln.Split('	');
+                int ix;
+                if (parts.Length == 2 && int.TryParse(parts[0], out ix)) nm[ix] = parts[1];
+            }
+            ehNames[stem] = nm;
+        }
+        Console.WriteLine("dump eh tables: " + ehMap.Count + " (+ " + ehNames.Count + " name tables)");
+
+        var byToken = new Dictionary<uint, MethodDef>();
+        foreach (var t in mod.GetTypes())
+            foreach (var m in t.Methods)
+                byToken[(uint)m.MDToken.Raw] = m;
+        Console.WriteLine("modul MethodDef: " + byToken.Count);
+
+        int restored = 0, skipped = 0;
+        bool noBodyWrite = Environment.GetEnvironmentVariable("NB_NOBODY") == "1";
+        // SEQ-matching (for x64 targets): dumps with synthetic tokens
+        // (out of rid range) in nb2 with the bodyless methods in metadata
+        // bind by encounter order. Weak proof — only
+        // use in report mode (NB_SEQ=1).
+        bool seqMode = Environment.GetEnvironmentVariable("NB_SEQ") == "1";
+        // NB_ILMATCH=1: sentetik tokenli dumplari bodyless methodlarla
+        // match by IL signature (ilSize + first byte) similarity. ilSize
+        // if unique it is a valid match; on collision the first
+        // candidate is taken and REPORTED (weakness of the proof is stated).
+        bool ilMatch = Environment.GetEnvironmentVariable("NB_ILMATCH") == "1";
+        int ilMatchUsed = 0;
+        var bodyless = new List<MethodDef>();
+        if (seqMode) {
+            foreach (var t in mod.GetTypes())
+                foreach (var m2 in t.Methods)
+                    if (!m2.HasBody) bodyless.Add(m2);
+            Console.WriteLine("seq target havuz (bodyless method): " + bodyless.Count);
+        }
+        // NB_STUBMAP: manual stub=dump mapping (the proven route).
+        // Format: NB_STUBMAP="m_0000.bin=methodAdi;m_0001.bin=methodAdi2"
+        var stubMap = new System.Collections.Generic.Dictionary<string,string>();
+        string smEnv = Environment.GetEnvironmentVariable("NB_STUBMAP");
+        if (!string.IsNullOrEmpty(smEnv))
+            foreach (var pair in smEnv.Split(';')) {
+                var kv = pair.Split('=');
+                if (kv.Length == 2) stubMap[kv[0].Trim()] = kv[1].Trim();
+                            }
+                        // NB_STUBMAPTOK: token-precise stub mapping (universal route):
+                        // format "m_0628001A.bin=06000006;m_06280015.bin=0600002B"
+                        // binds a dump file to the module method with that MethodDef
+                        // token. Token binding is unambiguous (unlike name binding).
+                        var stubTokMap = new System.Collections.Generic.Dictionary<string,string>();
+                        string stmEnv = Environment.GetEnvironmentVariable("NB_STUBMAPTOK");
+                        if (!string.IsNullOrEmpty(stmEnv))
+                            foreach (var pair in stmEnv.Split(';')) {
+                                var kv = pair.Split('=');
+                                if (kv.Length == 2) stubTokMap[kv[0].Trim()] = kv[1].Trim();
+                            }
+                        // NB_LDSTRMAP: rebind ldstr runtime tokens to literal strings
+                        // (NecroBit string-enc removes literals from the US heap; the
+                        // dumped IL keeps runtime-only tokens). Format:
+                        //   NB_LDSTRMAP="70000352=sample5;7000039E=register"
+                        // The literal is written into the OUT module's US heap by dnlib
+                        // with a fresh token — content-true rebinding.
+                        var ldstrMap = new System.Collections.Generic.Dictionary<uint,string>();
+                        string lsEnv = Environment.GetEnvironmentVariable("NB_LDSTRMAP");
+                        if (!string.IsNullOrEmpty(lsEnv))
+                            foreach (var pair in lsEnv.Split(';')) {
+                                var kv = pair.Split('=');
+                                if (kv.Length == 2) {
+                                    uint tk; if (!uint.TryParse(kv[0].Trim(), System.Globalization.NumberStyles.HexNumber, null, out tk)) continue;
+                                    ldstrMap[tk] = kv[1];
+                                }
+                            }
+                var tokenMap = (System.Collections.Generic.Dictionary<uint, uint>)null;
+                string tmPath = Environment.GetEnvironmentVariable("NB_TOKENMAP");
+                if (!string.IsNullOrEmpty(tmPath) && System.IO.File.Exists(tmPath))
+                {
+                    tokenMap = new System.Collections.Generic.Dictionary<uint, uint>();
+                    foreach (var ln in System.IO.File.ReadAllLines(tmPath))
+                    {
+                        var parts = ln.Trim().Split(' ');
+                        uint o, b;
+                        if (parts.Length == 2 &&
+                            uint.TryParse(parts[0], System.Globalization.NumberStyles.HexNumber, null, out o) &&
+                            uint.TryParse(parts[1], System.Globalization.NumberStyles.HexNumber, null, out b))
+                            tokenMap[o] = b;
+                    }
+                }
+                int seqIdx = 0;
+                        int stubHit = 0;
+                        int stubTokHit = 0, ldstrRebound = 0;
+        for (int i = 0; i < toks.Count; i++) {
+            // NB_STUBMAPTOK first (token-precise), then NB_STUBMAP (name).
+            string baseName = System.IO.Path.GetFileName(files[i]);
+                            MethodDef stubTarget = null;
+                            string dumpName = null;
+                            string tokName = null;
+                            if (stubTokMap.Count > 0 && stubTokMap.TryGetValue(baseName, out tokName)) {
+                                uint mt; if (uint.TryParse(tokName, System.Globalization.NumberStyles.HexNumber, null, out mt)) {
+                                    // pairs carry ORIGINAL-module tokens — translate
+                                    // them when the base shifted rids (slayer bases)
+                                    if (tokenMap != null && tokenMap.TryGetValue(mt, out var mapped)) mt = mapped;
+                                    foreach (var t in mod.GetTypes())
+                                        foreach (var mstub in t.Methods)
+                                            if (mstub.MDToken.Raw == mt) { stubTarget = mstub; break; }
+                                }
+                                if (stubTarget != null) { stubTokHit++; }
+                            }
+                            if (stubTarget == null && stubMap.Count > 0 && stubMap.TryGetValue(baseName, out dumpName)) {
+                foreach (var t in mod.GetTypes())
+                    foreach (var mstub in t.Methods)
+                        if (mstub.Name.String == dumpName) { stubTarget = mstub; break; }
+                if (stubTarget != null) {
+                    // the general write path handles this body:
+                    // set m=stubTarget, have=true.
+                    stubHit++;
+                }
+            }
+            if (noBodyWrite) { skipped++; continue; }
+            if (i < 3) Console.WriteLine("  [dbg" + i + "] tok=0x" + toks[i].ToString("X8") +
+                " map=" + (tokenMap == null ? "off" : tokenMap.Count.ToString()));
+            // NB_TOKENMAP: translate original-module dump tokens into the
+            // base module's rids (slayer bases can shift rids; binding by
+            // the raw dump token would cross-bind wrong bodies). Unmapped
+            // tokens are skipped, never cross-bound.
+            uint effTok = toks[i];
+            if (tokenMap != null)
+            {
+                uint mapped;
+                if (tokenMap.TryGetValue(toks[i], out mapped)) effTok = mapped;
+                else { skipped++; continue; }
+            }
+            MethodDef m = stubTarget;
+            bool have = stubTarget != null;
+            if (!have) have = byToken.TryGetValue(effTok, out m);
+            if (!have || m == null) {
+                if (seqMode && seqIdx < bodyless.Count) {
+                                    m = bodyless[seqIdx++];
+                                    if (m == null) { skipped++; continue; }
+                                    have = true;
+                                } else if (ilMatch && bodyless.Count > 0) {
+                                    // IL signature: dump (ilSize, first byte) — the module's
+                                    // bodyless methods have no known IL; but this
+                                    // matching runs in reverse: the dump's ilSize
+                                    // cannot be predicted from module metadata. Therefore
+                                    // ILMATCH is only an ilSize + call-count heuristic
+                                    // match and the RESULT IS REPORTED:
+                                    m = null;
+                                    // bodyless methodlarin param sayisi + statiklik
+                                    // dump'tan bilinmiyor — en zayif bag: siradaki
+                                    // uygun bodyless metodu al ama ETIKETLE:
+                                    for (int bi = 0; bi < bodyless.Count; bi++) {
+                                        var cand = bodyless[bi];
+                                        if (cand == null || cand.HasBody) continue;
+                                        m = cand; bodyless[bi] = null;
+                                        ilMatchUsed++;
+                                        break;
+                                    }
+                                    if (m == null) { skipped++; continue; }
+                                    have = true;
+                                } else {
+                                    skipped++;
+                                    if (i < 3) Console.WriteLine("  [miss] 0x" + effTok.ToString("X8"));
+                                    continue;
+                                }
+            }
+            // delegate-declaring methods must stay runtime-implemented —
+            // writing an IL body onto them is illegal and the JIT rejects
+            // the whole type ("runtime implemented delegate method")
+            if (m != null && m.DeclaringType?.BaseType?.FullName != null)
+            {
+                var bfn = m.DeclaringType.BaseType.FullName;
+                if (bfn.Contains("System.Delegate") || bfn.Contains("System.MulticastDelegate"))
+                { skipped++; if (skipped < 4) Console.WriteLine("  [skip] delegate: " + m.DeclaringType.FullName); continue; }
+            }
+            // generic types load-validate every member; a body written with
+            // Object-only locals can fail that check — leave generics to the
+            // reflection-equivalence pass until locals carry real types
+            if (m != null && m.DeclaringType != null && m.DeclaringType.HasGenericParameters)
+            { skipped++; if (skipped < 4) Console.WriteLine("  [skip] generic: " + m.DeclaringType.FullName); continue; }
+            try {
+                if (i < 3) Console.WriteLine("  [dbg" + i + "] try-entered m=" + (m == null ? "null" : m.Name.String));
+                // CreateCilBody METHOD BODY HEADER'li akis bekler:
+                // il<64 -> tiny (il<<2)|2, degilse 12-byte fat header.
+                uint il = (uint)bodies[i].Length;
+                byte[] all;
+                if (il < 64) {
+                    all = new byte[1 + il];
+                    all[0] = (byte)((il << 2) | 2);
+                    Array.Copy(bodies[i], 0, all, 1, il);
+                } else {
+                    var ms = new MemoryStream();
+                    // fat header: word0 = (3 dwords << 12) | flags.
+                    // flags 0x13 = FatFormat(0x3) | InitLocals(0x10).
+                    // 0x3011 is the wrong bit layout — 0x3013 is correct (q20 proof).
+                    ushort flags = 0x3013;
+                    ms.Write(BitConverter.GetBytes(flags), 0, 2);
+                    ms.Write(BitConverter.GetBytes((ushort)8), 0, 2);
+                    ms.Write(BitConverter.GetBytes(il), 0, 4);
+                    ms.Write(BitConverter.GetBytes((uint)0), 0, 4);
+                    ms.Write(bodies[i], 0, bodies[i].Length);
+                    all = ms.ToArray();
+                }
+                var dr = dnlib.IO.ByteArrayDataReaderFactory.CreateReader(all);
+                var newBody = dnlib.DotNet.Emit.MethodBodyReader.CreateCilBody(
+                    (dnlib.DotNet.Emit.IInstructionOperandResolver)mod,
+                    dr, m.Parameters);
+                if (i < 3) Console.WriteLine("  [dbg" + i + "] create done, instrs=" +
+                    (newBody == null ? -1 : newBody.Instructions.Count));
+                if (newBody != null && newBody.Instructions.Count > 0) {
+                    // REAL LOCALS: NecroBit encrypts method BODIES only — the
+                    // module's StandAloneSig rows (local signatures) stay
+                    // intact. Read the target method's own LocalVarSigTok from
+                    // the metadata and resolve it: Object-only locals make
+                    // value-type stores unverifiable IL (InvalidProgram).
+                    if (tokenMap != null)
+                    {
+                        int unmapped;
+                        bodies[i] = RewriteTokens(mod, bodies[i], tokenMap, out unmapped);
+                        if (unmapped > 0)
+                            Console.WriteLine("  [tok] 0x" + toks[i].ToString("X8") +
+                                " " + unmapped + " unmapped token(s) left as-is");
+                    }
+                    bool realLocals = false;
+                    uint ltok = localsToks[i];
+                    try {
+                        if (m.HasBody && m.Body != null && m.Body.LocalVarSigTok != 0) ltok = m.Body.LocalVarSigTok;
+                    } catch { }
+                    if (i < 3) Console.WriteLine("  [dbg" + i + "] sigtok=" + ltok);
+                        if (ltok != 0) {
+                        try {
+                            var resolvedSig = ((ITokenResolver)mod).ResolveToken(ltok, new GenericParamContext());
+                            var sas = resolvedSig as StandAloneSig;
+                            var lsig = sas == null ? null : sas.Signature as LocalSig;
+                            if (lsig != null && lsig.Locals.Count > 0) {
+                                newBody.Variables.Clear();
+                                foreach (var t in lsig.Locals)
+                                    newBody.Variables.Add(new Local(t));
+                                newBody.LocalVarSigTok = ltok;
+                                realLocals = true;
+                            }
+                        } catch { }
+                    }
+                    if (i < 3) Console.WriteLine("  [dbg" + i + "] realLocals=" + realLocals);
+                    // v49 LDSTR REBIND: NecroBit string-enc leaves runtime-only
+                    // ldstr tokens in the dumped IL. If NB_LDSTRMAP carries the
+                    // literal, replace the operand with the real string — dnlib
+                    // writes it into the OUT module's US heap content-true.
+                    foreach (var ins in newBody.Instructions) {
+                        if (ins.OpCode == OpCodes.Ldstr && ldstrMap.Count > 0) {
+                            uint slt = ins.Operand is uint ? (uint)ins.Operand : 0;
+                            string lit;
+                            if (slt != 0 && ldstrMap.TryGetValue(slt, out lit)) {
+                                ins.Operand = lit;
+                                ldstrRebound++;
+                            }
+                        }
+                    }
+                    // LOCALS: no localVarSig in the dump — local operands stay
+                    // unresolved (null, or a raw int index depending on the
+                    // dnlib parse path). Bind from the raw-IL offset map so
+                    // every ldloc/stloc/ldloca (.S and long forms included)
+                    // lands on the RIGHT slot, not on the last variable.
+                    var localOps = new List<dnlib.DotNet.Emit.Instruction>();
+                    var indexedOps = new List<KeyValuePair<dnlib.DotNet.Emit.Instruction, int>>();
+                    foreach (var ins in newBody.Instructions) {
+                        var op = ins.OpCode.Code;
+                        // ALL local opcodes — short forms included
+                        // (q21: the cause of 272 null operands was short forms
+                        // bu listede olmamasiydi):
+                        bool isLocalOp = op == dnlib.DotNet.Emit.Code.Ldloc ||
+                                         op == dnlib.DotNet.Emit.Code.Ldloca ||
+                                         op == dnlib.DotNet.Emit.Code.Stloc ||
+                                         (op >= dnlib.DotNet.Emit.Code.Ldloc_0 && op <= dnlib.DotNet.Emit.Code.Ldloc_3) ||
+                                         (op >= dnlib.DotNet.Emit.Code.Ldloc_S && op <= dnlib.DotNet.Emit.Code.Ldloca_S) ||
+                                         (op >= dnlib.DotNet.Emit.Code.Stloc_0 && op <= dnlib.DotNet.Emit.Code.Stloc_3) ||
+                                         op == dnlib.DotNet.Emit.Code.Stloc_S;
+                        if (!isLocalOp) continue;
+                        object operand = ins.Operand;
+                        if (operand is dnlib.DotNet.Emit.Local) continue;   // already bound
+                        if (operand is int)
+                            indexedOps.Add(new KeyValuePair<dnlib.DotNet.Emit.Instruction, int>(ins, (int)operand));
+                        else if (operand is uint)
+                            indexedOps.Add(new KeyValuePair<dnlib.DotNet.Emit.Instruction, int>(ins, unchecked((int)(uint)operand)));
+                        else if (operand == null)
+                            localOps.Add(ins);
+                    }
+                    if (localOps.Count > 0 || indexedOps.Count > 0) {
+                        string mwv = Environment.GetEnvironmentVariable("NB_MAXWRITE");
+                    if (mwv != null && restored >= int.Parse(mwv)) { skipped++; continue; }
+                    int nLocals;
+                        var localMap = ScanLocalIndices(bodies[i], out nLocals);
+                        while (newBody.Variables.Count < nLocals)
+                            newBody.Variables.Add(new dnlib.DotNet.Emit.Local(mod.CorLibTypes.Object));
+                        if (i < 3) Console.WriteLine("  [dbg] tok=0x" + toks[i].ToString("X8") +
+                            " localOps=" + localOps.Count + " indexed=" + indexedOps.Count +
+                            " nLocals=" + nLocals + " vars=" + newBody.Variables.Count);
+                        // operands dnlib kept as a raw index — bind directly:
+                        foreach (var kv in indexedOps) {
+                            int idx2 = kv.Value;
+                            while (newBody.Variables.Count <= idx2)
+                                newBody.Variables.Add(new dnlib.DotNet.Emit.Local(mod.CorLibTypes.Object));
+                            kv.Key.Operand = newBody.Variables[idx2];
+                        }
+                        // null operands: exact index from the raw-IL scan via
+                        // the instruction offset; implied-index forms (ldloc.N)
+                        // come from the opcode itself. An offset with no scan
+                        // entry falls back to the last variable and is counted.
+                        int fallback = 0;
+                        foreach (var ins in localOps) {
+                            int idx2;
+                            var c = ins.OpCode.Code;
+                            if (c >= dnlib.DotNet.Emit.Code.Ldloc_0 && c <= dnlib.DotNet.Emit.Code.Ldloc_3)
+                                idx2 = (int)(c - dnlib.DotNet.Emit.Code.Ldloc_0);
+                            else if (c >= dnlib.DotNet.Emit.Code.Stloc_0 && c <= dnlib.DotNet.Emit.Code.Stloc_3)
+                                idx2 = (int)(c - dnlib.DotNet.Emit.Code.Stloc_0);
+                            else if (!localMap.TryGetValue((uint)ins.Offset, out idx2)) {
+                                idx2 = newBody.Variables.Count - 1;
+                                fallback++;
+                            }
+                            if (idx2 >= 0) {
+                                while (newBody.Variables.Count <= idx2)
+                                    newBody.Variables.Add(new dnlib.DotNet.Emit.Local(mod.CorLibTypes.Object));
+                                ins.Operand = newBody.Variables[idx2];
+                            }
+                        }
+                        if (fallback > 0)
+                            Console.WriteLine("  [warn] tok=0x" + toks[i].ToString("X8") +
+                                " " + fallback + " local op(s) bound by fallback (offset miss)");
+                        // post-assignment check (before Write):
+                        int stillNull = 0;
+                        foreach (var ins in localOps) if (ins.Operand == null) stillNull++;
+                        if (i < 3) Console.WriteLine("  [post] tok=0x" + toks[i].ToString("X8") + " halaNull=" + stillNull);
+                    }
+                    // v6.1 EH REBUILD: reattach the exception clauses captured
+                    // from the getEHinfo hook (NB_EHSLOT). Clause offsets are
+                    // IL offsets; dnlib's writer serializes the fat header +
+                    // EH section on write, so no manual MoreSects surgery here.
+                    string stem = System.IO.Path.GetFileNameWithoutExtension(files[i]);
+                    uint[] flatEh;
+                    if (ehMap.TryGetValue(stem, out flatEh)) {
+                        int ehAdded = 0, ehDropped = 0;
+                        try {
+                            var off2ins = new Dictionary<uint, Instruction>();
+                            foreach (var ins in newBody.Instructions)
+                                off2ins[(uint)ins.Offset] = ins;
+                            int cnt2 = flatEh.Length / 7;
+                            for (int c = 0; c < cnt2; c++) {
+                                uint cflags = flatEh[c * 7 + 0], tryOff = flatEh[c * 7 + 1],
+                                     tryLen = flatEh[c * 7 + 2], hOff = flatEh[c * 7 + 3],
+                                     hLen = flatEh[c * 7 + 4];
+                                uint clsTok = flatEh[c * 7 + 5],
+                                     filtOff = flatEh[c * 7 + 6];
+                                if (tokenMap != null && tokenMap.TryGetValue(clsTok, out var mappedCls))
+                                    clsTok = mappedCls;
+                                Instruction tryStart, hStart;
+                                if (!off2ins.TryGetValue(tryOff, out tryStart)) { ehDropped++; Console.WriteLine("    [eh-drop] tryOff " + tryOff); continue; }
+                                if (!off2ins.TryGetValue(hOff, out hStart)) { ehDropped++; Console.WriteLine("    [eh-drop] hOff " + hOff); continue; }
+                                // CORINFO_EH_CLAUSE_FLAGS: 0 catch, 1 filter,
+                                // 2 finally, 3 fault (mask off meta bits).
+                                var htype =
+                                    (cflags & 3) == 1 ? ExceptionHandlerType.Filter :
+                                    (cflags & 3) == 2 ? ExceptionHandlerType.Finally :
+                                    (cflags & 3) == 3 ? ExceptionHandlerType.Fault :
+                                    ExceptionHandlerType.Catch;
+                                if (stem == "m_06000005")
+                                    Console.WriteLine("    [eh-dbg] c=" + c + " cflags=" + cflags +
+                                        " htype=" + htype + " tryOff=" + tryOff + " hOff=" + hOff +
+                                        " clsTok=" + clsTok.ToString("X8") + " filtOff=" + filtOff);
+                                var eh = new ExceptionHandler(htype);
+                                eh.TryStart = tryStart;
+                                eh.TryEnd = RegionEnd(off2ins, newBody.Instructions, tryOff + tryLen);
+                                eh.HandlerStart = hStart;
+                                eh.HandlerEnd = RegionEnd(off2ins, newBody.Instructions, hOff + hLen);
+                                if (htype == ExceptionHandlerType.Filter) {
+                                    Instruction fStart;
+                                    if (!off2ins.TryGetValue(filtOff, out fStart)) { ehDropped++; Console.WriteLine("    [eh-drop] filter " + filtOff); continue; }
+                                    eh.FilterStart = fStart;
+                                }
+                                if (htype == ExceptionHandlerType.Catch && clsTok != 0) {
+                                    try {
+                                        var resolved = ((ITokenResolver)mod).ResolveToken(clsTok, new GenericParamContext());
+                                        eh.CatchType = resolved as ITypeDefOrRef;
+                                    } catch { }
+                                    if (eh.CatchType == null) {
+                                        // token came from a foreign space (the
+                                        // runtime's decoded view) - resolve the
+                                        // catch type BY NAME (.ehn files)
+                                        string cname = null;
+                                        Dictionary<int, string> nmm;
+                                        if (ehNames.TryGetValue(stem, out nmm))
+                                            nmm.TryGetValue(c, out cname);
+                                        if (cname != null)
+                                        {
+                                            ITypeDefOrRef f = mod.Find(cname, false);
+                                            if (f == null)
+                                                foreach (var tr in mod.GetTypeRefs())
+                                                    if (tr.FullName == cname) { f = tr; break; }
+                                            eh.CatchType = f;
+                                        }
+                                    }
+                                    if (eh.CatchType == null) { ehDropped++; Console.WriteLine("    [eh-drop] catch-type 0x" + clsTok.ToString("X8") + " unresolvable"); continue; }
+                                }
+                                newBody.ExceptionHandlers.Add(eh);
+                                ehAdded++;
+                            }
+                        } catch (Exception e2) {
+                            Console.WriteLine("  [eh] " + stem + ": " + e2.GetType().Name + " " + e2.Message);
+                        }
+                        if (ehAdded > 0 || ehDropped > 0)
+                            Console.WriteLine("  [eh] " + stem + " added=" + ehAdded + " dropped=" + ehDropped);
+                    }
+                    // NecroBit marks decoys as runtime-implemented; a real
+                    // body replaces the stub, so the flag must go — keeping
+                    // it makes the JIT throw TypeLoadException
+                    // ("Runtime-implemented method with non-zero RVA").
+                    if ((m.ImplAttributes & MethodImplAttributes.Runtime) != 0)
+                        m.ImplAttributes &= ~MethodImplAttributes.Runtime;
+                    // transplanted instance ctors: decoded bodies lost the
+                    // base-ctor call (the NecroBit runtime did it) - prepend
+                    // ldarg.0 + base .ctor when the body never calls it,
+                    // else the runtime rejects the ctor (ThisUninitReturn)
+                    if (m.Name == ".ctor" && !m.IsStatic &&
+                        m.DeclaringType?.BaseType != null)
+                    {
+                        bool callsBase = false;
+                        foreach (var x in newBody.Instructions)
+                        {
+                            if (x.OpCode == OpCodes.Call && x.Operand is IMethod cm &&
+                                cm.Name == ".ctor" && cm.DeclaringType != null &&
+                                cm.DeclaringType.FullName == m.DeclaringType.BaseType.FullName)
+                            { callsBase = true; break; }
+                        }
+                        if (!callsBase)
+                        {
+                            try
+                            {
+                                var baseCtor = new MemberRefUser(mod, ".ctor",
+                                    MethodSig.CreateInstance(mod.CorLibTypes.Void),
+                                    m.DeclaringType.BaseType);
+                                newBody.Instructions.Insert(0, new Instruction(OpCodes.Call, baseCtor));
+                                newBody.Instructions.Insert(0, new Instruction(OpCodes.Ldarg_0));
+                            }
+                            catch { }
+                        }
+                    }
+                    m.Body = newBody;
+                    restored++;
+                } else skipped++;
+            } catch (Exception e) {
+                skipped++;
+                Console.WriteLine("  [exc] 0x" + toks[i].ToString("X8") + ": " + e.GetType().Name + " " + e.Message);
+            }
+        }
+        Console.WriteLine("stub-map hits: " + stubHit);
+        Console.WriteLine("method actually written: " + restored + " | skipped: " + skipped);
+        Console.WriteLine("ILMATCH (heuristic, unproven matching): " + ilMatchUsed);
+        Console.WriteLine("stubTok hits: " + stubTokHit + " | ldstr rebound: " + ldstrRebound);
+        string mw = Environment.GetEnvironmentVariable("NB_MAXWRITE");
+        if (mw != null) Console.WriteLine("NB_MAXWRITE=" + mw + " (limit modu)");
+
+        // POST-WRITE DANGLING SCAN: every restored body's final IL is walked
+        // against the base module; anything unresolvable prints with its
+        // method, offset and token (cap 20) - this pinpoints exactly which
+        // reference still dangles when a MissingMethod survives
+        {
+            int printed = 0;
+            foreach (var t in mod.GetTypes())
+                foreach (var mm in t.Methods)
+                {
+                    if (!mm.HasBody) continue;
+                    foreach (var ins in mm.Body.Instructions)
+                    {
+                        uint? tok = null;
+                        try
+                        {
+                            if (ins.Operand is ITypeDefOrRef tdr) tok = (uint)tdr.MDToken.Raw;
+                            else if (ins.Operand is IMethod im && im.MDToken != null) tok = (uint)im.MDToken.Raw;
+                            else if (ins.Operand is IField fd && fd.MDToken != null) tok = (uint)fd.MDToken.Raw;
+                        }
+                        catch { }
+                        if (tok == null) continue;
+                        if (!Resolves(mod, tok.Value))
+                        {
+                            printed++;
+                            if (printed <= 20)
+                                Console.WriteLine("    [dangle] " + t.FullName + "::" + mm.Name +
+                                    " +" + ins.Offset + " " + ins.OpCode.Name + " 0x" +
+                                    tok.Value.ToString("X8"));
+                        }
+                    }
+                }
+            Console.WriteLine("  [dangle-scan] unresolvable operands: " + printed);
+        }
+
+        // null-operand write rescue (skip with NB_NOSIL=1)
+        bool noSil2 = Environment.GetEnvironmentVariable("NB_NOSIL") == "1";
+        var toRemove = new List<Instruction>();
+        int nullSil = 0;
+        if (!noSil2)
+        foreach (var t in mod.GetTypes()) {
+            foreach (var m in t.Methods) {
+                if (!m.HasBody) continue;
+                toRemove.Clear();
+                var branchTargets = new HashSet<dnlib.DotNet.Emit.Instruction>();
+                foreach (var ins in m.Body.Instructions) {
+                    if (ins.Operand is dnlib.DotNet.Emit.Instruction) branchTargets.Add((dnlib.DotNet.Emit.Instruction)ins.Operand);
+                    if (ins.Operand is dnlib.DotNet.Emit.Instruction[])
+                        foreach (var x in (dnlib.DotNet.Emit.Instruction[])ins.Operand) branchTargets.Add(x);
+                }
+                foreach (var eh in m.Body.ExceptionHandlers) {
+                    if (eh.TryStart != null) branchTargets.Add(eh.TryStart);
+                    if (eh.HandlerStart != null) branchTargets.Add(eh.HandlerStart);
+                    if (eh.FilterStart != null) branchTargets.Add(eh.FilterStart);
+                }
+                foreach (var ins in m.Body.Instructions) {
+                    if (ins.Operand != null) continue;
+                    var ot = ins.OpCode.OperandType;
+                    if (ot == OperandType.InlineMethod || ot == OperandType.InlineField ||
+                        ot == OperandType.InlineType || ot == OperandType.InlineTok ||
+                        ot == OperandType.InlineString || ot == OperandType.InlineSig) {
+                        if (branchTargets.Contains(ins)) { ins.OpCode = OpCodes.Nop; ins.Operand = null; }
+                        else toRemove.Add(ins);
+                        nullSil++;
+                    }
+                }
+                foreach (var ins in toRemove) m.Body.Instructions.Remove(ins);
+            }
+        }
+        Console.WriteLine("null-wipe: " + nullSil);
+
+        // AT-KILL disabled (NB_ATKILL=1 opt-in): PreserveTokens
+        // write keeps nb2's CRC intact, no need;
+        // if "tampered" reappears, v44 surgery with NB_ATKILL=1.
+        int tamperKilled = 0, tamperNop = 0;
+        bool doAtKill = Environment.GetEnvironmentVariable("NB_ATKILL") == "1";
+        if (!doAtKill) { tamperKilled = 0; goto SkipAtKill; }
+        var tamperMethods = new HashSet<MethodDef>();
+        foreach (var t in mod.GetTypes())
+            foreach (var mm in t.Methods) {
+                if (!mm.HasBody) continue;
+                foreach (var ins in mm.Body.Instructions) {
+                    if (ins.OpCode == OpCodes.Ldstr) {
+                        var sv = ins.Operand as string;
+                        if (sv != null && sv.ToLower().Contains("tamper"))
+                            tamperMethods.Add(mm);
+                    }
+                }
+            }
+        foreach (var tm in tamperMethods) {
+            // LINE-SURGERY (not method-kill): only the "tampered"
+            // cut the throw chain after ldstr; the method's init
+            // part stays (v44 finding: check/init share one body).
+            var instrs = tm.Body.Instructions;
+            for (int ii = 0; ii < instrs.Count; ii++) {
+                if (instrs[ii].OpCode == OpCodes.Ldstr) {
+                    var sv = instrs[ii].Operand as string;
+                    if (sv == null || !sv.ToLower().Contains("tamper")) continue;
+                    // throw chain after ldstr: ldstr -> newobj -> throw
+                    int cutEnd = Math.Min(ii + 4, instrs.Count);
+                    for (int jj = ii; jj < cutEnd; jj++) {
+                        if (instrs[jj].OpCode == OpCodes.Throw) {
+                            cutEnd = jj + 1; break;
+                        }
+                    }
+                    // ldstr..throw arasini nop, throw yerine ret:
+                    for (int jj = ii; jj < cutEnd - 1; jj++) {
+                        instrs[jj].OpCode = OpCodes.Nop; instrs[jj].Operand = null;
+                    }
+                    instrs[cutEnd - 1].OpCode = OpCodes.Ret; instrs[cutEnd - 1].Operand = null;
+                    tamperKilled++;
+                    break;
+                }
+            }
+        }
+        foreach (var t in mod.GetTypes())
+            foreach (var mm in t.Methods) {
+                if (!mm.HasBody || tamperMethods.Contains(mm)) continue;
+                foreach (var ins in mm.Body.Instructions) {
+                    if ((ins.Operand is MethodDef) && tamperMethods.Contains((MethodDef)ins.Operand)) {
+                        ins.OpCode = OpCodes.Nop; ins.Operand = null; tamperNop++;
+                    }
+                }
+            }
+        Console.WriteLine("tamper-oldur: " + tamperKilled + " | call-nop: " + tamperNop);
+        SkipAtKill: ;
+        var wopts = new ModuleWriterOptions(mod);
+        wopts.MetadataLogger = DummyLogger.NoThrowInstance;
+        // PreserveAll: rid + heap offset hizalamasini korur — AT'nin
+        // CRC coverage area stays intact (verified via q26, 32767).
+        wopts.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.PreserveAll;
+        wopts.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack;
+        mod.Write(a[2], wopts);
+        Console.WriteLine("[ok] written: " + a[2]);
+        return 0;
+    }
+}

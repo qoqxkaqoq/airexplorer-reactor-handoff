@@ -3,5 +3,7 @@
 # 工具中间产物
 bin/
 obj/
-# CI 探针结果（提交在 ci-<run_id> 分支，不进工作分支）
-results/
+# 崩溃转储
+core.*
+# OCR 中间产物
+ui-shots/big*.png

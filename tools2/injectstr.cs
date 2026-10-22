@@ -15,7 +15,7 @@ using dnlib.DotNet.Emit;
 //   ldsfld automatedError ; callvirt get_Location
 //   ldc.i4 3 ; ldc.i4 1 ; newobj FileStream(string,FileMode,FileAccess)
 //   ldc.i4 LEN ; newarr byte ; dup ; stsfld _ExtractorVisitors
-//   ldc.i4 0 ; ldc.i4 LEN ; callvirt Stream::Read(byte[],int,int) ; pop ; pop ; ret
+//   ldc.i4 0 ; ldc.i4 LEN ; callvirt Stream::Read(byte[],int,int) ; pop ; ret
 //
 // 用法: injectstr <in.exe> <out.exe> <extractor.bin> [typeName] [methodName]
 class InjectStr {
@@ -75,6 +75,15 @@ class InjectStr {
         var il = new List<byte>();
         void E(byte b) { il.Add(b); }
         void T(byte op, uint tok) { il.Add(op); il.Add((byte)tok); il.Add((byte)(tok >> 8)); il.Add((byte)(tok >> 16)); il.Add((byte)(tok >> 24)); }
+        // newarr/ldtoken 之类要 TypeDefOrRefEncoded（压缩）, 不是 raw token
+        void TEnc(byte op, uint raw) {
+            uint tbl = raw >> 24, rid = raw & 0x00FFFFFF;
+            uint tag = tbl == 0x01 ? 1u : (tbl == 0x02 ? 0u : 2u);
+            uint val = (rid << 2) | tag;
+            il.Add(op);
+            while (val >= 0x80) { il.Add((byte)(val | 0x80)); val >>= 7; }
+            il.Add((byte)val);
+        }
         void I4(int v) { il.Add(0x20); il.Add((byte)v); il.Add((byte)(v >> 8)); il.Add((byte)(v >> 16)); il.Add((byte)(v >> 24)); }
 
         T(0x7E, fAsm.MDToken.Raw);            // ldsfld automatedError
@@ -83,14 +92,13 @@ class InjectStr {
         E(0x17);                              // ldc.i4.1  FileAccess.Read
         T(0x73, tokCtor);                     // newobj FileStream
         I4(blob.Length);                      // ldc.i4 len
-        T(0x8D, tokByte);                     // newarr byte
+        TEnc(0x8D, tokByte);                   // newarr byte (TypeDefOrRefEncoded)
         E(0x25);                              // dup
         T(0x80, fExtractor.MDToken.Raw);      // stsfld _ExtractorVisitors
         E(0x16);                              // ldc.i4.0
         I4(blob.Length);                      // ldc.i4 len
-        T(0x6F, tokRead);                     // callvirt Stream::Read
-        E(0x26);                              // pop
-        E(0x26);                              // pop
+        T(0x6F, tokRead);                     // callvirt Stream::Read: [fs,arr,0,len] -> [n]
+        E(0x26);                              // pop  (丢弃返回值, 栈已空)
         E(0x2A);                              // ret
         Console.WriteLine("[il] " + il.Count + " bytes  maxstack=5");
 
