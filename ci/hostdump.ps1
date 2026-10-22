@@ -235,6 +235,36 @@ foreach ($tn in $probeTypes) {
   } catch { W "D|$tn|<fatal $($_.Exception.GetType().Name)>" }
 }
 
+# 5) 解出 m_LogicalProcessorMap: TrackCompiler 的"字段 token -> 方法 token"映射表。
+#    有了它就能离线知道每个委托静态字段指向哪个方法, 从而判断那个方法在我们的 exe 里是不是桩。
+try {
+  $di = $asm.GetType("CloudClient.Templating.DispatcherInitializer")
+  $tc = $di.GetMethod("TrackCompiler", [Reflection.BindingFlags]"Static,Public,NonPublic")
+  $awv = $asm.GetType("AlphabeticWrapperValidator")
+  if ($tc -and $awv) {
+    try { $null = $tc.Invoke($null, [object[]]@($awv.TypeHandle)); W "H|trackcompiler|ok" }
+    catch { $ie = $_.Exception.InnerException; W ("H|trackcompiler|throw: " + $(if ($ie) { $ie.GetType().Name + ": " + $ie.Message } else { $_.Exception.Message })) }
+    $mf = $di.GetField("m_LogicalProcessorMap", [Reflection.BindingFlags]"Static,Public,NonPublic")
+    $map = $mf.GetValue($null)
+    if ($null -eq $map) { W "H|map|<null>" }
+    else {
+      W "H|map|count=$($map.Count)"
+      $i = 0
+      foreach ($kv in $map.GetEnumerator()) {
+        $tok = $kv.Key; $val = $kv.Value
+        $mtok = $val -band 0x3FFFFFFF
+        $nm = "?"
+        try {
+          $mb = $mod.ResolveMethod([int]$mtok)
+          $nm = $mb.DeclaringType.FullName + "::" + $mb.Name
+        } catch { $nm = "<resolve fail>" }
+        W "K|$tok|$mtok|$nm"
+        if (++$i -ge 5000) { break }
+      }
+    }
+  } else { W "H|trackcompiler|<missing>" }
+} catch { W "H|mapdump|fatal $($_.Exception.GetType().Name)" }
+
 W "H|end|$(Get-Date -Format o)  total=$($script:lines.Count)"
 $dir = Split-Path -Parent $Out
 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
