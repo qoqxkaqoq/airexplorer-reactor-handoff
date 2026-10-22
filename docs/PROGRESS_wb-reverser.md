@@ -877,3 +877,101 @@ ldarg.0 ; ldc.i4.0 ; call ConnectedObserver::.ctor(a13Nrt3eN4sDIpSxIRj)
 
 **下一步**：确认 `a13Nrt3eN4sDIpSxIRj` 在官方 exe 里对应哪个类型，
 以及 `ConnectedObserver::.ctor` 内部对它的用法。
+
+---
+
+## 13. JIT 收割补泛型（v54 → v57）
+
+### 13.1 找到了泛型盲区
+
+`work/nj_art/jitout` 里 16586 个 `m_*.bin`、2218 个 `m_*.eh`，其中
+**52 个方法有 `.eh` 但没有 `.bin`**。逐个翻名字，12 个是显式泛型方法：
+
+```
+0x06000093  DetachedRequest::SendPortableRequest<T>
+0x060042AC  TemplateArgument::InstantiateStatelessUser<T>     <- 卡了 20 轮的那个
+0x06003A7D  AggregatorCompilerChain::PopManager<T>
+0x06003C90  TransmitterRecommender::FetchSequentialEnumerator<T>
+...
+```
+
+根因在 `autoreaktor/v3/forcedump/Program.cs`：
+
+```csharp
+var body = m.GetMethodBody();                    // 开放泛型 -> IL 为空
+RuntimeHelpers.PrepareMethod(m.MethodHandle);    // 开放泛型 -> ArgumentException
+```
+
+**开放泛型既不能 `PrepareMethod`，`GetILAsByteArray()` 也返回空**。所以这些方法
+一个体都没落盘，只有 `catch` 分支里写出来的 `.eh`。
+
+### 13.2 补丁：MakeGenericMethod 造实例
+
+`ci/jitdump/forcedump/Program.cs`（从 autoreaktor 复制并修改）：
+
+```csharp
+MethodInfo prep = m;
+if (m.IsGenericMethodDefinition) {
+    var inst = Instantiate(m);   // 依次试 object / int / string / Guid
+    if (inst != null) prep = inst;
+}
+var body = prep.GetMethodBody();          // 实例 -> 共享 IL 可读
+RuntimeHelpers.PrepareMethod(prep.MethodHandle);  // 实例 -> 真 JIT, 触发 NecroBit 解密
+// 落盘仍用 m.MetadataToken（实例化不改 token）
+```
+
+加权类型（`InstantiateType`）同理，能捞到 `ScheduledReg`1::Finalize` 这类泛型类型的成员。
+
+CI 输出：
+
+```
+[fd] done: prepared=16154 failed=484 skipped=4708 eh=2144 dumped=16598
+           genericMethods=58 genericTypes=25
+bin 16586 -> 16598 (+12)
+```
+
+`m_060042AC.bin`：`ilSize=3038 maxStack=6 ehCount=2`
+→ `nbrestore` 写回后 **923 指令 / 50 locals 真类型**（cilantro 版是 888，少了 35 条）。
+
+### 13.3 但 InvalidCast 没消失，于是精确定位到一条指令
+
+换成官方真体后（v55），错误一模一样。用新写的 `castscan` 扫全模块所有
+`castclass/isinst/callvirt/newobj` 的操作数：
+
+```
+VirtualInitializer::AddEfficientHandler  IL_0075  castclass  ProgramFinder
+WrapperQueue::AddEfficientHandler        IL_0059  castclass  ProgramFinder
+```
+
+**就是这一条**。而且：
+
+| | 指令数 | 内容 |
+|---|---|---|
+| 官方 JIT 真体（`m_06004308.bin`，289 字节） | 79 | 与 cilantro 版**完全一致** |
+| cilantro | 79 | 同上 |
+| 官方文件里的加密壳 | 4 | `nop;nop;ldc.i4.1;ret` |
+
+三方一致 ⇒ **不是方法体的问题**，是传进去的 `setup` 真的是 `VirtualInitializer`。
+
+### 13.4 顺带修的真 bug：585 处指令操作数还是 TypeRef
+
+`fixnested` 原本只处理 `MemberRef.Class`、字段/局部/方法签名，**没处理指令操作数**：
+
+```
+v55:  IL_0075  castclass ProgramFinder  [tok 0x0100090F]   <- TypeRef
+正确: IL_0075  castclass ProgramFinder  [tok 0x0200065C]   <- TypeDef
+```
+
+补上之后 `insOperand=585`。虽然没解决这个 `InvalidCast`，但这是个真问题
+（TypeRef 可能被解析成另一个 Type 实例）。
+
+### 13.5 结论：JIT 收割这条线已经挖到底
+
+- 方法体覆盖：**16598 个**，剩余 924 个两边都没有真体
+- 剩下的是**脚本执行时的对象错位**：`TemplateThread` 的 `m_ProjectDecorators`
+  里某个元素应该是 `ProgramFinder`，实际是 `VirtualInitializer`
+- 这不是"方法体缺失"，补多少方法体都解决不了
+
+**下一步唯一有希望的方向**：`ci/hostdump.ps1` 里在官方宿主进程跑
+`SearchAdapter(["help"])`，把 `m_ProjectDecorators` 的实际内容（类型名+顺序）
+dump 出来，和我们的版本逐项对比，差在哪一项就补哪一项。
