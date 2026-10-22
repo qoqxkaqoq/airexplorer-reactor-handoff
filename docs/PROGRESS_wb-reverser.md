@@ -604,3 +604,58 @@ JIT 需要按**当前泛型上下文**实例化 `<>c<T>`；而这份体是从 ci
   fixgen / fixnested / restub / tokcmp / resdump / xref / typediag`
 - **认知**：Reactor 的初始化是"数据驱动 + 反射建委托"，静态还原必须按"导出运行时数据"的思路做，
   而不是逐条解密
+
+---
+
+## 11. locals 才是 AV 的根因（v32 → v39）
+
+### 11.1 `patchsort`：先绕开 `<>c` 的 TypeLoad
+
+v30 卡在 `TypeLoadException: Could not load type 'URqFYq3xtmntT2OcLub\`1'`。
+`patchsort` 把 `InstantiateStatelessUser` 里
+
+```
+ldloc.0 ; ldfld m_ProjectDecorators ; ldsfld <>9__47_0 ; ... ; callvirt Sort(Comparison<T>)
+```
+
+整段（10 条指令）换成 `pop` —— 不排序，也就不触发编译器生成的 `<>c` 泛型缓存类加载。
+TypeLoad 消失。
+
+### 11.2 真正的大坑：5126 个方法的 locals 全是 `System.Object`
+
+`nbjit` 的 dump 格式里 `localsTok = 0`（第 7 节已写），`nbrestore` 只能填一堆
+`System.Object` 占位。**在 full trust 下 JIT 不验证 IL**，于是
+`ldloc`（object）+ `ldfld`（具体字段）会按 **object 的布局**算偏移 → 直接
+`AccessViolationException`，而且堆栈指向的方法名毫无规律，极难定位。
+
+`tools2/fixlocals`（从 cilantro 按名取）修了：
+
+```
+allObjectMethods=5126  fixed=4965  locals=33847  miss=161
+```
+
+AV 位置立刻从 `GenerateAdaptableExtractor` 后退到 `DefineSetSet` —— 证明方向正确。
+
+### 11.3 剩下 162 个：名字被 nb_slayer 改过
+
+`DefineSetSet`（6819 指令）在 cilantro 里叫 **`generatedMethod_0288`（6866 指令）**，
+签名相同（`(TemplateThread, HandlerPublisher)`），locals 92 个。
+
+给 `bodytrans` 加了 `DstName@SrcName` 语法：
+
+```
+bodytrans cilantro v35 v37 <Type> "DefineSetSet@generatedMethod_0288"
+→ [rbind] 重绑 1325 处引用
+→ [trans] 移植 6866 指令
+```
+
+locals 一起搬过来，再跑 `fixgen`（127 处）+ `fixnested`（13 处）清掉假名。
+
+### 11.4 试过但从根上封死的一条路
+
+想从**官方 exe** 的 `MethodDef` 表读 `LocalVarSigTok`（行内偏移 14）拿最权威的 locals。
+读出来是 `0x33CB0001` 这种乱值 —— 因为 **`LocalVarSigTok` 不在 MethodDef 表里，
+而在方法体的 fat header 里**；NecroBit 方法 RVA=0，签名跟着体一起加密，读不到。
+
+**结论**：locals 的唯一来源就是 cilantro（及其改名映射）。`fixlocals` 的 161 个 miss
+需要逐个用 `Dst@Src` 手工对齐。
