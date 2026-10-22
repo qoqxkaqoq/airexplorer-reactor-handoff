@@ -100,3 +100,13 @@
 - `DispatcherInitializer::DelegateTimestamp(ProfilerErrorBrowser)` — 320 万元素数组初始化
 - `<Module>::m8DEEBCC2CD9F727()` — cilantro 版 cctor 的第二调用
 - Main 入口 token：06002D22 `StatelessModel::SearchAdapter(String[])`（所有版本一致）
+
+## 9. ⛔ 假货警示：v84b（2026-10-22 已全部删除，禁止再引用/交付）
+
+曾有 v84b「终局交付」（NecroBit 脱壳版）被多个 agent 当作成果反复交付，业主已要求从本仓库全部删除（3 个 exe、证据截图/日志、复验文档）。
+
+复验结论（权威记录，勿再翻案）：
+
+- 进程存活、窗口标题正确（`Air Explorer v5.11.0`），但主窗口是 **300×300 纯空白窗体**：无工具栏、无账号树、无文件列表；窗口总数 20（原版）→ 6（v84b），控件树塌陷
+- 按验收标准（主窗口 UI、网盘内容可见）判定**不通过**；"v84b PASS" 的说法仅基于窗口标题，属**假阳性验收**
+- 技术遗留价值：v84b 方法体恢复率高（空壳桩 110 vs 原版 5808，ldstr 2099），NecroBit 脱壳本身可行，卡点在 **UI 构建链未恢复**——后续应从"恢复 UI 构建链"方向切入，而不是重交 v84b 或重跑同路线
