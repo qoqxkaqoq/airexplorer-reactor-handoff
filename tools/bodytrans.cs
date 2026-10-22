@@ -536,11 +536,7 @@ class BodyTrans {
         if (n == 0) { Console.WriteLine("[trans] 0 移植 — 无可写内容"); return 2; }
         try {
             var wopt = new dnlib.DotNet.Writer.ModuleWriterOptions(dstMod);
-            // PreserveAll 必须加: 否则 dnlib 会丢掉"当前没被引用"的 MemberRef 行,
-            // 而 Reactor 的 TrackCompiler 用写死的 metadata token 去 ResolveMethod,
-            // 行号一变就 ArgumentOutOfRangeException: Token 0x0a000996 is not valid.
-            wopt.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.PreserveAll
-                                        | dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack;
+            wopt.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack | dnlib.DotNet.Writer.MetadataFlags.PreserveAll;
             dstMod.Write(path, wopt);
             Console.WriteLine("[trans] 写出: " + path + " (" + n + " 方法)");
             return 0;
