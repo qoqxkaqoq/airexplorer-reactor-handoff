@@ -1052,3 +1052,63 @@ System.ArgumentNullException
 （注：清言在 HANDOFF 第 14 节把 ANE 归到 `m_ProjectDecorators == null`，
 方向对了一半：null 确实存在，但 v60 修掉 null 之后 ANE 依旧，
 说明真正的抛出点是这个 Sort。）
+
+---
+
+## 15. 主窗口已创建（v65 → v66）
+
+### 15.1 OCR 截图 = 定位利器
+
+程序自带 "Error detected" 对话框，probe 会截图。把 PNG 放大 3 倍 + tesseract OCR，
+**直接读出异常类型与完整调用栈**，比等 CI 事件日志快得多：
+
+```
+v61 OCR: NullReferenceException
+  ToolStripControlHost.get_Font()
+  ToolStripItem.SetOwner / ToolStripItemCollection.Insert
+  RequestVerifierTransformer..ctor(AggregatorCompilerChain)
+  CustomMonitor.FormatCollection / ..ctor
+  AdvancedClient.MergeRequest
+  Form.OnLoad -> OnCreateControl -> WmShowWindow
+```
+
+### 15.2 v65：主窗口出现了
+
+`badstub` 扫出 **20 个"ldnull + unbox.any"必崩桩**（对 null 做 unbox 必抛 NRE），
+7 个用官方 JIT 真体替换成功（含 UI 崩溃元凶 `ReceiveModularWorker 0x060037D1`，
+桩体就是 `nop; ldnull; unbox.any Size; ret`）。
+
+v65 的 UI probe 结果：
+
+```
+[17:10:26] WINDOW title='Error detected' visible=True
+[17:10:46] still alive, windows = 16  responding = True  threads = 17
+[17:10:50] MAIN hwnd=0x20124 visible=True rect=52,52,997,652
+           main screenshot -> mainwindow.png (visible=True)
+```
+
+**主窗口首次 visible=True 并成功截图**：标题栏 `Air Explorer v5.11.0` + 图标 +
+最小化/最大化/关闭按钮全部正确渲染。客户区为黑 —— 初始化线程仍在 OnLoad 里抛
+`ToolStripControlHost.get_Font()` 的 NRE（Control==null），内容未绘制。
+
+### 15.3 已修与待修
+
+| 版本 | 动作 | 结果 |
+|---|---|---|
+| v63 | `DetachedCalculator..ctor` 桩 → 初始化 `m_ProjectDecorators`（initfield） | 文本 PASS 保持 |
+| v65 | 20 个必崩桩中 7 个换官方真体 | **主窗口 visible=True** |
+| v66 | `preinit`：`RecommenderRecordAggregator..ctor` 开头预初始化 `aggregatorBufferConsumer` | NRE 不变（未命中） |
+
+剩余链：`ToolStripControlHost.Control == null`。全模块 `newobj ToolStripControlHost` 仅 2 处
+（`MonoSummarizerAggregator::CollectCustomizableAnnotation(arg1)` 传参可能为 null；
+`RecommenderRecordAggregator` 已修）；另有 3 处 `newobj ToolStripTextBox` 待查。
+栈里 `RequestVerifierTransformer..ctor`(561 指令平坦化) 与 cilantro 同源，无官方 bin
+（forcedump failed 名单内）。
+
+### 15.4 验收状态
+
+| 通道 | 状态 |
+|---|---|
+| `AirExplorerCmd.exe help`（转发器） | PASS（早前达成） |
+| `AirExplorer.exe help`（文本模式，16 命令 + 标题 + exit 0） | **PASS，与官方逐行一致** |
+| 主窗口 | **已创建、标题栏正确、进程存活响应**；内容区待最后一层 OnLoad 异常清零 |
