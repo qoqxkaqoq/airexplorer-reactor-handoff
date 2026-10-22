@@ -51,9 +51,10 @@ jobs:
           $label = "${{ matrix.exe }}"
           $argset = "${{ inputs.args }}"
           switch ($argset) {
-            "help"    { $argv = @("--help") }
-            "version" { $argv = @("--version") }
-            default   { $argv = @() }
+            "help"     { $argv = @("--help") }
+            "rawhelp"  { $argv = @("help") }     # 入口里 args[0]=="help" 会跳过授权直接启动
+            "version"  { $argv = @("--version") }
+            default    { $argv = @() }
           }
           Write-Host ("argset=" + $argset + " argv=" + ($argv -join " "))
 
