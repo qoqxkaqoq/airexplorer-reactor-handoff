@@ -32,7 +32,9 @@ class JitCheck {
                     bad++;
                     var msg = (e.Message ?? "").Split('\n')[0];
                     var key = e.GetType().Name + ": " + msg;
-                    groups[key] = groups.TryGetValue(key, out int c) ? c + 1 : 1;
+                    int c;
+                    if (groups.TryGetValue(key, out c)) groups[key] = c + 1;
+                    else groups[key] = 1;
                     if (samples.Count < 60) samples.Add(t.FullName + "::" + m.Name + "   <- " + key);
                 }
             }
