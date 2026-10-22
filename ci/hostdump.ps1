@@ -290,7 +290,12 @@ try {
         $ie = $_.Exception.InnerException
         if ($null -eq $ie) { $ie = $_.Exception }
         W ("H|joinexecutor|throw: " + $ie.GetType().Name + ": " + $ie.Message)
-        if ($ie.StackTrace) { foreach ($ln in ($ie.StackTrace -split "`n" | Select-Object -First 8)) { W ("H|je-stack|" + $ln.Trim()) } }
+        $inner2 = $ie.InnerException
+        if ($null -ne $inner2) {
+          W ("H|je-inner|" + $inner2.GetType().Name + ": " + $inner2.Message)
+          if ($inner2.StackTrace) { foreach ($ln in ($inner2.StackTrace -split "`n" | Select-Object -First 10)) { W ("H|je-inner-stack|" + $ln.Trim()) } }
+        }
+        if ($ie.StackTrace) { foreach ($ln in ($ie.StackTrace -split "`n" | Select-Object -First 10)) { W ("H|je-stack|" + $ln.Trim()) } }
       }
     } else { W "H|joinexecutor|<method missing>" }
   } else { W "H|joinexecutor|<type missing>" }
