@@ -53,6 +53,26 @@ class CctorFix {
             return 0;
         }
 
+        else if (mode == "fldref") {
+            // fldref <字段名子串> [写|读]
+            string needle = a[2]; bool writes = a.Length > 3;
+            foreach (var t in mod.GetTypes()) {
+                foreach (var m in t.Methods) {
+                    if (!m.HasBody) continue;
+                    foreach (var ins in m.Body.Instructions) {
+                        if (ins.Operand is IField f && f.Name.String.Contains(needle)) {
+                            bool isWrite = ins.OpCode.Code == Code.Stfld || ins.OpCode.Code == Code.Stsfld;
+                            if (writes && !isWrite) continue;
+                            var fr = f.ResolveFieldDef();
+                            Console.WriteLine((isWrite ? "[写]" : "[读]") + " " + t.FullName + "::" + m.Name
+                                + " IL_" + ins.Offset.ToString("X4") + " -> " + fr.DeclaringType.FullName + "::" + fr.Name
+                                + "  本方法指令数=" + m.Body.Instructions.Count);
+                        }
+                    }
+                }
+            }
+            return 0;
+        }
         else if (mode == "meth") {
             foreach (var t in mod.GetTypes()) {
                 if (!t.FullName.Contains(a[2])) continue;

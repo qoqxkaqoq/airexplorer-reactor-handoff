@@ -110,3 +110,40 @@
 - 进程存活、窗口标题正确（`Air Explorer v5.11.0`），但主窗口是 **300×300 纯空白窗体**：无工具栏、无账号树、无文件列表；窗口总数 20（原版）→ 6（v84b），控件树塌陷
 - 按验收标准（主窗口 UI、网盘内容可见）判定**不通过**；"v84b PASS" 的说法仅基于窗口标题，属**假阳性验收**
 - 技术遗留价值：v84b 方法体恢复率高（空壳桩 110 vs 原版 5808，ldstr 2099），NecroBit 脱壳本身可行，卡点在 **UI 构建链未恢复**——后续应从"恢复 UI 构建链"方向切入，而不是重交 v84b 或重跑同路线
+
+
+## 14. v59 → ANE 因果链（2026-10-22 深夜，清言接力诊断）
+
+**现状**：v59 文本模式 CI=PASS（16/16 exit 0）。UI Probe（首次真正探测 v59）：
+主窗体已创建（Air Explorer v5.11.0 hwnd 存在不可见），初始化线程抛
+`ArgumentNullException @ GenerateAdaptableExtractor` → 进程 0xe0434352 崩溃。
+
+**完整因果链（已闭环）**：
+1. `TemplateThread::GenerateAdaptableExtractor` IL_0498 `List::AddRange(V_13)`
+2. `V_13 = InstantiateConfigurableModule(V_4, false)`（06004527）
+3. 该方法开头：`if (_TemplateConfig?.m_ProjectDecorators == null) return null`（IL_000B-0011）
+4. **`m_ProjectDecorators` 全模块唯一写入点 = `TemplateArgument::InstantiateStatelessUser` IL_045E**（914 指令 JIT 收割真体）：
+   `m_ProjectDecorators = new List<>(V_12)`，位于解释器状态机循环后段
+5. UI 路径没有跑到该写入点 → 列表保持 null → AddRange(null) → **ArgumentNullException("collection")**
+
+**已排除**（勿重查）：
+- token/引用错位：官方 55781 vs v59 57872 全量指纹对账，仅 1 处嵌套类歧义，IL 引用类 100% 齐
+- 资源表/Main IL：官方与 v59 完全一致
+- 委托三连（146 处）：target 均来自 cctor 初始化的 `<>9`（newobj 桩 ctor 仍返回非 null 实例，无害）
+- `a13Nrt3eN4sDIpSxIRj` 之谜：它只是个 byte enum（0200065A），12.5 的怀疑解除
+
+**下一步（唯一有希望方向）**：
+解释器状态机为何 UI 分支没走到 IL_045E。两条路：
+a) 官方宿主 hostdump 反射导出官方运行时的 `m_ProjectDecorators` 内容（类型+顺序+条数），
+   对照 v59 判断"该有但没写"还是"顺序/分支不同"（同 12.4 拿字符串表的方法）
+b) 给 v59 的 InstantiateStatelessUser 关键状态点插 trace（Console.Error），CI 直接启动跑 UI 路径
+
+**新工具**（tools/）：
+- `tokmap8` <exe> <out.tsv>：全量 token→签名指纹映射（对账基准）
+- `cctorfix8` <exe> dump|scan|meth|fldref|fix：委托三连扫描/精确 IL/字段引用查找
+- `uiscan8` <exe> [out.tsv]：92 个窗体类覆盖统计（v59 桩 1444→20）
+
+**host v2**（tools/ci/host.cs，CI 自动重编译）：异常落盘 host_trace.txt +
+ThreadException + COMPlus_JitNoInline=1。注意：宿主 Assembly.LoadFrom 会绕过
+native stub → `<Module>` cctor 链在宿主里必炸 InvalidProgramException
+（VerifyCombinedStateRequest）——宿主路线只适用于数据导出，不适用于整程序运行。

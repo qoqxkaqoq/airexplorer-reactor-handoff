@@ -1,0 +1,915 @@
+===== CloudClient.Templating.TemplateArgument::InstantiateStatelessUser =====
+  IL_0000: ldnull 
+  IL_0001: stloc.0 
+  IL_0002: ldsfld CloudClient.Templating.TemplateArgument::m_ProviderTemplateObj : System.Object
+  IL_0007: stloc.s V_7
+  IL_0009: ldc.i4.0 
+  IL_000A: stloc.s V_8
+  IL_000C: ldloc.s V_7
+  IL_000E: ldloca.s V_8
+  IL_0010: ldsfld ValidatorSharerRunner::CheckScheduledDecryptor : ValidatorSharerRunner
+  IL_0015: call System.Void ValidatorSharerRunner::ExecuteExplorer(System.Object,System.Boolean&,ValidatorSharerRunner)
+  IL_001A: ldsfld CloudClient.Templating.TemplateArgument::isObserverTemplate : System.Boolean
+  IL_001F: brtrue IL_002F: ldsfld CloudClient.Templating.TemplateArgument/DetachedCalculator[] CloudClient.Templating.TemplateArgument::_AdjustableTransformerElements
+  IL_0024: ldc.i4.1 
+  IL_0025: stsfld CloudClient.Templating.TemplateArgument::isObserverTemplate : System.Boolean
+  IL_002A: call System.Void CloudClient.Templating.TemplateArgument::GenerateJoinedOrder()
+  IL_002F: ldsfld CloudClient.Templating.TemplateArgument::_AdjustableTransformerElements : CloudClient.Templating.TemplateArgument/DetachedCalculator[]
+  IL_0034: ldarg.0 
+  IL_0035: ldelem.ref 
+  IL_0036: brfalse IL_0048: ldsfld System.IO.BinaryReader CloudClient.Templating.TemplateArgument::_TemplateController
+  IL_003B: ldsfld CloudClient.Templating.TemplateArgument::_AdjustableTransformerElements : CloudClient.Templating.TemplateArgument/DetachedCalculator[]
+  IL_0040: ldarg.0 
+  IL_0041: ldelem.ref 
+  IL_0042: stloc.0 
+  IL_0043: leave IL_06E2: newobj System.Void CloudClient.Templating.TemplateArgument/TemplateThread::.ctor()
+  IL_0048: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_004D: ldsfld ActiveTemplateValidator::ValidateAdaptableAuditorComparator : ActiveTemplateValidator
+  IL_0052: call System.IO.Stream ActiveTemplateValidator::ExecuteExplorer(System.Object,ActiveTemplateValidator)
+  IL_0057: ldsfld CloudClient.Templating.TemplateArgument::templateStateArray : System.Int32[]
+  IL_005C: ldarg.0 
+  IL_005D: ldelem.i4 
+  IL_005E: conv.i8 
+  IL_005F: ldsfld ValidatorSystemRequester::VerifyGeneralSynchronizer : ValidatorSystemRequester
+  IL_0064: call System.Void ValidatorSystemRequester::ExecuteExplorer(System.Object,System.Int64,ValidatorSystemRequester)
+  IL_0069: newobj System.Void CloudClient.Templating.TemplateArgument/DetachedCalculator::.ctor()
+  IL_006E: stloc.0 
+  IL_006F: ldtoken CloudClient.Templating.TemplateArgument
+  IL_0074: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_0079: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_007E: ldsfld ValidatorEventRequest::CloneExtractor : ValidatorEventRequest
+  IL_0083: call System.Reflection.Module ValidatorEventRequest::ExecuteExplorer(System.Object,ValidatorEventRequest)
+  IL_0088: stloc.s V_9
+  IL_008A: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_008F: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_0094: stloc.s V_10
+  IL_0096: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_009B: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_00A0: stloc.s V_11
+  IL_00A2: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_00A7: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_00AC: stloc.s V_12
+  IL_00AE: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_00B3: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_00B8: stloc.s V_13
+  IL_00BA: ldloc.0 
+  IL_00BB: ldloc.s V_9
+  IL_00BD: ldloc.s V_10
+  IL_00BF: ldsfld ValidatorEnumeratorFactory::CheckSegmentedFunctionVerifier : ValidatorEnumeratorFactory
+  IL_00C4: call System.Reflection.MethodBase ValidatorEnumeratorFactory::ExecuteExplorer(System.Object,System.Int32,ValidatorEnumeratorFactory)
+  IL_00C9: stfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_00CE: ldloc.0 
+  IL_00CF: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_00D4: ldsfld SymbolicWatcherValidator::CheckEfficientReporterAnalyzer : SymbolicWatcherValidator
+  IL_00D9: call System.Reflection.ParameterInfo[] SymbolicWatcherValidator::ExecuteExplorer(System.Object,SymbolicWatcherValidator)
+  IL_00DE: stloc.s V_14
+  IL_00E0: ldloc.0 
+  IL_00E1: ldloc.s V_14
+  IL_00E3: ldlen 
+  IL_00E4: conv.i4 
+  IL_00E5: newarr CloudClient.Templating.TemplateArgument/AdjustableTreeAggregator
+  IL_00EA: stfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CustomContextItems : CloudClient.Templating.TemplateArgument/AdjustableTreeAggregator[]
+  IL_00EF: ldc.i4.0 
+  IL_00F0: stloc.s V_15
+  IL_00F2: br IL_03C9: ldloc.s V_15
+  IL_00F7: ldloc.s V_14
+  IL_00F9: ldloc.s V_15
+  IL_00FB: ldelem.ref 
+  IL_00FC: ldsfld ValidatorFinderGenerator::ValidateLocalAnalyzerEvaluator : ValidatorFinderGenerator
+  IL_0101: call System.Type ValidatorFinderGenerator::ExecuteExplorer(System.Object,ValidatorFinderGenerator)
+  IL_0106: stloc.s V_16
+  IL_0108: newobj System.Void CloudClient.Templating.TemplateArgument/AdjustableTreeAggregator::.ctor()
+  IL_010D: stloc.s V_17
+  IL_010F: ldloc.s V_17
+  IL_0111: ldloc.s V_16
+  IL_0113: ldsfld ResponderSender::CheckConfigurableEvaluatorCompressor : ResponderSender
+  IL_0118: call System.Boolean ResponderSender::ExecuteExplorer(System.Object,ResponderSender)
+  IL_011D: stfld CloudClient.Templating.TemplateArgument/AdjustableTreeAggregator::_IsConfigurationTester : System.Boolean
+  IL_0122: ldloc.s V_17
+  IL_0124: ldloc.s V_15
+  IL_0126: stfld CloudClient.Templating.TemplateArgument/AdjustableTreeAggregator::_IterableTransmitterVal : System.Int32
+  IL_012B: ldloc.0 
+  IL_012C: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CustomContextItems : CloudClient.Templating.TemplateArgument/AdjustableTreeAggregator[]
+  IL_0131: ldloc.s V_15
+  IL_0133: ldloc.s V_17
+  IL_0135: stelem.ref 
+  IL_0136: ldloc.s V_16
+  IL_0138: ldsfld ResponderSender::CheckConfigurableEvaluatorCompressor : ResponderSender
+  IL_013D: call System.Boolean ResponderSender::ExecuteExplorer(System.Object,ResponderSender)
+  IL_0142: brfalse IL_0155: ldc.i4.0
+  IL_0147: ldloc.s V_16
+  IL_0149: ldsfld ValidatorSchemaRole::SelectPool : ValidatorSchemaRole
+  IL_014E: call System.Type ValidatorSchemaRole::ExecuteExplorer(System.Object,ValidatorSchemaRole)
+  IL_0153: stloc.s V_16
+  IL_0155: ldc.i4.0 
+  IL_0156: stloc.s V_18
+  IL_0158: ldloc.s V_16
+  IL_015A: ldtoken System.String
+  IL_015F: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_0164: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_0169: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_016E: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_0173: brfalse IL_0181: ldloc.s V_16
+  IL_0178: ldc.i4.s 14
+  IL_017A: stloc.s V_18
+  IL_017C: br IL_03BA: ldloc.s V_17
+  IL_0181: ldloc.s V_16
+  IL_0183: ldtoken System.Byte
+  IL_0188: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_018D: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_0192: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_0197: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_019C: brfalse IL_01A9: ldloc.s V_16
+  IL_01A1: ldc.i4.2 
+  IL_01A2: stloc.s V_18
+  IL_01A4: br IL_03BA: ldloc.s V_17
+  IL_01A9: ldloc.s V_16
+  IL_01AB: ldtoken System.SByte
+  IL_01B0: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_01B5: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_01BA: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_01BF: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_01C4: brfalse IL_01D1: ldloc.s V_16
+  IL_01C9: ldc.i4.1 
+  IL_01CA: stloc.s V_18
+  IL_01CC: br IL_03BA: ldloc.s V_17
+  IL_01D1: ldloc.s V_16
+  IL_01D3: ldtoken System.Int16
+  IL_01D8: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_01DD: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_01E2: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_01E7: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_01EC: brfalse IL_01F9: ldloc.s V_16
+  IL_01F1: ldc.i4.3 
+  IL_01F2: stloc.s V_18
+  IL_01F4: br IL_03BA: ldloc.s V_17
+  IL_01F9: ldloc.s V_16
+  IL_01FB: ldtoken System.UInt16
+  IL_0200: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_0205: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_020A: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_020F: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_0214: brfalse IL_0221: ldloc.s V_16
+  IL_0219: ldc.i4.4 
+  IL_021A: stloc.s V_18
+  IL_021C: br IL_03BA: ldloc.s V_17
+  IL_0221: ldloc.s V_16
+  IL_0223: ldtoken System.Int32
+  IL_0228: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_022D: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_0232: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_0237: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_023C: brfalse IL_0249: ldloc.s V_16
+  IL_0241: ldc.i4.5 
+  IL_0242: stloc.s V_18
+  IL_0244: br IL_03BA: ldloc.s V_17
+  IL_0249: ldloc.s V_16
+  IL_024B: ldtoken System.UInt32
+  IL_0250: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_0255: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_025A: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_025F: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_0264: brfalse IL_0271: ldloc.s V_16
+  IL_0269: ldc.i4.6 
+  IL_026A: stloc.s V_18
+  IL_026C: br IL_03BA: ldloc.s V_17
+  IL_0271: ldloc.s V_16
+  IL_0273: ldtoken System.Int64
+  IL_0278: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_027D: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_0282: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_0287: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_028C: brfalse IL_0299: ldloc.s V_16
+  IL_0291: ldc.i4.7 
+  IL_0292: stloc.s V_18
+  IL_0294: br IL_03BA: ldloc.s V_17
+  IL_0299: ldloc.s V_16
+  IL_029B: ldtoken System.UInt64
+  IL_02A0: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_02A5: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_02AA: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_02AF: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_02B4: brfalse IL_02C1: ldloc.s V_16
+  IL_02B9: ldc.i4.8 
+  IL_02BA: stloc.s V_18
+  IL_02BC: br IL_03BA: ldloc.s V_17
+  IL_02C1: ldloc.s V_16
+  IL_02C3: ldtoken System.Single
+  IL_02C8: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_02CD: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_02D2: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_02D7: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_02DC: brfalse IL_02EA: ldloc.s V_16
+  IL_02E1: ldc.i4.s 9
+  IL_02E3: stloc.s V_18
+  IL_02E5: br IL_03BA: ldloc.s V_17
+  IL_02EA: ldloc.s V_16
+  IL_02EC: ldtoken System.Double
+  IL_02F1: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_02F6: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_02FB: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_0300: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_0305: brfalse IL_0313: ldloc.s V_16
+  IL_030A: ldc.i4.s 10
+  IL_030C: stloc.s V_18
+  IL_030E: br IL_03BA: ldloc.s V_17
+  IL_0313: ldloc.s V_16
+  IL_0315: ldtoken System.Boolean
+  IL_031A: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_031F: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_0324: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_0329: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_032E: brfalse IL_033C: ldloc.s V_16
+  IL_0333: ldc.i4.s 11
+  IL_0335: stloc.s V_18
+  IL_0337: br IL_03BA: ldloc.s V_17
+  IL_033C: ldloc.s V_16
+  IL_033E: ldtoken System.IntPtr
+  IL_0343: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_0348: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_034D: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_0352: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_0357: brfalse IL_0365: ldloc.s V_16
+  IL_035C: ldc.i4.s 12
+  IL_035E: stloc.s V_18
+  IL_0360: br IL_03BA: ldloc.s V_17
+  IL_0365: ldloc.s V_16
+  IL_0367: ldtoken System.UIntPtr
+  IL_036C: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_0371: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_0376: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_037B: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_0380: brfalse IL_038E: ldloc.s V_16
+  IL_0385: ldc.i4.s 13
+  IL_0387: stloc.s V_18
+  IL_0389: br IL_03BA: ldloc.s V_17
+  IL_038E: ldloc.s V_16
+  IL_0390: ldtoken System.Char
+  IL_0395: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_039A: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_039F: ldsfld IsolatedValidator::ValidateBasicTransformer : IsolatedValidator
+  IL_03A4: call System.Boolean IsolatedValidator::ExecuteExplorer(System.Type,System.Type,IsolatedValidator)
+  IL_03A9: brfalse IL_03B7: ldc.i4.0
+  IL_03AE: ldc.i4.s 15
+  IL_03B0: stloc.s V_18
+  IL_03B2: br IL_03BA: ldloc.s V_17
+  IL_03B7: ldc.i4.0 
+  IL_03B8: stloc.s V_18
+  IL_03BA: ldloc.s V_17
+  IL_03BC: ldloc.s V_18
+  IL_03BE: stfld CloudClient.Templating.TemplateArgument/AdjustableTreeAggregator::responderDecorator : CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc
+  IL_03C3: ldloc.s V_15
+  IL_03C5: ldc.i4.1 
+  IL_03C6: add 
+  IL_03C7: stloc.s V_15
+  IL_03C9: ldloc.s V_15
+  IL_03CB: ldloc.s V_14
+  IL_03CD: ldlen 
+  IL_03CE: conv.i4 
+  IL_03CF: blt IL_00F7: ldloc.s V_14
+  IL_03D4: ldloc.0 
+  IL_03D5: ldloc.s V_11
+  IL_03D7: newobj System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>::.ctor : ?
+  IL_03DC: stfld CloudClient.Templating.TemplateArgument/DetachedCalculator::flexibleCalculatorList : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>
+  IL_03E1: ldc.i4.0 
+  IL_03E2: stloc.s V_19
+  IL_03E4: br IL_044D: ldloc.s V_19
+  IL_03E9: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_03EE: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_03F3: stloc.s V_20
+  IL_03F5: newobj System.Void CloudClient.Templating.TemplateArgument/CalculatorListener::.ctor()
+  IL_03FA: stloc.s V_21
+  IL_03FC: ldloc.s V_21
+  IL_03FE: ldnull 
+  IL_03FF: stfld CloudClient.Templating.TemplateArgument/CalculatorListener::calculatorTransaction : System.Type
+  IL_0404: ldloc.s V_20
+  IL_0406: ldc.i4.0 
+  IL_0407: blt IL_0431: ldloc.s V_21
+  IL_040C: ldloc.s V_20
+  IL_040E: ldc.i4.s 50
+  IL_0410: bge IL_0431: ldloc.s V_21
+  IL_0415: ldloc.s V_21
+  IL_0417: ldloc.s V_20
+  IL_0419: ldc.i4.s 31
+  IL_041B: and 
+  IL_041C: conv.u1 
+  IL_041D: stfld CloudClient.Templating.TemplateArgument/CalculatorListener::statelessCalculator : CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc
+  IL_0422: ldloc.s V_21
+  IL_0424: ldloc.s V_20
+  IL_0426: ldc.i4.s 32
+  IL_0428: and 
+  IL_0429: ldc.i4.0 
+  IL_042A: cgt 
+  IL_042C: stfld CloudClient.Templating.TemplateArgument/CalculatorListener::isConnectedFactory : System.Boolean
+  IL_0431: ldloc.s V_21
+  IL_0433: ldloc.s V_19
+  IL_0435: stfld CloudClient.Templating.TemplateArgument/CalculatorListener::_AlphabeticCalculatorIdx : System.Int32
+  IL_043A: ldloc.0 
+  IL_043B: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::flexibleCalculatorList : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>
+  IL_0440: ldloc.s V_21
+  IL_0442: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>::Add : ?
+  IL_0447: ldloc.s V_19
+  IL_0449: ldc.i4.1 
+  IL_044A: add 
+  IL_044B: stloc.s V_19
+  IL_044D: ldloc.s V_19
+  IL_044F: ldloc.s V_11
+  IL_0451: blt IL_03E9: ldsfld System.IO.BinaryReader CloudClient.Templating.TemplateArgument::_TemplateController
+  IL_0456: ldloc.0 
+  IL_0457: ldloc.s V_12
+  IL_0459: newobj System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::.ctor : ?
+  IL_045E: stfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_ProjectDecorators : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>
+  IL_0463: ldc.i4.0 
+  IL_0464: stloc.s V_22
+  IL_0466: br IL_0550: ldloc.s V_22
+  IL_046B: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_0470: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_0475: stloc.s V_23
+  IL_0477: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_047C: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_0481: stloc.s V_24
+  IL_0483: newobj System.Void CloudClient.Templating.TemplateArgument/DistributorProfile::.ctor()
+  IL_0488: stloc.s V_25
+  IL_048A: ldloc.s V_25
+  IL_048C: ldloc.s V_23
+  IL_048E: stfld CloudClient.Templating.TemplateArgument/DistributorProfile::_SegmentedFilterId : System.Int32
+  IL_0493: ldloc.s V_25
+  IL_0495: ldloc.s V_24
+  IL_0497: stfld CloudClient.Templating.TemplateArgument/DistributorProfile::m_InterruptibleListCounter : System.Int32
+  IL_049C: newobj System.Void CloudClient.Templating.TemplateArgument/WrapperConfiguration::.ctor()
+  IL_04A1: stloc.s V_26
+  IL_04A3: ldloc.s V_25
+  IL_04A5: ldloc.s V_26
+  IL_04A7: stfld CloudClient.Templating.TemplateArgument/DistributorProfile::m_AdjustableDistributor : CloudClient.Templating.TemplateArgument/WrapperConfiguration
+  IL_04AC: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_04B1: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_04B6: stloc.s V_23
+  IL_04B8: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_04BD: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_04C2: stloc.s V_24
+  IL_04C4: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_04C9: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_04CE: stloc.s V_27
+  IL_04D0: ldloc.s V_26
+  IL_04D2: ldloc.s V_23
+  IL_04D4: stfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::filterSetSize : System.Int32
+  IL_04D9: ldloc.s V_26
+  IL_04DB: ldloc.s V_24
+  IL_04DD: stfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::m_WrapperProxyErrorCode : System.Int32
+  IL_04E2: ldloc.s V_26
+  IL_04E4: ldloc.s V_27
+  IL_04E6: stfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::m_WrapperContextScore : System.Int32
+  IL_04EB: ldloc.s V_27
+  IL_04ED: brtrue IL_0514: ldloc.s V_27
+  IL_04F2: ldloc.s V_26
+  IL_04F4: ldloc.s V_9
+  IL_04F6: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_04FB: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_0500: ldsfld AnalyzerUser::CheckIsolatedPoolTransformer : AnalyzerUser
+  IL_0505: call System.Type AnalyzerUser::ExecuteExplorer(System.Object,System.Int32,AnalyzerUser)
+  IL_050A: stfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::advancedServer : System.Type
+  IL_050F: br IL_053D: ldloc.0
+  IL_0514: ldloc.s V_27
+  IL_0516: ldc.i4.1 
+  IL_0517: bne.un IL_0532: ldsfld System.IO.BinaryReader CloudClient.Templating.TemplateArgument::_TemplateController
+  IL_051C: ldloc.s V_26
+  IL_051E: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_0523: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_0528: stfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::m_DividedChainFreq : System.Int32
+  IL_052D: br IL_053D: ldloc.0
+  IL_0532: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_0537: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_053C: pop 
+  IL_053D: ldloc.0 
+  IL_053E: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_ProjectDecorators : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>
+  IL_0543: ldloc.s V_25
+  IL_0545: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::Add : ?
+  IL_054A: ldloc.s V_22
+  IL_054C: ldc.i4.1 
+  IL_054D: add 
+  IL_054E: stloc.s V_22
+  IL_0550: ldloc.s V_22
+  IL_0552: ldloc.s V_12
+  IL_0554: blt IL_046B: ldsfld System.IO.BinaryReader CloudClient.Templating.TemplateArgument::_TemplateController
+  IL_0559: ldloc.0 
+  IL_055A: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_ProjectDecorators : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>
+  IL_055F: pop 
+  IL_0560: ldloc.0 
+  IL_0561: ldloc.s V_13
+  IL_0563: newobj System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/HandlerPublisher>::.ctor : ?
+  IL_0568: stfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_SequentialCalculators : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/HandlerPublisher>
+  IL_056D: ldc.i4.0 
+  IL_056E: stloc.s V_28
+  IL_0570: br IL_06B8: ldloc.s V_28
+  IL_0575: newobj System.Void CloudClient.Templating.TemplateArgument/HandlerPublisher::.ctor()
+  IL_057A: stloc.s V_29
+  IL_057C: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_0581: ldsfld ValidatorResolverViewer::CheckSetCompressorCalculator : ValidatorResolverViewer
+  IL_0586: call System.Byte ValidatorResolverViewer::ExecuteExplorer(System.Object,ValidatorResolverViewer)
+  IL_058B: stloc.s V_30
+  IL_058D: ldloc.s V_29
+  IL_058F: ldloc.s V_30
+  IL_0591: stfld CloudClient.Templating.TemplateArgument/HandlerPublisher::m_CalculatorPredicate : CloudClient.Templating.TemplateArgument/AItOeB3UZns1qY0NkiI
+  IL_0596: ldloc.s V_30
+  IL_0598: ldc.i4 176
+  IL_059D: blt IL_05A8: ldsfld System.Byte[] CloudClient.Templating.TemplateArgument::templatePolicyElements
+  IL_05A2: newobj System.Exception::.ctor : ?
+  IL_05A7: throw 
+  IL_05A8: ldsfld CloudClient.Templating.TemplateArgument::templatePolicyElements : System.Byte[]
+  IL_05AD: ldloc.s V_30
+  IL_05AF: ldelem.u1 
+  IL_05B0: stloc.s V_31
+  IL_05B2: ldloc.s V_31
+  IL_05B4: brtrue IL_05C6: ldnull
+  IL_05B9: ldloc.s V_29
+  IL_05BB: ldnull 
+  IL_05BC: stfld CloudClient.Templating.TemplateArgument/HandlerPublisher::_CommonBuilderObj : System.Object
+  IL_05C1: br IL_06A5: ldloc.0
+  IL_05C6: ldnull 
+  IL_05C7: stloc.s V_32
+  IL_05C9: ldloc.s V_31
+  IL_05CB: ldc.i4.1 
+  IL_05CC: sub 
+  IL_05CD: switch dnlib.DotNet.Emit.Instruction[]
+  IL_05E6: br IL_0696: newobj System.Void System.Exception::.ctor()
+  IL_05EB: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_05F0: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_05F5: box System.Int32
+  IL_05FA: stloc.s V_32
+  IL_05FC: br IL_069C: ldloc.s V_29
+  IL_0601: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_0606: ldsfld ExpandableStackValidator::ConcatTag : ExpandableStackValidator
+  IL_060B: call System.Int64 ExpandableStackValidator::ExecuteExplorer(System.Object,ExpandableStackValidator)
+  IL_0610: box System.Int64
+  IL_0615: stloc.s V_32
+  IL_0617: br IL_069C: ldloc.s V_29
+  IL_061C: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_0621: ldsfld GeneralProfilerValidator::SaveSet : GeneralProfilerValidator
+  IL_0626: call System.Single GeneralProfilerValidator::ExecuteExplorer(System.Object,GeneralProfilerValidator)
+  IL_062B: box System.Single
+  IL_0630: stloc.s V_32
+  IL_0632: br IL_069C: ldloc.s V_29
+  IL_0637: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_063C: ldsfld IntegratedBufferValidator::PrepareState : IntegratedBufferValidator
+  IL_0641: call System.Double IntegratedBufferValidator::ExecuteExplorer(System.Object,IntegratedBufferValidator)
+  IL_0646: box System.Double
+  IL_064B: stloc.s V_32
+  IL_064D: br IL_069C: ldloc.s V_29
+  IL_0652: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_0657: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_065C: stloc.s V_33
+  IL_065E: ldloc.s V_33
+  IL_0660: newarr System.Int32
+  IL_0665: stloc.s V_34
+  IL_0667: ldc.i4.0 
+  IL_0668: stloc.s V_35
+  IL_066A: br IL_0684: ldloc.s V_35
+  IL_066F: ldloc.s V_34
+  IL_0671: ldloc.s V_35
+  IL_0673: ldsfld CloudClient.Templating.TemplateArgument::_TemplateController : System.IO.BinaryReader
+  IL_0678: call System.Int32 CloudClient.Templating.TemplateArgument::EnableAuthorizer(System.IO.BinaryReader)
+  IL_067D: stelem.i4 
+  IL_067E: ldloc.s V_35
+  IL_0680: ldc.i4.1 
+  IL_0681: add 
+  IL_0682: stloc.s V_35
+  IL_0684: ldloc.s V_35
+  IL_0686: ldloc.s V_33
+  IL_0688: blt IL_066F: ldloc.s V_34
+  IL_068D: ldloc.s V_34
+  IL_068F: stloc.s V_32
+  IL_0691: br IL_069C: ldloc.s V_29
+  IL_0696: newobj System.Exception::.ctor : ?
+  IL_069B: throw 
+  IL_069C: ldloc.s V_29
+  IL_069E: ldloc.s V_32
+  IL_06A0: stfld CloudClient.Templating.TemplateArgument/HandlerPublisher::_CommonBuilderObj : System.Object
+  IL_06A5: ldloc.0 
+  IL_06A6: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_SequentialCalculators : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/HandlerPublisher>
+  IL_06AB: ldloc.s V_29
+  IL_06AD: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/HandlerPublisher>::Add : ?
+  IL_06B2: ldloc.s V_28
+  IL_06B4: ldc.i4.1 
+  IL_06B5: add 
+  IL_06B6: stloc.s V_28
+  IL_06B8: ldloc.s V_28
+  IL_06BA: ldloc.s V_13
+  IL_06BC: blt IL_0575: newobj System.Void CloudClient.Templating.TemplateArgument/HandlerPublisher::.ctor()
+  IL_06C1: ldsfld CloudClient.Templating.TemplateArgument::_AdjustableTransformerElements : CloudClient.Templating.TemplateArgument/DetachedCalculator[]
+  IL_06C6: ldarg.0 
+  IL_06C7: ldloc.0 
+  IL_06C8: stelem.ref 
+  IL_06C9: leave IL_06E2: newobj System.Void CloudClient.Templating.TemplateArgument/TemplateThread::.ctor()
+  IL_06CE: ldloc.s V_8
+  IL_06D0: brfalse IL_06E1: endfinally
+  IL_06D5: ldloc.s V_7
+  IL_06D7: ldsfld RandomSharerValidator::CheckEditableNode : RandomSharerValidator
+  IL_06DC: call System.Void RandomSharerValidator::ExecuteExplorer(System.Object,RandomSharerValidator)
+  IL_06E1: endfinally 
+  IL_06E2: newobj System.Void CloudClient.Templating.TemplateArgument/TemplateThread::.ctor()
+  IL_06E7: stloc.1 
+  IL_06E8: ldloc.1 
+  IL_06E9: ldloc.0 
+  IL_06EA: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_TemplateConfig : CloudClient.Templating.TemplateArgument/DetachedCalculator
+  IL_06EF: ldloc.0 
+  IL_06F0: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_06F5: ldsfld SymbolicWatcherValidator::CheckEfficientReporterAnalyzer : SymbolicWatcherValidator
+  IL_06FA: call System.Reflection.ParameterInfo[] SymbolicWatcherValidator::ExecuteExplorer(System.Object,SymbolicWatcherValidator)
+  IL_06FF: stloc.2 
+  IL_0700: ldc.i4.0 
+  IL_0701: stloc.3 
+  IL_0702: ldc.i4.0 
+  IL_0703: stloc.s V_4
+  IL_0705: ldloc.0 
+  IL_0706: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_070B: isinst System.Reflection.MethodInfo
+  IL_0710: brfalse IL_074A: ldloc.0
+  IL_0715: ldloc.0 
+  IL_0716: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_071B: castclass System.Reflection.MethodInfo
+  IL_0720: ldsfld TransferableStubValidator::ValidateDetailedFieldResolver : TransferableStubValidator
+  IL_0725: call System.Type TransferableStubValidator::ExecuteExplorer(System.Object,TransferableStubValidator)
+  IL_072A: ldtoken System.Void
+  IL_072F: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_0734: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_0739: ldsfld FinalizerSharer::VerifyAccessibleCompressor : FinalizerSharer
+  IL_073E: call System.Boolean FinalizerSharer::ExecuteExplorer(System.Type,System.Type,FinalizerSharer)
+  IL_0743: brfalse IL_074A: ldloc.0
+  IL_0748: ldc.i4.1 
+  IL_0749: stloc.3 
+  IL_074A: ldloc.0 
+  IL_074B: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_0750: ldsfld ValidatorObserverAllocator::VerifyAdvancedResolverSynchronizer : ValidatorObserverAllocator
+  IL_0755: call System.Boolean ValidatorObserverAllocator::ExecuteExplorer(System.Object,ValidatorObserverAllocator)
+  IL_075A: brfalse IL_07C5: ldloc.1
+  IL_075F: ldloc.1 
+  IL_0760: ldloc.2 
+  IL_0761: ldlen 
+  IL_0762: conv.i4 
+  IL_0763: newarr CloudClient.Templating.TemplateArgument/ConnectedObserver
+  IL_0768: stfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_076D: ldc.i4.0 
+  IL_076E: stloc.s V_36
+  IL_0770: br IL_07B6: ldloc.s V_36
+  IL_0775: ldloc.2 
+  IL_0776: ldloc.s V_36
+  IL_0778: ldelem.ref 
+  IL_0779: ldsfld ValidatorFinderGenerator::ValidateLocalAnalyzerEvaluator : ValidatorFinderGenerator
+  IL_077E: call System.Type ValidatorFinderGenerator::ExecuteExplorer(System.Object,ValidatorFinderGenerator)
+  IL_0783: stloc.s V_37
+  IL_0785: ldloc.1 
+  IL_0786: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_078B: ldloc.s V_36
+  IL_078D: ldloc.s V_37
+  IL_078F: ldarg.1 
+  IL_0790: ldloc.s V_36
+  IL_0792: ldelem.ref 
+  IL_0793: call CloudClient.Templating.TemplateArgument/ConnectedObserver CloudClient.Templating.TemplateArgument/ConnectedObserver::MonitorConcreteUser(System.Type,System.Object)
+  IL_0798: stelem.ref 
+  IL_0799: ldloc.s V_37
+  IL_079B: ldsfld ResponderSender::CheckConfigurableEvaluatorCompressor : ResponderSender
+  IL_07A0: call System.Boolean ResponderSender::ExecuteExplorer(System.Object,ResponderSender)
+  IL_07A5: brfalse IL_07B0: ldloc.s V_36
+  IL_07AA: ldloc.s V_4
+  IL_07AC: ldc.i4.1 
+  IL_07AD: add 
+  IL_07AE: stloc.s V_4
+  IL_07B0: ldloc.s V_36
+  IL_07B2: ldc.i4.1 
+  IL_07B3: add 
+  IL_07B4: stloc.s V_36
+  IL_07B6: ldloc.s V_36
+  IL_07B8: ldloc.2 
+  IL_07B9: ldlen 
+  IL_07BA: conv.i4 
+  IL_07BB: blt IL_0775: ldloc.2
+  IL_07C0: br IL_089A: ldloc.1
+  IL_07C5: ldloc.1 
+  IL_07C6: ldloc.2 
+  IL_07C7: ldlen 
+  IL_07C8: conv.i4 
+  IL_07C9: ldc.i4.1 
+  IL_07CA: add 
+  IL_07CB: newarr CloudClient.Templating.TemplateArgument/ConnectedObserver
+  IL_07D0: stfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_07D5: ldloc.0 
+  IL_07D6: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_07DB: ldsfld GlobalSetValidator::VerifyScopeNode : GlobalSetValidator
+  IL_07E0: call System.Type GlobalSetValidator::ExecuteExplorer(System.Object,GlobalSetValidator)
+  IL_07E5: ldsfld ValidatorListBridge::StartDriver : ValidatorListBridge
+  IL_07EA: call System.Boolean ValidatorListBridge::ExecuteExplorer(System.Object,ValidatorListBridge)
+  IL_07EF: brfalse IL_081C: ldloc.1
+  IL_07F4: ldloc.1 
+  IL_07F5: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_07FA: ldc.i4.0 
+  IL_07FB: ldarg.2 
+  IL_07FC: newobj System.Void CloudClient.Templating.TemplateArgument/ProgramFinder::.ctor(System.Object)
+  IL_0801: ldloc.0 
+  IL_0802: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_0807: ldsfld GlobalSetValidator::VerifyScopeNode : GlobalSetValidator
+  IL_080C: call System.Type GlobalSetValidator::ExecuteExplorer(System.Object,GlobalSetValidator)
+  IL_0811: newobj System.Void CloudClient.Templating.TemplateArgument/TagToken::.ctor(CloudClient.Templating.TemplateArgument/ConnectedObserver,System.Type)
+  IL_0816: stelem.ref 
+  IL_0817: br IL_082A: ldc.i4.0
+  IL_081C: ldloc.1 
+  IL_081D: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0822: ldc.i4.0 
+  IL_0823: ldarg.2 
+  IL_0824: newobj System.Void CloudClient.Templating.TemplateArgument/ProgramFinder::.ctor(System.Object)
+  IL_0829: stelem.ref 
+  IL_082A: ldc.i4.0 
+  IL_082B: stloc.s V_38
+  IL_082D: br IL_0890: ldloc.s V_38
+  IL_0832: ldloc.2 
+  IL_0833: ldloc.s V_38
+  IL_0835: ldelem.ref 
+  IL_0836: ldsfld ValidatorFinderGenerator::ValidateLocalAnalyzerEvaluator : ValidatorFinderGenerator
+  IL_083B: call System.Type ValidatorFinderGenerator::ExecuteExplorer(System.Object,ValidatorFinderGenerator)
+  IL_0840: stloc.s V_39
+  IL_0842: ldloc.s V_39
+  IL_0844: ldsfld ResponderSender::CheckConfigurableEvaluatorCompressor : ResponderSender
+  IL_0849: call System.Boolean ResponderSender::ExecuteExplorer(System.Object,ResponderSender)
+  IL_084E: brfalse IL_0874: ldloc.1
+  IL_0853: ldloc.1 
+  IL_0854: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0859: ldloc.s V_38
+  IL_085B: ldc.i4.1 
+  IL_085C: add 
+  IL_085D: ldloc.s V_39
+  IL_085F: ldarg.1 
+  IL_0860: ldloc.s V_38
+  IL_0862: ldelem.ref 
+  IL_0863: call CloudClient.Templating.TemplateArgument/ConnectedObserver CloudClient.Templating.TemplateArgument/ConnectedObserver::MonitorConcreteUser(System.Type,System.Object)
+  IL_0868: stelem.ref 
+  IL_0869: ldloc.s V_4
+  IL_086B: ldc.i4.1 
+  IL_086C: add 
+  IL_086D: stloc.s V_4
+  IL_086F: br IL_088A: ldloc.s V_38
+  IL_0874: ldloc.1 
+  IL_0875: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_087A: ldloc.s V_38
+  IL_087C: ldc.i4.1 
+  IL_087D: add 
+  IL_087E: ldloc.s V_39
+  IL_0880: ldarg.1 
+  IL_0881: ldloc.s V_38
+  IL_0883: ldelem.ref 
+  IL_0884: call CloudClient.Templating.TemplateArgument/ConnectedObserver CloudClient.Templating.TemplateArgument/ConnectedObserver::MonitorConcreteUser(System.Type,System.Object)
+  IL_0889: stelem.ref 
+  IL_088A: ldloc.s V_38
+  IL_088C: ldc.i4.1 
+  IL_088D: add 
+  IL_088E: stloc.s V_38
+  IL_0890: ldloc.s V_38
+  IL_0892: ldloc.2 
+  IL_0893: ldlen 
+  IL_0894: conv.i4 
+  IL_0895: blt IL_0832: ldloc.2
+  IL_089A: ldloc.1 
+  IL_089B: ldloc.0 
+  IL_089C: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::flexibleCalculatorList : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>
+  IL_08A1: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>::get_Count : ?
+  IL_08A6: newarr CloudClient.Templating.TemplateArgument/ConnectedObserver
+  IL_08AB: stfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_08B0: ldc.i4.0 
+  IL_08B1: stloc.s V_40
+  IL_08B3: br IL_09DD: ldloc.s V_40
+  IL_08B8: ldloc.0 
+  IL_08B9: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::flexibleCalculatorList : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>
+  IL_08BE: ldloc.s V_40
+  IL_08C0: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>::get_Item : ?
+  IL_08C5: stloc.s V_41
+  IL_08C7: ldloc.s V_41
+  IL_08C9: ldfld CloudClient.Templating.TemplateArgument/CalculatorListener::statelessCalculator : CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc
+  IL_08CE: stloc.s V_42
+  IL_08D0: ldloc.s V_42
+  IL_08D2: switch dnlib.DotNet.Emit.Instruction[]
+  IL_091B: br IL_09D7: ldloc.s V_40
+  IL_0920: ldloc.1 
+  IL_0921: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0926: ldloc.s V_40
+  IL_0928: ldnull 
+  IL_0929: stelem.ref 
+  IL_092A: br IL_09D7: ldloc.s V_40
+  IL_092F: ldloc.1 
+  IL_0930: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0935: ldloc.s V_40
+  IL_0937: ldc.i4.0 
+  IL_0938: ldloc.s V_41
+  IL_093A: ldfld CloudClient.Templating.TemplateArgument/CalculatorListener::statelessCalculator : CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc
+  IL_093F: newobj System.Void CloudClient.Templating.TemplateArgument/VirtualInitializer::.ctor(System.Int32,CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc)
+  IL_0944: stelem.ref 
+  IL_0945: br IL_09D7: ldloc.s V_40
+  IL_094A: ldloc.1 
+  IL_094B: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0950: ldloc.s V_40
+  IL_0952: ldc.i4.0 
+  IL_0953: conv.i8 
+  IL_0954: ldloc.s V_41
+  IL_0956: ldfld CloudClient.Templating.TemplateArgument/CalculatorListener::statelessCalculator : CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc
+  IL_095B: newobj System.Void CloudClient.Templating.TemplateArgument/WrapperQueue::.ctor(System.Int64,CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc)
+  IL_0960: stelem.ref 
+  IL_0961: br IL_09D7: ldloc.s V_40
+  IL_0966: ldloc.1 
+  IL_0967: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_096C: ldloc.s V_40
+  IL_096E: ldc.r8 0
+  IL_0977: ldloc.s V_41
+  IL_0979: ldfld CloudClient.Templating.TemplateArgument/CalculatorListener::statelessCalculator : CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc
+  IL_097E: newobj System.Void CloudClient.Templating.TemplateArgument/DecryptorWriter::.ctor(System.Double,CloudClient.Templating.TemplateArgument/m4iNrp3uTHM9viOH5bc)
+  IL_0983: stelem.ref 
+  IL_0984: br IL_09D7: ldloc.s V_40
+  IL_0989: ldloc.1 
+  IL_098A: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_098F: ldloc.s V_40
+  IL_0991: ldsfld System.IntPtr::Zero : ?
+  IL_0996: newobj System.Void CloudClient.Templating.TemplateArgument/ExtendedCalculator::.ctor(System.IntPtr)
+  IL_099B: stelem.ref 
+  IL_099C: br IL_09D7: ldloc.s V_40
+  IL_09A1: ldloc.1 
+  IL_09A2: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_09A7: ldloc.s V_40
+  IL_09A9: ldsfld System.UIntPtr::Zero : ?
+  IL_09AE: newobj System.Void CloudClient.Templating.TemplateArgument/ExtendedCalculator::.ctor(System.UIntPtr)
+  IL_09B3: stelem.ref 
+  IL_09B4: br IL_09D7: ldloc.s V_40
+  IL_09B9: ldloc.1 
+  IL_09BA: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_09BF: ldloc.s V_40
+  IL_09C1: ldnull 
+  IL_09C2: stelem.ref 
+  IL_09C3: br IL_09D7: ldloc.s V_40
+  IL_09C8: ldloc.1 
+  IL_09C9: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_09CE: ldloc.s V_40
+  IL_09D0: ldnull 
+  IL_09D1: newobj System.Void CloudClient.Templating.TemplateArgument/ProgramFinder::.ctor(System.Object)
+  IL_09D6: stelem.ref 
+  IL_09D7: ldloc.s V_40
+  IL_09D9: ldc.i4.1 
+  IL_09DA: add 
+  IL_09DB: stloc.s V_40
+  IL_09DD: ldloc.s V_40
+  IL_09DF: ldloc.0 
+  IL_09E0: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::flexibleCalculatorList : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>
+  IL_09E5: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/CalculatorListener>::get_Count : ?
+  IL_09EA: blt IL_08B8: ldloc.0
+  IL_09EF: nop 
+  IL_09F0: ldloc.1 
+  IL_09F1: callvirt System.Void CloudClient.Templating.TemplateArgument/TemplateThread::PlanRunner()
+  IL_09F6: leave IL_0A02: ldc.i4.0
+  IL_09FB: ldloc.1 
+  IL_09FC: callvirt System.Void CloudClient.Templating.TemplateArgument/TemplateThread::DefineIntegratedCollection()
+  IL_0A01: endfinally 
+  IL_0A02: ldc.i4.0 
+  IL_0A03: stloc.s V_5
+  IL_0A05: ldloc.3 
+  IL_0A06: brfalse IL_0A0E: ldloc.s V_5
+  IL_0A0B: ldc.i4.1 
+  IL_0A0C: stloc.s V_5
+  IL_0A0E: ldloc.s V_5
+  IL_0A10: ldloc.s V_4
+  IL_0A12: add 
+  IL_0A13: stloc.s V_5
+  IL_0A15: ldloc.s V_5
+  IL_0A17: newarr System.Object
+  IL_0A1C: stloc.s V_6
+  IL_0A1E: ldloc.3 
+  IL_0A1F: brfalse IL_0A29: ldloc.0
+  IL_0A24: ldloc.s V_6
+  IL_0A26: ldc.i4.0 
+  IL_0A27: ldnull 
+  IL_0A28: stelem.ref 
+  IL_0A29: ldloc.0 
+  IL_0A2A: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_0A2F: isinst System.Reflection.MethodInfo
+  IL_0A34: brfalse IL_0A96: ldloc.s V_4
+  IL_0A39: ldloc.0 
+  IL_0A3A: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_0A3F: castclass System.Reflection.MethodInfo
+  IL_0A44: stloc.s V_43
+  IL_0A46: ldloc.s V_43
+  IL_0A48: ldsfld TransferableStubValidator::ValidateDetailedFieldResolver : TransferableStubValidator
+  IL_0A4D: call System.Type TransferableStubValidator::ExecuteExplorer(System.Object,TransferableStubValidator)
+  IL_0A52: ldtoken System.Void
+  IL_0A57: ldsfld ValidatorDefinition::MatchRunner : ValidatorDefinition
+  IL_0A5C: call System.Type ValidatorDefinition::ExecuteExplorer(System.RuntimeTypeHandle,ValidatorDefinition)
+  IL_0A61: ldsfld FinalizerSharer::VerifyAccessibleCompressor : FinalizerSharer
+  IL_0A66: call System.Boolean FinalizerSharer::ExecuteExplorer(System.Type,System.Type,FinalizerSharer)
+  IL_0A6B: brfalse IL_0A96: ldloc.s V_4
+  IL_0A70: ldloc.1 
+  IL_0A71: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::templateEditor : CloudClient.Templating.TemplateArgument/ConnectedObserver
+  IL_0A76: brfalse IL_0A96: ldloc.s V_4
+  IL_0A7B: ldloc.s V_6
+  IL_0A7D: ldc.i4.0 
+  IL_0A7E: ldloc.1 
+  IL_0A7F: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::templateEditor : CloudClient.Templating.TemplateArgument/ConnectedObserver
+  IL_0A84: ldloc.s V_43
+  IL_0A86: ldsfld TransferableStubValidator::ValidateDetailedFieldResolver : TransferableStubValidator
+  IL_0A8B: call System.Type TransferableStubValidator::ExecuteExplorer(System.Object,TransferableStubValidator)
+  IL_0A90: callvirt System.Object CloudClient.Templating.TemplateArgument/ConnectedObserver::HandleAutomatableConnection(System.Type)
+  IL_0A95: stelem.ref 
+  IL_0A96: ldloc.s V_4
+  IL_0A98: ldc.i4.0 
+  IL_0A99: ble IL_0B59: ldloc.0
+  IL_0A9E: ldc.i4.0 
+  IL_0A9F: stloc.s V_44
+  IL_0AA1: ldloc.3 
+  IL_0AA2: brfalse IL_0AAD: ldc.i4.0
+  IL_0AA7: ldloc.s V_44
+  IL_0AA9: ldc.i4.1 
+  IL_0AAA: add 
+  IL_0AAB: stloc.s V_44
+  IL_0AAD: ldc.i4.0 
+  IL_0AAE: stloc.s V_45
+  IL_0AB0: br IL_0B4F: ldloc.s V_45
+  IL_0AB5: ldloc.2 
+  IL_0AB6: ldloc.s V_45
+  IL_0AB8: ldelem.ref 
+  IL_0AB9: ldsfld ValidatorFinderGenerator::ValidateLocalAnalyzerEvaluator : ValidatorFinderGenerator
+  IL_0ABE: call System.Type ValidatorFinderGenerator::ExecuteExplorer(System.Object,ValidatorFinderGenerator)
+  IL_0AC3: stloc.s V_46
+  IL_0AC5: ldloc.s V_46
+  IL_0AC7: ldsfld ResponderSender::CheckConfigurableEvaluatorCompressor : ResponderSender
+  IL_0ACC: call System.Boolean ResponderSender::ExecuteExplorer(System.Object,ResponderSender)
+  IL_0AD1: brfalse IL_0B49: ldloc.s V_45
+  IL_0AD6: ldloc.s V_46
+  IL_0AD8: ldsfld ValidatorSchemaRole::SelectPool : ValidatorSchemaRole
+  IL_0ADD: call System.Type ValidatorSchemaRole::ExecuteExplorer(System.Object,ValidatorSchemaRole)
+  IL_0AE2: stloc.s V_46
+  IL_0AE4: ldloc.1 
+  IL_0AE5: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0AEA: ldloc.s V_45
+  IL_0AEC: ldelem.ref 
+  IL_0AED: brfalse IL_0B3D: ldloc.s V_6
+  IL_0AF2: ldloc.0 
+  IL_0AF3: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_0AF8: ldsfld ValidatorObserverAllocator::VerifyAdvancedResolverSynchronizer : ValidatorObserverAllocator
+  IL_0AFD: call System.Boolean ValidatorObserverAllocator::ExecuteExplorer(System.Object,ValidatorObserverAllocator)
+  IL_0B02: brfalse IL_0B21: ldloc.s V_6
+  IL_0B07: ldloc.s V_6
+  IL_0B09: ldloc.s V_44
+  IL_0B0B: ldloc.1 
+  IL_0B0C: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0B11: ldloc.s V_45
+  IL_0B13: ldelem.ref 
+  IL_0B14: ldloc.s V_46
+  IL_0B16: callvirt System.Object CloudClient.Templating.TemplateArgument/ConnectedObserver::HandleAutomatableConnection(System.Type)
+  IL_0B1B: stelem.ref 
+  IL_0B1C: br IL_0B43: ldloc.s V_44
+  IL_0B21: ldloc.s V_6
+  IL_0B23: ldloc.s V_44
+  IL_0B25: ldloc.1 
+  IL_0B26: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0B2B: ldloc.s V_45
+  IL_0B2D: ldc.i4.1 
+  IL_0B2E: add 
+  IL_0B2F: ldelem.ref 
+  IL_0B30: ldloc.s V_46
+  IL_0B32: callvirt System.Object CloudClient.Templating.TemplateArgument/ConnectedObserver::HandleAutomatableConnection(System.Type)
+  IL_0B37: stelem.ref 
+  IL_0B38: br IL_0B43: ldloc.s V_44
+  IL_0B3D: ldloc.s V_6
+  IL_0B3F: ldloc.s V_44
+  IL_0B41: ldnull 
+  IL_0B42: stelem.ref 
+  IL_0B43: ldloc.s V_44
+  IL_0B45: ldc.i4.1 
+  IL_0B46: add 
+  IL_0B47: stloc.s V_44
+  IL_0B49: ldloc.s V_45
+  IL_0B4B: ldc.i4.1 
+  IL_0B4C: add 
+  IL_0B4D: stloc.s V_45
+  IL_0B4F: ldloc.s V_45
+  IL_0B51: ldloc.2 
+  IL_0B52: ldlen 
+  IL_0B53: conv.i4 
+  IL_0B54: blt IL_0AB5: ldloc.2
+  IL_0B59: ldloc.0 
+  IL_0B5A: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_0B5F: ldsfld ValidatorObserverAllocator::VerifyAdvancedResolverSynchronizer : ValidatorObserverAllocator
+  IL_0B64: call System.Boolean ValidatorObserverAllocator::ExecuteExplorer(System.Object,ValidatorObserverAllocator)
+  IL_0B69: brtrue IL_0BB5: ldloc.s V_6
+  IL_0B6E: ldloc.0 
+  IL_0B6F: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_0B74: ldsfld GlobalSetValidator::VerifyScopeNode : GlobalSetValidator
+  IL_0B79: call System.Type GlobalSetValidator::ExecuteExplorer(System.Object,GlobalSetValidator)
+  IL_0B7E: ldsfld ValidatorListBridge::StartDriver : ValidatorListBridge
+  IL_0B83: call System.Boolean ValidatorListBridge::ExecuteExplorer(System.Object,ValidatorListBridge)
+  IL_0B88: brfalse IL_0BB5: ldloc.s V_6
+  IL_0B8D: ldarg.3 
+  IL_0B8E: ldloc.1 
+  IL_0B8F: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  IL_0B94: ldc.i4.0 
+  IL_0B95: ldelem.ref 
+  IL_0B96: ldloc.0 
+  IL_0B97: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_CalculatorArgument : System.Reflection.MethodBase
+  IL_0B9C: ldsfld GlobalSetValidator::VerifyScopeNode : GlobalSetValidator
+  IL_0BA1: call System.Type GlobalSetValidator::ExecuteExplorer(System.Object,GlobalSetValidator)
+  IL_0BA6: callvirt System.Object CloudClient.Templating.TemplateArgument/ConnectedObserver::HandleAutomatableConnection(System.Type)
+  IL_0BAB: unbox.any T
+  IL_0BB0: stobj T
+  IL_0BB5: ldloc.s V_6
+  IL_0BB7: ret 
