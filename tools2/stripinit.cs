@@ -15,6 +15,11 @@ using dnlib.DotNet.Writer;
 //
 // 用法: stripinit <in.exe> <out.exe> [--dry]
 class StripInit {
+    // 这些**不能**摘: TrackCompiler(rt) 是"按类型句柄初始化该类型静态字段"的例程,
+    // 摘掉它, cctor 里本该被赋值的静态对象(如 ValidatorDefinition::MatchRunner)就永远是 null,
+    // 下游会以 NullReferenceException 的形式炸在莫名其妙的地方。
+    static readonly string[] KeepMethods = { "TrackCompiler" };
+
     static readonly string[] ReactorTypes = {
         "CloudClient.Templating.DispatcherInitializer",
         "AirExplorer.Wrapping.WrapperProvider",
@@ -41,10 +46,14 @@ class StripInit {
                     var dt = im.DeclaringType;
                     if (dt == null) continue;
                     if (!ReactorTypes.Contains(dt.FullName)) continue;
-                    // 非 cctor 里只摘"无参且返回 void"的调用, 保证栈平衡
-                    bool safe = im.MethodSig != null && im.MethodSig.Params.Count == 0
-                                && im.MethodSig.RetType != null && im.MethodSig.RetType.ElementType == ElementType.Void;
-                    if (m.Name.String == ".cctor" || safe) kill.Add(x);
+                    // 只摘"返回 void"的调用。
+                    // 注意 FinderMap::DirectDefinition 有重载: 无参 void 的是装 hook,
+                    // (int)->string 的那个才是**字符串解密器** —— 摘掉它会让 stsfld 从空栈取值,
+                    // 直接变成 InvalidProgramException。所以必须按返回类型判断。
+                    if (KeepMethods.Contains(im.Name.String)) continue;
+                    bool isVoid = im.MethodSig != null && im.MethodSig.RetType != null
+                                  && im.MethodSig.RetType.ElementType == ElementType.Void;
+                    if (isVoid) kill.Add(x);
                 }
                 if (kill.Count == 0) continue;
 
