@@ -61,6 +61,13 @@ jobs:
           # 标准输出不会关闭, ReadToEnd 会永远阻塞。改用重定向到文件 + 限时等待。
           $outFile = Join-Path (Get-Location) "out\raw_${{ matrix.exe }}.txt"
           $errFile = Join-Path (Get-Location) "out\raw_${{ matrix.exe }}.err.txt"
+          # 调试: 禁用 JIT 内联, 否则 InvalidCastException 的栈会被内联折叠到调用者,
+          # 看不到真正抛异常的方法
+          if ("${{ matrix.exe }}" -eq "v55" -or "${{ inputs.debug }}" -eq "1") {
+            $env:COMPlus_JitNoInline = "1"
+            $env:COMPlus_TieredCompilation = "0"
+            Write-Host "[debug] JIT inlining disabled"
+          }
           $p = Start-Process -FilePath (Resolve-Path "app\AirExplorer.exe").Path `
                              -WorkingDirectory (Resolve-Path "app").Path `
                              -ArgumentList "help" `
