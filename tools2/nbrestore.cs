@@ -230,8 +230,12 @@ class NbRestore {
                     // 注意: StringsStream.Read 返回 dnlib 的 UTF8String, 不是 string。
                     // WriteInlineString 只认 string, 直接塞 UTF8String 会
                     // "Invalid instruction operand" / "InlineString got UTF8String"。
-                    var u8 = ((ModuleDefMD)mod).StringsStream.Read(t & 0x00FFFFFF);
-                    operand = (u8.String == null) ? "" : u8.String; break;
+                    // 关键: ldstr 的 token(0x70xxxxxx) 指向 **#US 用户字符串堆**,
+                    // 不是 #Strings(元数据名字堆)。之前误用 StringsStream, 取到的是
+                    // 元数据名字的碎片(例如 "ing>>-GetEnumerator>d__52"、"ources"),
+                    // 于是所有字符串常量都是错的 —— 表现为按名字取资源拿到 null。
+                    var u8 = ((ModuleDefMD)mod).USStream.Read(t & 0x00FFFFFF);   // 直接返回 string
+                    operand = u8 ?? ""; break;
                 }
                 case OperandType.InlineMethod:
                 case OperandType.InlineField:
