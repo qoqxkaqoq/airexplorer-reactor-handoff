@@ -204,6 +204,37 @@ try {
   }
 } catch { W "H|trigger|throw: $($_.Exception.ToString())" }
 
+# 4) 委托字段诊断: TrackCompiler 用数据驱动给静态字段赋委托, 目标方法名只能在运行时看到。
+#    这一步回答: CheckAlphabeticProject 指向哪个方法? 那个方法在我们的 exe 里是不是桩?
+$probeTypes = @(
+  "ValidatorParserCollection",
+  "CloudClient.Templating.TemplateInitializer",
+  "AirExplorer.Values.ArgumentGateway",
+  "AirExplorer.Networking.RequestWorker"
+)
+foreach ($tn in $probeTypes) {
+  try {
+    $t = $asm.GetType($tn)
+    if ($null -eq $t) { W "D|$tn|<type missing>"; continue }
+    foreach ($f in $t.GetFields([Reflection.BindingFlags]"Public,NonPublic,Static")) {
+      $val = $null
+      try { $val = $f.GetValue($null) } catch { W "D|$tn|$($f.Name)|<throw $($_.Exception.GetType().Name)>"; continue }
+      if ($null -eq $val) { W "D|$tn|$($f.Name)|<null>"; continue }
+      if ($val -is [Delegate]) {
+        $dm = $null
+        try { $dm = $val.Method } catch {}
+        $dt = $null
+        try { $dt = $dm.DeclaringType.FullName } catch {}
+        $dn = $null
+        try { $dn = $dm.Name } catch {}
+        W "D|$tn|$($f.Name)|delegate->$dt::$dn"
+      } else {
+        W "D|$tn|$($f.Name)|$($val.GetType().FullName)"
+      }
+    }
+  } catch { W "D|$tn|<fatal $($_.Exception.GetType().Name)>" }
+}
+
 W "H|end|$(Get-Date -Format o)  total=$($script:lines.Count)"
 $dir = Split-Path -Parent $Out
 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
