@@ -300,6 +300,21 @@ class NbRestore {
         if (eh.Length < 4) return;
         uint cnt = BitConverter.ToUInt32(eh, 0);
         if (cnt == 0 || eh.Length < 4 + cnt * 28) return;
+        // 结束偏移 == 代码长度 的子句没有对应指令; 不补哨兵的话 dnlib 会写出 end<start 的非法区间,
+        // 运行时就是 BadImageFormatException: Bad IL range。
+        bool needSentinel = false;
+        for (int i = 0; i < cnt; i++) {
+            int b0 = 4 + i * 28;
+            uint t0 = BitConverter.ToUInt32(eh, b0 + 4), l0 = BitConverter.ToUInt32(eh, b0 + 8);
+            uint h0 = BitConverter.ToUInt32(eh, b0 + 12), l0b = BitConverter.ToUInt32(eh, b0 + 16);
+            if ((int)(t0 + l0) == ilSize || (int)(h0 + l0b) == ilSize) needSentinel = true;
+        }
+        if (needSentinel && !offMap.ContainsKey(ilSize)) {
+            var sentinel = OpCodes.Nop.ToInstruction();
+            body.Instructions.Add(sentinel);
+            offMap[ilSize] = sentinel;
+        }
+
         int dropped = 0;
         for (int i = 0; i < cnt; i++) {
             int b = 4 + i * 28;
@@ -334,6 +349,13 @@ class NbRestore {
             neh.HandlerStart = hs; neh.HandlerEnd = he;
             body.ExceptionHandlers.Add(neh);
         }
+        // ECMA 要求子句按 try 起点升序、同起点时区间长的在前(外层先)
+        var ordered = body.ExceptionHandlers
+            .OrderBy(h => h.TryStart == null ? int.MaxValue : h.TryStart.Offset)
+            .ThenByDescending(h => (h.TryEnd == null || h.TryStart == null) ? 0 : h.TryEnd.Offset - h.TryStart.Offset)
+            .ToList();
+        body.ExceptionHandlers.Clear();
+        foreach (var h in ordered) body.ExceptionHandlers.Add(h);
         if (dropped > 0) Console.WriteLine("    [eh] " + dropped + " clause(s) dropped");
     }
 
