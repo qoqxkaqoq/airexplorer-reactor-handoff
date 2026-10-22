@@ -1,0 +1,90 @@
+name: cmd-verify
+
+# AirExplorerCmd.exe 的验收探针。
+# 命令行版没有 GUI, 所以判据是硬的: stdout/stderr 文本 + 退出码。
+# 同一份脚本既能跑官方原版做基线, 也能跑候选做对比。
+on:
+  workflow_dispatch:
+    inputs:
+      exes:
+        description: 'candidate list (JSON array; "official" = run the shipped exe untouched)'
+        required: false
+        default: '["official"]'
+      args:
+        description: 'argument set label: help | none | version'
+        required: false
+        default: 'help'
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        exe: ${{ fromJSON(inputs.exes) }}
+    steps:
+      - name: 准备运行目录
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $base = "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main"
+          New-Item -ItemType Directory -Force -Path app, out | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorerCmd.exe")) { throw "installer extract failed: no AirExplorerCmd.exe" }
+          if ("${{ matrix.exe }}" -ne "official") {
+            $cand = "AirExplorerCmd_${{ matrix.exe }}.exe"
+            Invoke-WebRequest -Uri "$base/exes/$cand" -OutFile "app\AirExplorerCmd.exe"
+            Write-Host ("candidate = " + $cand)
+          } else {
+            Write-Host "baseline = official installer copy"
+          }
+          Write-Host ("md5 = " + (Get-FileHash 'app\AirExplorerCmd.exe' -Algorithm MD5).Hash)
+          Get-ChildItem app -Filter *.exe | Select-Object Name,Length | Format-Table | Out-String | Write-Host
+
+      - name: 运行并记录输出
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $label = "${{ matrix.exe }}"
+          $argset = "${{ inputs.args }}"
+          switch ($argset) {
+            "help"    { $argv = @("--help") }
+            "version" { $argv = @("--version") }
+            default   { $argv = @() }
+          }
+          Write-Host ("argset=" + $argset + " argv=" + ($argv -join " "))
+
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = (Resolve-Path "app\AirExplorerCmd.exe").Path
+          $psi.WorkingDirectory = (Resolve-Path "app").Path
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $psi.UseShellExecute = $false
+          $psi.Arguments = ($argv -join " ")
+          $p = [System.Diagnostics.Process]::Start($psi)
+          $so = $p.StandardOutput.ReadToEnd()
+          $se = $p.StandardError.ReadToEnd()
+          $done = $p.WaitForExit(60000)
+          if (-not $done) { try { $p.Kill() } catch {} }
+          $code = if ($done) { $p.ExitCode } else { -999 }
+
+          $out = @()
+          $out += "=== cmd-verify label=$label argset=$argset ==="
+          $out += "exit_code = $code"
+          $out += "--- stdout ---"
+          $out += $so
+          $out += "--- stderr ---"
+          $out += $se
+          $out | Out-File -FilePath "out\$label.$argset.log" -Encoding utf8
+          Write-Host ($out -join "`n")
+
+      - name: 上传日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmd-${{ matrix.exe }}-${{ inputs.args }}
+          path: out/
+          if-no-files-found: warn
