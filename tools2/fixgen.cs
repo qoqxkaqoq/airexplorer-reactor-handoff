@@ -85,6 +85,14 @@ class FixGen {
             else Console.WriteLine("[mapM-miss] " + kv.Key + " -> " + kv.Value);
         }
         if (map.Count == 0) { Console.WriteLine("[err] 无可映射类型"); return 2; }
+        // 简单名索引: dnlib 重建 TypeRef 时可能丢掉嵌套关系, 只剩简单名
+        var mapSimple = new Dictionary<string, TypeDef>();
+        gMapSimple = mapSimple;
+        foreach (var kv in map) {
+            var n = kv.Value.Name.String;
+            if (!mapSimple.ContainsKey(n)) mapSimple[n] = kv.Value;
+            else mapSimple[n] = null;   // 有歧义, 不用
+        }
 
         // 3) 扫描 dst 的 IL, 替换操作数
         int nField = 0, nType = 0, nMethod = 0, nLocal = 0;
@@ -94,6 +102,14 @@ class FixGen {
                 foreach (var v in m.Body.Variables) {
                     var nt = FixSig(v.Type, map);
                     if (nt != null && !ReferenceEquals(nt, v.Type)) { v.Type = nt; nLocal++; }
+                }
+                if (m.MethodSig != null) {
+                    for (int pi = 0; pi < m.MethodSig.Params.Count; pi++) {
+                        var np = FixSig(m.MethodSig.Params[pi], map);
+                        if (np != null && !ReferenceEquals(np, m.MethodSig.Params[pi])) { m.MethodSig.Params[pi] = np; nLocal++; }
+                    }
+                    var nr = FixSig(m.MethodSig.RetType, map);
+                    if (nr != null && !ReferenceEquals(nr, m.MethodSig.RetType)) { m.MethodSig.RetType = nr; nLocal++; }
                 }
                 foreach (var ins in m.Body.Instructions) {
                     if (ins.Operand is IMethod im0 && im0.DeclaringType != null && map.ContainsKey(Norm(im0.DeclaringType.FullName))) {
@@ -157,14 +173,18 @@ class FixGen {
     }
 
     // 递归替换 TypeSig 里的假名类型（局部变量签名 / 数组元素 / byref / 泛型实参）
+    static Dictionary<string, TypeDef> gMapSimple;
     static TypeSig FixSig(TypeSig sig, Dictionary<string, TypeDef> map) {
+        var mapSimple = gMapSimple;
         if (sig == null) return null;
         if (sig is TypeDefOrRefSig tds) {
             var td = tds.TypeDefOrRef;
-            if (td != null && map.ContainsKey(td.FullName)) {
-                var target = map[td.FullName];
-                bool isValue = target.IsValueType;
-                return target.ToTypeSig(isValue);
+            if (td != null) {
+                TypeDef target = null;
+                if (!map.TryGetValue(td.FullName, out target) || target == null) {
+                    mapSimple.TryGetValue(td.Name.String, out target);
+                }
+                if (target != null) return target.ToTypeSig(target.IsValueType);
             }
             return sig;
         }
