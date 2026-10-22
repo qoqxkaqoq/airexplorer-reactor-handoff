@@ -202,13 +202,25 @@ static class ForceDump
                                 Put(bout, 8, (uint)body.MaxStackSize);
                                 Put(bout, 12, (uint)body.ExceptionHandlingClauses.Count);
                                 Put(bout, 16, 0);
-                                // 第6 dword: LocalVarSigTok —— 反射的 MethodBody 在
-                                // PrepareMethod(解密)之后读, 这个 token 指向 StandAloneSig
-                                // 表(索引不会被 token 加密覆盖), dnlib 可直接解析出
-                                // 官方 locals 签名 -> 替代 fixlocals 从 cilantro 的猜测
-                                Put(bout, 20, (uint)body.LocalVarSigToken);
+                                Put(bout, 20, 0);
                                 Array.Copy(ilBytes, 0, bout, 24, ilBytes.Length);
                                 File.WriteAllBytes(bpath, bout);
+                                // 官方 locals: PrepareMethod(解密)后 LocalVariables 是
+                                // 运行时真类型(索引+Type), net48 没有 LocalVarSigToken
+                                // 公开属性, 这里写成 index|isPinned|TypeFullName 每行一条,
+                                // nbrestore 据此重建官方 locals 签名(替代 fixlocals 猜测)
+                                try {
+                                    var lvs = body.LocalVariables;
+                                    if (lvs.Count > 0) {
+                                        var lsb = new System.Text.StringBuilder();
+                                        foreach (var lv in lvs)
+                                            lsb.Append(lv.LocalIndex).Append('|')
+                                               .Append(lv.IsPinned ? 1 : 0).Append('|')
+                                               .Append(lv.LocalType.FullName).Append('\n');
+                                        File.WriteAllText(Path.Combine(bdir,
+                                            "m_" + m.MetadataToken.ToString("X8") + ".loc"), lsb.ToString());
+                                    }
+                                } catch { }
                                 dumped++;
                             }
                         }
