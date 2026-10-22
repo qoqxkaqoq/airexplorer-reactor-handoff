@@ -202,7 +202,11 @@ static class ForceDump
                                 Put(bout, 8, (uint)body.MaxStackSize);
                                 Put(bout, 12, (uint)body.ExceptionHandlingClauses.Count);
                                 Put(bout, 16, 0);
-                                Put(bout, 20, 0);
+                                // 第6 dword: LocalVarSigTok —— 反射的 MethodBody 在
+                                // PrepareMethod(解密)之后读, 这个 token 指向 StandAloneSig
+                                // 表(索引不会被 token 加密覆盖), dnlib 可直接解析出
+                                // 官方 locals 签名 -> 替代 fixlocals 从 cilantro 的猜测
+                                Put(bout, 20, (uint)body.LocalVarSigToken);
                                 Array.Copy(ilBytes, 0, bout, 24, ilBytes.Length);
                                 File.WriteAllBytes(bpath, bout);
                                 dumped++;
