@@ -177,19 +177,19 @@
     ]
   },
   "packageFolders": {
-    "/root/.nuget/packages/": {}
+    "/home/z/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/workspace/airexplorer-reactor-handoff/tools/cmpasm8.csproj",
-      "projectName": "cmpasm8",
-      "projectPath": "/workspace/airexplorer-reactor-handoff/tools/cmpasm8.csproj",
-      "packagesPath": "/root/.nuget/packages/",
-      "outputPath": "/workspace/airexplorer-reactor-handoff/tools/obj/",
+      "projectUniqueName": "/run/csi/mount-root/oss/79518b664a0b4bc7c1cbf160bcbd163a/agent-model/6ad80fc7973da8774906915e/tmp/ghwork/tools/cctorfix8.csproj",
+      "projectName": "cctorfix8",
+      "projectPath": "/run/csi/mount-root/oss/79518b664a0b4bc7c1cbf160bcbd163a/agent-model/6ad80fc7973da8774906915e/tmp/ghwork/tools/cctorfix8.csproj",
+      "packagesPath": "/home/z/.nuget/packages/",
+      "outputPath": "/run/csi/mount-root/oss/79518b664a0b4bc7c1cbf160bcbd163a/agent-model/6ad80fc7973da8774906915e/tmp/ghwork/tools/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/root/.nuget/NuGet/NuGet.Config"
+        "/home/z/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
@@ -239,7 +239,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/8.0.404/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/home/z/.dotnet/sdk/8.0.426/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

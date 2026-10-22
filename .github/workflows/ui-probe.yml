@@ -50,7 +50,10 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          # 重编译 host.cs (v2: 异常落盘 + ThreadException)
+          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:tools\ci\host.exe /r:System.Windows.Forms.dll tools\ci\host.cs
           $env:COMPLUS_ReadyToRun = "0"
+          $env:COMPlus_JitNoInline = "1"
           $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "AirExplorer.exe" -WorkingDirectory "app" -PassThru -RedirectStandardOutput "probe\host_stdout.txt" -RedirectStandardError "probe\host_stderr.txt" -NoNewWindow
           $deadline = (Get-Date).AddSeconds(25)
           while ((Get-Date) -lt $deadline -and -not $hp.HasExited) { Start-Sleep -Milliseconds 500 }
@@ -79,6 +82,7 @@ jobs:
           git config user.email "ci@local"
           git config user.name "ci"
           New-Item -ItemType Directory -Force -Path "results/$env:GITHUB_RUN_ID" | Out-Null
+          Copy-Item app/host_trace.txt probe/host_trace.txt -Force -ErrorAction SilentlyContinue
           Copy-Item probe/* "results/$env:GITHUB_RUN_ID/" -Recurse -Force -ErrorAction SilentlyContinue
           Copy-Item app/_candidate.txt "results/$env:GITHUB_RUN_ID/" -Force -ErrorAction SilentlyContinue
           git checkout -B ci-results
