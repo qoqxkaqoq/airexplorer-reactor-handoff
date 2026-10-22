@@ -1,0 +1,74 @@
+name: ttd-jitscan
+on:
+  workflow_dispatch:
+    inputs:
+      exe:
+        required: false
+        default: 'e8runnable'
+
+jobs:
+  ttd:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 WinDbg (含 TTD 录制器)
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          winget install --id Microsoft.WinDbg -e --accept-source-agreements --accept-package-agreements --silent
+          # 定位 TTD.exe / DbgX.Shell.exe
+          $roots = @("$env:LOCALAPPDATA\Microsoft\WindowsApps", "$env:ProgramFiles\WindowsApps") 
+          $ttd = Get-ChildItem -Recurse $roots -Filter "TTD.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $dbgx = Get-ChildItem -Recurse $roots -Filter "DbgX.Shell.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $windbgx = Get-ChildItem -Recurse $roots -Filter "WinDbgX.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          Write-Host "TTD     = $($ttd.FullName)"
+          Write-Host "DbgX    = $($dbgx.FullName)"
+          Write-Host "WinDbgX = $($windbgx.FullName)"
+          if (-not $ttd) { Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WindowsApps" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Name }; exit 1 }
+          "TTD=$($ttd.FullName)"     | Out-File $env:GITHUB_ENV -Append utf8
+          "DBGX=$($dbgx.FullName)"   | Out-File $env:GITHUB_ENV -Append utf8
+          "WINDBGX=$($windbgx.FullName)" | Out-File $env:GITHUB_ENV -Append utf8
+
+      - name: TTD 录制 (help 模式自然退出)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\ttd, C:\out | Out-Null
+          $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
+          # TTD 录制: -out 指定 trace, 程序 help 退出后录制结束
+          & $env:TTD -out C:\ttd\trace.run $exe help 2>&1 | Tee-Object -FilePath C:\out\ttd-record.log | Select-Object -Last 15
+          if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; Get-Content C:\out\ttd-record.log -Tail 30; exit 1 }
+          Write-Host ("trace 大小: " + (Get-Item C:\ttd\trace.run).Length)
+
+      - name: TTD 时间旅行扫描 (JitScan.js)
+        shell: pwsh
+        run: |
+          if ($env:WINDBGX) {
+            # WinDbgX 无头: 打开 trace, 加载 JS, 跑完退出
+            $p = Start-Process -FilePath $env:WINDBGX `
+              -ArgumentList "-z `"C:\ttd\trace.run`" -c `".scriptload $PWD\ci\ttd\JitScan.js; q`"" `
+              -PassThru -NoNewWindow
+            if (-not $p.WaitForExit(1500000)) { $p.Kill(); Write-Host "[timeout] 扫描 25min 超时" }
+          } elseif ($env:DBGX) {
+            $p = Start-Process -FilePath $env:DBGX `
+              -ArgumentList "-z `"C:\ttd\trace.run`" -c `".scriptload $PWD\ci\ttd\JitScan.js; q`"" `
+              -PassThru -NoNewWindow
+            if (-not $p.WaitForExit(1500000)) { $p.Kill(); Write-Host "[timeout] 扫描 25min 超时" }
+          } else { Write-Host "无调试器可执行文件"; exit 1 }
+          if (Test-Path C:\out\jitscan.json) {
+            $sz = (Get-Item C:\out\jitscan.json).Length
+            Write-Host "jitscan.json = $sz 字节"
+            $j = Get-Content C:\out\jitscan.json -Raw | ConvertFrom-Json
+            Write-Host ("methods = " + $j.methods.Count)
+            $withTok = ($j.methods | Where-Object { $_.localsTok -ne "0x0" }).Count
+            Write-Host ("localsTok 非零 = " + $withTok)
+          } else { Write-Host "JS 未产出结果(可能 WinDbgX 窗口模式不适合无头); 保留 trace.run 供本地分析" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ttd-out
+          path: |
+            C:\out\
+            C:\ttd\

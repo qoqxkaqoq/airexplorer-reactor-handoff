@@ -61,6 +61,9 @@ jobs:
           Copy-Item self\ci\jitdump\forcedump\Program.cs ar\v3\forcedump\Program.cs -Force
           Copy-Item self\ci\jitdump\forcedump\forcedump.csproj ar\v3\forcedump\forcedump.csproj -Force
           Select-String -Path ar\v3\forcedump\Program.cs -Pattern "genericPrepared" | Select-Object -First 3
+          # 方案A: 覆盖 hook 为 v4 -- dump 头 6 字段(含 localsTok + 官方EH段快照 preExtra)
+          Copy-Item self\ci\jitdump\clrjit_hook.cpp ar\v3\jitdump\clrjit_hook.cpp -Force
+          Select-String -Path ar\v3\jitdump\clrjit_hook.cpp -Pattern "preLocalsTok" | Select-Object -First 2
 
       - name: 构建 hook DLL (clrjit VMT hook, MSVC)
         shell: pwsh
