@@ -45,21 +45,25 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Continue"
-          $psi = New-Object System.Diagnostics.ProcessStartInfo
-          $psi.FileName = (Resolve-Path "app\AirExplorer.exe").Path
-          $psi.WorkingDirectory = (Resolve-Path "app").Path
-          $psi.Arguments = "help"
-          $psi.RedirectStandardOutput = $true
-          $psi.RedirectStandardError = $true
-          $psi.UseShellExecute = $false
-          $psi.CreateNoWindow = $true
-          $p = [System.Diagnostics.Process]::Start($psi)
-          $so = $p.StandardOutput.ReadToEnd()
-          $se = $p.StandardError.ReadToEnd()
-          $done = $p.WaitForExit(90000)
+          # 注意: 不能用 ReadToEnd —— 若程序不退出(例如直接开窗口不处理参数),
+          # 标准输出不会关闭, ReadToEnd 会永远阻塞。改用重定向到文件 + 限时等待。
+          $outFile = Join-Path (Get-Location) "out\raw_${{ matrix.exe }}.txt"
+          $errFile = Join-Path (Get-Location) "out\raw_${{ matrix.exe }}.err.txt"
+          $p = Start-Process -FilePath (Resolve-Path "app\AirExplorer.exe").Path `
+                             -WorkingDirectory (Resolve-Path "app").Path `
+                             -ArgumentList "help" `
+                             -RedirectStandardOutput $outFile `
+                             -RedirectStandardError $errFile `
+                             -NoNewWindow -PassThru
+          $done = $p.WaitForExit(60000)
           $killed = $false
           if (-not $done) { $killed = $true; try { $p.Kill() } catch {} }
           $code = if ($done) { $p.ExitCode } else { -999 }
+          Start-Sleep -Seconds 1
+          $so = if (Test-Path $outFile) { Get-Content $outFile -Raw } else { "" }
+          $se = if (Test-Path $errFile) { Get-Content $errFile -Raw } else { "" }
+          if ($null -eq $so) { $so = "" }
+          if ($null -eq $se) { $se = "" }
 
           $cmds = @("accounts","copy","delete","dir","download","mkdir","move","quota","rename","search","sharelink","runsavedsync","startsync","transfer","upload","zipupload")
           $hits = 0
