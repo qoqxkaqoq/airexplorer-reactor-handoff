@@ -140,3 +140,63 @@ cilantro（nb_slayer 产物）把编译器生成的类型改成了 `GeneratedTyp
    —— 这条要结合 `docs/PROGRESS_wb-reverser.md` 第 7 节的 dump 格式一起看。
 
 工具已全部入库：`stripinit / bodytrans / fixmap / fixrefs / pairlist / unresolved / nestcmp / typemembers / findfield`。
+
+---
+
+## 7. 补记（同日）：找到写回工具的致命 bug —— `ldstr` 读错了堆
+
+`nbrestore` 里一直写的是：
+
+```csharp
+var u8 = ((ModuleDefMD)mod).StringsStream.Read(t & 0x00FFFFFF);   // 错
+```
+
+`ldstr` 的 token 是 `0x70xxxxxx`，指向 **`#US`（用户字符串）堆**，不是 `#Strings`（元数据名字堆）。
+所以此前写回的每一个字符串常量都是**元数据名字的碎片**：`"AirExplorer"`、`"ystem"`、`"ources"`、
+`"ing>>-GetEnumerator>d__52"`……全都能在类型/成员名里找到出处。
+
+这正是 `InstantiateGlobalCalculator` 里"按名字取资源却拿到 null"的真正原因：
+
+| | ldstr 的值 |
+|---|---|
+| 旧（错） | `"ing>>-GetEnumerator>d__52"` |
+| 新（对） | `"ValidatorArgument.EmitterReporter"`（6 个嵌入资源之一） |
+| nb_slayer 产物 | 同上，一致 |
+
+改成 `mod.USStream.Read(offset)` 后，`nbjit_v2` 里 `InstantiateGlobalCalculator` 的字符串
+（`" is tampered."` / `"SHA1"` / `"ValidatorArgument.EmitterReporter"`）与 nb_original **完全一致**。
+
+**影响面**：此前所有"写回真体"的候选（`nbjit_restored*`、`depfix*`、`si*`）字符串全是坏的。
+这条修复之后，`12768` 个方法体才第一次"内容正确"。
+
+## 8. 新暴露的结构性阻塞：字段初始化数据里嵌了元数据 token
+
+修好字符串后，`nbjit_v2` 的崩溃变成：
+
+```
+BadImageFormatException: Bad IL range
+   at DispatcherInitializer.ObserveConverter(IntPtr)      <- JIT hook 安装
+```
+
+而剥离引导后的 `si11` 变成：
+
+```
+ArgumentOutOfRangeException: Token 0x0a000996 is not valid in the scope of module AirExplorer.exe
+   at DispatcherInitializer.TrackCompiler(RuntimeTypeHandle)
+   at ValidatorDefinition..cctor()
+```
+
+`TrackCompiler` 做的事是：**用写死在字段 RVA 数据里的 metadata token，去 `Module.ResolveMethod`
+解析出成员，再给该类型的静态字段赋值**。而我们的重写会让 `MemberRef` 表布局变化，
+这些 token 就失效了。
+
+这是个比"字符串/方法体"更底层的耦合：**Reactor 的字段初始化数据绑定在原始元数据行号上**。
+任何会改动 `MemberRef`/`MethodSpec` 表的重写（移植、加方法、去重）都会打断它。
+
+可选解法：
+1. 写盘时保证 `MemberRef` 表的 RID 与原始完全一致（不能增删、不能去重）——需要 dnlib 层面的表级控制；
+2. 把 `TrackCompiler` 改成"逐个 token 容错"（解析失败就跳过），先让流程跑通，缺的字段另想办法补；
+3. 反过来：不重写元数据，只把方法体**原地**写回（保持 token 表一字节不动）——理论上最干净，
+   但要求方法体长度不变或 RVA 重排后仍能对上（PE 允许改 RVA，token 表不动，这条其实可行）。
+
+第 3 条是目前看来最有希望的：**只改 MethodDef.RVA 与代码字节，绝不碰元数据表**。
