@@ -89,7 +89,9 @@ class NbRestore {
             if (instrs == null || instrs.Count == 0) { skipParse++; continue; }
 
             var body = new CilBody();
-            body.InitLocals = m.HasBody ? m.Body.InitLocals : true;
+            // InitLocals 必须和"有没有局部变量签名"一致:
+            // 声明了 initlocals 却没有 LocalVarSigTok, 运行时会判非法(表现为 BadImageFormat: Bad IL range)。
+            body.InitLocals = oldVars.Count > 0;
             int ms = Math.Max(Math.Max(maxStack, needStack + 2), 8);
             body.MaxStack = (ushort)Math.Min(ms, 65535);
             body.KeepOldMaxStack = true;
