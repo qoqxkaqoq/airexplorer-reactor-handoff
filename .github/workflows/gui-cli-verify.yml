@@ -36,7 +36,18 @@ jobs:
           if (-not (Test-Path "app\AirExplorer.exe")) { throw "installer extract failed" }
           if ("${{ matrix.exe }}" -ne "official") {
             $cand = "AirExplorer_${{ matrix.exe }}.exe"
-            Invoke-WebRequest -Uri "$base/exes/$cand" -OutFile "app\AirExplorer.exe"
+            # raw.githubusercontent 对刚 push 的文件有缓存/传播延迟, 重试 8 次
+            $ok = $false
+            for ($i = 1; $i -le 8; $i++) {
+              try {
+                Invoke-WebRequest -Uri "$base/exes/$cand" -OutFile "app\AirExplorer.exe" -Headers @{ "Cache-Control" = "no-cache" } -ErrorAction Stop
+                $ok = $true; break
+              } catch {
+                Write-Host ("retry $i : " + $_.Exception.Message)
+                Start-Sleep -Seconds 6
+              }
+            }
+            if (-not $ok) { throw ("download failed: " + $cand) }
             Write-Host ("candidate = " + $cand)
           } else { Write-Host "baseline = official" }
           Write-Host ("md5 = " + (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)
