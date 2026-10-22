@@ -23,13 +23,15 @@ class StripInit {
 
     static void Main(string[] a) {
         string inPath = a[0], outPath = a[1];
-        bool dry = a.Length > 2 && a[2] == "--dry";
+        bool dry = a.Contains("--dry");
+        bool all = a.Contains("--all");   // 连非 cctor 方法里的引导调用一起摘(只摘无参 void)
         var mod = ModuleDefMD.Load(inPath);
 
         int touched = 0, removed = 0, retargeted = 0;
         foreach (var t in mod.GetTypes())
             foreach (var m in t.Methods) {
-                if (m.Name.String != ".cctor" || !m.HasBody) continue;
+                if (!m.HasBody) continue;
+                if (m.Name.String != ".cctor" && !all) continue;
                 var body = m.Body;
                 var ins = body.Instructions;
                 var kill = new HashSet<Instruction>();
@@ -38,7 +40,11 @@ class StripInit {
                     if (!(x.Operand is IMethod im)) continue;
                     var dt = im.DeclaringType;
                     if (dt == null) continue;
-                    if (ReactorTypes.Contains(dt.FullName)) kill.Add(x);
+                    if (!ReactorTypes.Contains(dt.FullName)) continue;
+                    // 非 cctor 里只摘"无参且返回 void"的调用, 保证栈平衡
+                    bool safe = im.MethodSig != null && im.MethodSig.Params.Count == 0
+                                && im.MethodSig.RetType != null && im.MethodSig.RetType.ElementType == ElementType.Void;
+                    if (m.Name.String == ".cctor" || safe) kill.Add(x);
                 }
                 if (kill.Count == 0) continue;
 
@@ -58,8 +64,21 @@ class StripInit {
                             }
                     }
                 }
-                foreach (var x in kill) ins.Remove(x);
-                if (ins.Count == 0) ins.Add(OpCodes.Ret.ToInstruction());   // 全被删空时必须留一条 ret
+                // 不能直接删: 被摘的 call 可能带参数(例如 TrackCompiler(ldtoken ...)),
+                // 直接删会让栈上残留值 -> InvalidProgramException。
+                // 用 N 个 pop 顶掉它的参数, 保持栈平衡。
+                foreach (var x in kill) {
+                    var im2 = (IMethod)x.Operand;
+                    int argc = im2.MethodSig == null ? 0 : im2.MethodSig.Params.Count;
+                    x.OpCode = OpCodes.Pop;
+                    x.Operand = null;
+                    if (argc == 0) { x.OpCode = OpCodes.Nop; }
+                    else {
+                        int at = ins.IndexOf(x);
+                        for (int n = 1; n < argc; n++) ins.Insert(at, OpCodes.Pop.ToInstruction());
+                    }
+                }
+                if (ins.Count == 0) ins.Add(OpCodes.Ret.ToInstruction());
                 removed += kill.Count;
                 touched++;
                 body.UpdateInstructionOffsets();
