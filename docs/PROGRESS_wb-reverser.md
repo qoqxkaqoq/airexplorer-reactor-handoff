@@ -562,3 +562,45 @@ dnlib 重写这条路是安全的（v12n 对照组也印证过）。
 
 **当前状态**：v25 已把 `InstantiateStatelessUser` 的真体（888 指令）连同它依赖的
 `GeneratedType_0431<T>` / `GeneratedEnum_0425` 一起重绑干净，等待 CI 验证。
+
+### 10.7 当前确切的卡点（v30）
+
+```
+TypeLoadException: Could not load type 'URqFYq3xtmntT2OcLub`1'
+   at TemplateArgument.InstantiateStatelessUser<T>(...)
+   at TemplateArgument.InstantiateAccessibleProcessor(43, ...)
+   at ModelTracer.JoinExecutor(String[] first)
+   at StatelessModel.SearchAdapter(String[] info)
+```
+
+已经排除的：
+
+| 假设 | 验证 | 结论 |
+|---|---|---|
+| 类型被改名/丢了 | `ildump` 看 TypeDef | attrs=0x2103、nested=True、gpc=1，与官方**完全一致** |
+| 泛型参数丢了 | `gpc=1` | 一致 |
+| 嵌套关系丢了 | `nested=True` | 一致 |
+| 签名里的顶层 TypeRef | `fixnested` 递归修了 476 处 | 修完仍崩 |
+| 整个模块加载不了 | `ci/typediag.ps1` 遍历 4884 个类型 | **bad=0**，只有 24 个外部依赖缺失（WebView2/Newtonsoft 等） |
+| 反篡改 | 官方宿主里反射调 `JoinExecutor` 也抛 `TypeInitializationException` | 是环境限制，不是我们的问题 |
+
+**剩下的怀疑**：`URqFYq3xtmntT2OcLub\`1` 是编译器生成的 `<>c` 缓存类，
+`InstantiateStatelessUser<T>` 里 `ldsfld <>9` 用的是 **FieldDef token**，
+JIT 需要按**当前泛型上下文**实例化 `<>c<T>`；而这份体是从 cilantro 移植来的，
+`<>c` 的泛型参数绑定可能和官方有细微差别（cilantro 的 `GeneratedType_0431\`1` vs 官方 `URqFYq3xtmntT2OcLub\`1`）。
+
+**下一步（按可行性排序）**
+1. **patch 掉排序分支**：把 0x47A–0x494 那段 `<>9__47_0` 懒初始化换成 `ldnull; stsfld`，
+   排序退化为默认比较（`List<T>.Sort()` 无参重载），绕开 `<>c` 的加载。
+2. **改进 jitdump 捕获泛型实例化**：现在只对 MethodDef 落盘，`InstantiateStatelessUser<int>`
+   走 MethodDesc 路径没抓到。改 hook 用 `CORINFO_METHOD_INFO.ftn` 反查 MethodDesc，
+   能拿到**官方那份真体**（而不是 cilantro 的），从根上消除移植差异。
+3. 逐方法硬编码运行时结果（成本最高，但确定能过）。
+
+### 10.8 本轮净收益
+
+- **数据**：`work/final_map.tsv`（3266 条委托映射）、hostdump 的 holder.tsv + extractor.bin
+- **工具**：`hostdump / initholder / injectstr / rebuild2 / stubscan / bodytrans fromlist /
+  fixgen / fixnested / restub / tokcmp / resdump / xref / typediag`
+- **认知**：Reactor 的初始化是"数据驱动 + 反射建委托"，静态还原必须按"导出运行时数据"的思路做，
+  而不是逐条解密
