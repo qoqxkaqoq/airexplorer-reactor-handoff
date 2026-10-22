@@ -1,0 +1,31 @@
+[16:31:17.863] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[16:31:17.913] size = 11142144  md5 = 199F97D04DAB5138A9BBC9C5353B3823
+[16:31:17.924] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[16:31:17.973] started pid = 9380
+[16:31:19.527] WINDOW hwnd=0x70072 visible=False class='WindowsForms10.Window.8.app.0.2eeeb2e_r6_ad1' title='Air Explorer v5.11.0' rect=52,52,997,652
+[16:31:19.529] WINDOW hwnd=0x20158 visible=False class='GDI+ Hook Window Class' title='GDI+ Window (AirExplorer.exe)' rect=0,0,1,1
+[16:31:19.530] WINDOW hwnd=0x30150 visible=False class='.NET-BroadcastEventWindow.4.0.0.0.2eeeb2e.0' title='.NET-BroadcastEventWindow.4.0.0.0.2eeeb2e.0' rect=0,0,0,0
+[16:31:19.532] WINDOW hwnd=0x2015E visible=False class='IME' title='Default IME' rect=0,0,0,0
+[16:31:19.533] WINDOW hwnd=0x2015A visible=False class='IME' title='Default IME' rect=0,0,0,0
+[16:31:21.050] WINDOW hwnd=0x201EE visible=True class='WindowsForms10.Window.8.app.0.2eeeb2e_r6_ad1' title='Error detected' rect=78,78,566,394
+[16:31:21.172]   screenshot -> probe\window1_hwnd131566.png (PrintWindow=True)
+[16:31:21.178] WINDOW hwnd=0x501C8 visible=False class='WindowsForms10.Window.0.app.0.2eeeb2e_r6_ad1' title='' rect=0,0,16,16
+[16:31:21.179] WINDOW hwnd=0x40076 visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[16:31:21.181] WINDOW hwnd=0x1020E visible=False class='MSCTFIME UI' title='MSCTFIME UI' rect=0,0,0,0
+[16:32:03.300] still alive, windows = 9
+[16:32:03.311] responding = True  threads = 13  WS(MB) = 96.4  CPU = 00:00:01.1250000
+[16:32:03.337] modules(head40) = AirExplorer.exe,ntdll.dll,MSCOREE.DLL,KERNEL32.dll,KERNELBASE.dll,ADVAPI32.dll,msvcrt.dll,sechost.dll,RPCRT4.dll,mscoreei.dll,SHLWAPI.dll,ucrtbase.dll,kernel.appcore.dll,VERSION.dll,clr.dll,USER32.dll,win32u.dll,VCRUNTIME140_1_CLR0400.dll,GDI32.dll,VCRUNTIME140_CLR0400.dll,gdi32full.dll,ucrtbase_clr0400.dll,msvcp_win.dll,IMM32.DLL,mscorlib.ni.dll,ole32.dll,combase.dll,bcryptPrimitives.dll,uxtheme.dll,clrjit.dll,shell32.dll,wintypes.dll,windows.storage.dll,SHCORE.dll,profapi.dll,bcrypt.dll,CRYPTSP.dll,rsaenh.dll,CRYPTBASE.dll,System.ni.dll
+[16:32:03.342]   hwnd=0x201EE visible=True class='WindowsForms10.Window.8.app.0.2eeeb2e_r6_ad1' title='Error detected'
+[16:32:03.343]   hwnd=0x501C8 visible=False class='WindowsForms10.Window.0.app.0.2eeeb2e_r6_ad1' title=''
+[16:32:03.344]   hwnd=0x40076 visible=False class='tooltips_class32' title=''
+[16:32:03.345]   hwnd=0x70072 visible=False class='WindowsForms10.Window.8.app.0.2eeeb2e_r6_ad1' title='Air Explorer v5.11.0'
+[16:32:03.346]   hwnd=0x20158 visible=False class='GDI+ Hook Window Class' title='GDI+ Window (AirExplorer.exe)'
+[16:32:03.347]   hwnd=0x30150 visible=False class='.NET-BroadcastEventWindow.4.0.0.0.2eeeb2e.0' title='.NET-BroadcastEventWindow.4.0.0.0.2eeeb2e.0'
+[16:32:03.348]   hwnd=0x1020E visible=False class='MSCTFIME UI' title='MSCTFIME UI'
+[16:32:03.349]   hwnd=0x2015A visible=False class='IME' title='Default IME'
+[16:32:03.350]   hwnd=0x2015E visible=False class='IME' title='Default IME'
+[16:32:03.351] close dialog: 'Error detected'
+[16:32:07.365] killed
+[16:32:09.492] EVENT [10/22/2026 4:32:04 PM] Application Error: Faulting application name: AirExplorer.exe, version: 5.11.0.0, time stamp: 0x6a671a98 | Faulting module name: KERNELBASE.dll, version: 10.0.26100.33438, time stamp: 0xace796d3 | Exception code: 0xe0434352 | Fault offset: 0x00000000000c75fa | Faulting process id: 0x24A4 | Faulting application start time: 0x1DD6242C394D004 | Faulting application path: D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe | Faulting module path: C:\Windows\System32\KERNELBASE.dll | Report Id: 9cddfb2f-8b0a-4dbb-8b82-a77119f8ed4a | Faulting package full name:  | Faulting package-relative application ID: 
+[16:32:09.493] EVENT [10/22/2026 4:32:03 PM] .NET Runtime: Application: AirExplorer.exe | Framework Version: v4.0.30319 | Description: The process was terminated due to an unhandled exception. | Exception Info: System.ArgumentNullException |    at CloudClient.Templating.TemplateArgument+TemplateThread.GenerateAdaptableExtractor(Boolean ByRef) |    at CloudClient.Templating.TemplateArgument+TemplateThread.PlanRunner() |    at CloudClient.Templating.TemplateArgument.InstantiateStatelessUser[[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]](Int32, System.Object[], System.Object, Int32 ByRef) |    at CloudClient.Templating.TemplateArgument.InstantiateAccessibleProcessor(Int32, System.Object[], System.Object) |    at AirExplorer.Processing.AggregatorEvaluator.Start() |    at CloudClient.Registry.InitializerReg..ctor() |    at CloudClient.Registry.InitializerReg.ValidateDynamicEncryptor() |    at CloudClient.Models.StatelessModel.SearchAdapter(System.String[]) |  | 
+[16:32:09.494] done
