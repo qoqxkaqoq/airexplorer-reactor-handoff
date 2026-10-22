@@ -1,0 +1,191 @@
+# .github/workflows/ar_diag.yml
+# v86: nb_slayer 崩溃诊断层 — .NET 未处理异常 (-532462766 = 0xE0434352) 定位
+#   1. stderr 捕获 + 3/6/9s 早期退出轮询
+#   2. Windows Application 事件日志 (.NET Runtime 1026 / Application Error 1025) — 完整异常类型+栈
+#   3. 修复版 UIA 控件树 (GetFirstChild/GetNextSibling) 顺便对 orig 取真基线
+#   4. 对照组: orig / nbsl / Slayed(纯 Slayer 基座, 未合并体)
+name: Diagnose nb_slayer crash
+
+on:
+  workflow_dispatch:
+
+env:
+  APP_DIR: D:\a\_temp\app
+  OUT_DIR: D:\a\_temp\diag
+
+jobs:
+  diag:
+    name: 崩溃诊断 (事件日志+stderr+UIA基线)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract and stage
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $src = "$env:GITHUB_WORKSPACE\1.zip"
+          Expand-Archive -Path $src -DestinationPath $env:APP_DIR -Force
+          $orig = Get-ChildItem $env:APP_DIR -Recurse -Filter "AirExplorer.exe" | Where-Object Length -gt 1MB | Select-Object -First 1
+          if (-not $orig) { Write-Error "未找到原版"; exit 1 }
+          "ORIG_EXE=$($orig.FullName)" | Out-File -Append $env:GITHUB_ENV
+          # 三个隔离目录: nbsl / slayed / orig
+          foreach ($v in @('nbsl', 'slayed')) {
+            $d = "D:\a\_temp\run_$v"
+            if (Test-Path $d) { Remove-Item $d -Recurse -Force }
+            Copy-Item $env:APP_DIR $d -Recurse -Force
+            Get-ChildItem $d -Recurse -File | Where-Object Name -eq "AirExplorer.exe" | ForEach-Object {
+              $src2 = "$env:GITHUB_WORKSPACE\bin\AirExplorer_nb_slayer.exe"
+              if ($v -eq 'slayed') { $src2 = "$env:GITHUB_WORKSPACE\bin\AirExplorer_Slayed.exe" }
+              Copy-Item $src2 $_.FullName -Force
+            }
+          }
+          # 清理旧事件日志基准时间
+          "BASE_TS=$(Get-Date -Format o)" | Out-File -Append $env:GITHUB_ENV
+          exit 0
+
+      - name: Launch and capture crash (stderr + event log + UIA)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          Add-Type -AssemblyName System.Drawing
+          $sig = '[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r); public struct RECT { public int Left, Top, Right, Bottom; }'
+          Add-Type -MemberDefinition $sig -Name U32 -Namespace W
+
+          function Read-DotNetEvents([string]$since) {
+            try {
+              $sinceD = [DateTime]::Parse($since)
+              $ev = Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$sinceD} -ErrorAction SilentlyContinue |
+                Where-Object { $_.ProviderName -in '.NET Runtime','Application Error','Windows Error Reporting','.NET' }
+              if ($ev) {
+                $ev | Select-Object -First 8 | ForEach-Object {
+                  "---- 事件 [$($_.ProviderName)] $($_.Id) $($_.TimeCreated) ----"
+                  ($_.Message -split "`n" | Select-Object -First 40) -join "`n"
+                }
+              } else { "(无 .NET/Runtime 相关事件)" }
+            } catch { "事件读取失败: $_" }
+          }
+
+          function Uia-Tree([int]$pid_, [string]$tag) {
+            try {
+              $p2 = Get-Process -Id $pid_ -ErrorAction Stop
+              $hwnd = $p2.MainWindowHandle
+              if (-not $hwnd -or $hwnd -eq [IntPtr]::Zero) { return "  (无主窗口句柄)" }
+              $root = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+              $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+              $queue = New-Object System.Collections.Queue
+              $queue.Enqueue($root)
+              $count = 0; $names = New-Object System.Collections.Generic.List[string]
+              $sw = [Diagnostics.Stopwatch]::StartNew()
+              while ($queue.Count -gt 0 -and $sw.Elapsed.TotalSeconds -lt 12 -and $count -lt 2000) {
+                $el = $queue.Dequeue()
+                $count++
+                if ($names.Count -lt 40) {
+                  $cn = ''
+                  try { $cn = $el.Current.Name } catch {}
+                  $ct = ''
+                  try { $ct = $el.Current.ControlType.ProgrammaticName -replace 'ControlType\.','' } catch {}
+                  if ($cn) { $names.Add("$($ct):'$([string]$cn)'") }
+                }
+                $c = $walker.GetFirstChild($el)
+                while ($c -and $sw.Elapsed.TotalSeconds -lt 12) {
+                  $queue.Enqueue($c)
+                  $c = $walker.GetNextSibling($c)
+                }
+              }
+              "  UIA 控件数: $count"
+              if ($names.Count -gt 0) { "  控件样例: " + ($names -join ' | ') }
+            } catch { "  UIA 失败: $_" }
+          }
+
+          # ===== 1) nbsl: stderr + 早期退出轮询 + 事件日志 =====
+          $rep = "$out\nbsl_diag.txt"
+          "===== nbsl 崩溃诊断 =====" | Out-File $rep -Encoding utf8
+          $exe = "D:\a\_temp\run_nbsl\AirExplorer.exe"
+          $errf = "$out\nbsl_stderr.txt"
+          try {
+            $p = Start-Process $exe -WorkingDirectory "D:\a\_temp\run_nbsl" -PassThru -RedirectStandardError $errf
+            "PID: $($p.Id)" | Out-File $rep -Append -Encoding utf8
+            $exited = $false
+            foreach ($t in @(3, 6, 9, 15)) {
+              Start-Sleep -Seconds 3
+              $p.Refresh()
+              if ($p.HasExited) {
+                "[$t s] 已退出 code=$($p.ExitCode)" | Out-File $rep -Append -Encoding utf8
+                $exited = $true
+                break
+              } else {
+                $p2 = Get-Process -Id $p.Id -ErrorAction SilentlyContinue
+                "[$t s] 存活 标题='$($p2.MainWindowTitle)'" | Out-File $rep -Append -Encoding utf8
+              }
+            }
+            if (-not $exited) {
+              "进程存活过 15s — 崩溃复现失败 (非确定性?)" | Out-File $rep -Append -Encoding utf8
+              Uia-Tree $p.Id 'nbsl' | Out-File $rep -Append -Encoding utf8
+              & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+            }
+          } catch { "启动异常: $_" | Out-File $rep -Append -Encoding utf8 }
+          if (Test-Path $errf) {
+            $e = Get-Content $errf -Raw -ErrorAction SilentlyContinue
+            if ($e) { "---- stderr ----`n$($e.Substring(0, [Math]::Min(3000, $e.Length)))" | Out-File $rep -Append -Encoding utf8 }
+            else { "(stderr 为空)" | Out-File $rep -Append -Encoding utf8 }
+          }
+          "---- Windows 事件日志 (Application) ----" | Out-File $rep -Append -Encoding utf8
+          Read-DotNetEvents $env:BASE_TS | Out-File $rep -Append -Encoding utf8
+
+          # ===== 2) Slayed 纯基座对照 (未合并 JIT 体) =====
+          $rep2 = "$out\slayed_diag.txt"
+          "===== slayed 纯基座 =====" | Out-File $rep2 -Encoding utf8
+          $exe2 = "D:\a\_temp\run_slayed\AirExplorer.exe"
+          try {
+            $p2 = Start-Process $exe2 -WorkingDirectory "D:\a\_temp\run_slayed" -PassThru -RedirectStandardError "$out\slayed_stderr.txt"
+            $ex2 = $false
+            foreach ($t in @(3, 6, 9, 15)) {
+              Start-Sleep -Seconds 3
+              $p2.Refresh()
+              if ($p2.HasExited) { "[$t s] 已退出 code=$($p2.ExitCode)" | Out-File $rep2 -Append -Encoding utf8; $ex2 = $true; break }
+            }
+            if (-not $ex2) {
+              "存活过 15s" | Out-File $rep2 -Append -Encoding utf8
+              Uia-Tree $p2.Id 'slayed' | Out-File $rep2 -Append -Encoding utf8
+              & taskkill.exe /PID $p2.Id /T /F 2>&1 | Out-Null
+            }
+          } catch { "启动异常: $_" | Out-File $rep2 -Append -Encoding utf8 }
+
+          # ===== 3) orig: UIA 真基线 =====
+          $rep3 = "$out\orig_uia.txt"
+          "===== orig UIA 基线 =====" | Out-File $rep3 -Encoding utf8
+          try {
+            $p3 = Start-Process $env:ORIG_EXE -WorkingDirectory $env:APP_DIR -PassThru
+            Start-Sleep -Seconds 15
+            $p3.Refresh()
+            "存活=$(-not $p3.HasExited) 标题='$($p3.MainWindowTitle)' 窗口=$($p3.MainWindowHandle)" | Out-File $rep3 -Append -Encoding utf8
+            Uia-Tree $p3.Id 'orig' | Out-File $rep3 -Append -Encoding utf8
+            if (-not $p3.HasExited) { & taskkill.exe /PID $p3.Id /T /F 2>&1 | Out-Null }
+          } catch { "启动异常: $_" | Out-File $rep3 -Append -Encoding utf8 }
+
+          Get-Content $rep | ForEach-Object { Write-Host $_ }
+          Get-Content $rep2 | ForEach-Object { Write-Host $_ }
+          Get-Content $rep3 | ForEach-Object { Write-Host $_ }
+          exit 0
+
+      - name: Upload diag evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nbsl-diag
+          path: |
+            D:/a/_temp/diag/nbsl_diag.txt
+            D:/a/_temp/diag/nbsl_stderr.txt
+            D:/a/_temp/diag/slayed_diag.txt
+            D:/a/_temp/diag/slayed_stderr.txt
+            D:/a/_temp/diag/orig_uia.txt
+          retention-days: 30
+          if-no-files-found: warn

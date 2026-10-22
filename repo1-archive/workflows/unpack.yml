@@ -1,0 +1,1234 @@
+# .github/workflows/unpack.yml
+# .NET 程序集内存脱壳 CI —— 按 plan.md 完成
+# 输入：1.zip（repo 根目录）+ 目标 EXE 名（workflow_dispatch 输入）
+# 流程：解压定位 → 静态分析 → 混淆器检测 → NETReactorSlayer 脱壳(全部受保护模块) → de4dot 链式清理
+#       → 组装可运行完整程序包 + 启动冒烟测试(五模式递降) → ILSpy 反编译
+# 输出：Artifact（可运行程序包 runnable/ + 脱壳 exe + 导入表 + 静态/动态报告 + SHA256）
+
+name: .NET Memory Unpack & Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_exe:
+        description: '要脱壳分析的 EXE 文件名（从 source_zip 中递归查找）'
+        required: true
+        default: 'AirExplorer.exe'
+      source_zip:
+        description: '源压缩包文件名（repo 根目录）'
+        required: true
+        default: '1.zip'
+
+env:
+  WORK_DIR: ${{ github.workspace }}\analysis_work
+  OUTPUT_DIR: ${{ github.workspace }}\analysis_output
+  TOOLS_DIR: ${{ github.workspace }}\tools
+
+jobs:
+  unpack:
+    name: 内存脱壳 + 静态分析 + 反编译
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install tools (pefile / ilspycmd / de4dotEx / NETReactorSlayer)
+        shell: pwsh
+        run: |
+          pip install pefile --quiet --disable-pip-version-check
+          dotnet tool install -g ilspycmd
+          New-Item -ItemType Directory -Force -Path "$env:TOOLS_DIR" | Out-Null
+          # de4dotEx 3.11.0 (net48 版, runner 自带 .NET Framework 4.8)
+          Invoke-WebRequest -Uri 'https://github.com/GDATAAdvancedAnalytics/de4dotEx/releases/download/3.11.0/de4dotEx-3.11.0-net48.zip' -OutFile "$env:RUNNER_TEMP\de4dotEx.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\de4dotEx.zip" -DestinationPath "$env:TOOLS_DIR\de4dotEx" -Force
+          $de4dot = (Get-ChildItem "$env:TOOLS_DIR\de4dotEx" -Recurse -Filter 'de4dot-x64.exe' | Select-Object -First 1).FullName
+          if (-not $de4dot) { $de4dot = (Get-ChildItem "$env:TOOLS_DIR\de4dotEx" -Recurse -Filter 'de4dot.exe' | Select-Object -First 1).FullName }
+          "DE4DOT=$de4dot" | Out-File -Append $env:GITHUB_ENV
+          # NETReactorSlayer v6.4.0 (Windows CLI 版)
+          Invoke-WebRequest -Uri 'https://github.com/SychicBoy/NETReactorSlayer/releases/download/v6.4.0.0/NETReactorSlayer-windows.zip' -OutFile "$env:RUNNER_TEMP\slayer.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\slayer.zip" -DestinationPath "$env:TOOLS_DIR\slayer" -Force
+          $slayer = (Get-ChildItem "$env:TOOLS_DIR\slayer" -Recurse -Filter 'NETReactorSlayer-x64.CLI.exe' | Select-Object -First 1).FullName
+          if (-not $slayer) { $slayer = (Get-ChildItem "$env:TOOLS_DIR\slayer" -Recurse -Filter 'NETReactorSlayer.CLI.exe' | Select-Object -First 1).FullName }
+          "SLAYER=$slayer" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "de4dot:       $de4dot"
+          Write-Host "slayer:       $slayer"
+          Write-Host "ilspycmd:     $env:USERPROFILE\.dotnet\tools\ilspycmd.exe"
+          & $de4dot --help 2>&1 | Select-Object -First 3
+
+      - name: Extract target from source zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:WORK_DIR" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:OUTPUT_DIR" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:OUTPUT_DIR\reports" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:OUTPUT_DIR\unpacked" | Out-Null
+          $src = Join-Path $env:GITHUB_WORKSPACE "${{ github.event.inputs.source_zip }}"
+          if (-not (Test-Path $src)) { Write-Error "源压缩包不存在: $src"; exit 1 }
+          Expand-Archive -Path $src -DestinationPath "$env:WORK_DIR" -Force
+          $target = Get-ChildItem $env:WORK_DIR -Recurse -File -Filter "${{ github.event.inputs.target_exe }}" | Select-Object -First 1
+          if (-not $target) { Write-Error "压缩包内未找到目标: ${{ github.event.inputs.target_exe }}"; exit 1 }
+          "TARGET_PATH=$($target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "TARGET_NAME=$($target.Name)" | Out-File -Append $env:GITHUB_ENV
+          "TARGET_BASE=$([IO.Path]::GetFileNameWithoutExtension($target.Name))" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "目标: $($target.FullName) ($('{0:N0}' -f $target.Length) bytes)"
+          $count = (Get-ChildItem $env:WORK_DIR -Recurse -File).Count
+          Write-Host "已解压 $count 个文件(含依赖, 供程序集引用解析)"
+
+      - name: Write analysis scripts
+        shell: pwsh
+        run: |
+          $py1 = @'
+          import sys, os, json, hashlib, struct, math
+          import pefile
+
+          path, outdir, prefix = sys.argv[1], sys.argv[2], sys.argv[3]
+
+          def entropy(data):
+              if not data:
+                  return 0.0
+              counts = [0] * 256
+              for b in data:
+                  counts[b] += 1
+              n = len(data)
+              return -sum((c / n) * math.log2(c / n) for c in counts if c)
+
+          def parse_streams(pe, f):
+              com = pe.OPTIONAL_HEADER.DATA_DIRECTORY[14]
+              com_off = pe.get_offset_from_rva(com.VirtualAddress)
+              f.seek(com_off + 8)
+              md_rva, md_size = struct.unpack("<II", f.read(8))
+              md_off = pe.get_offset_from_rva(md_rva)
+              f.seek(md_off)
+              sig, maj, mnr, reserved = struct.unpack("<IHHI", f.read(12))
+              vlen = struct.unpack("<I", f.read(4))[0]
+              f.read(vlen)
+              f.read(2)
+              nstreams = struct.unpack("<H", f.read(2))[0]
+              streams = {}
+              for _ in range(nstreams):
+                  off, size = struct.unpack("<II", f.read(8))
+                  name = b""
+                  while True:
+                      c = f.read(1)
+                      if c == b"\x00":
+                          break
+                      name += c
+                  while f.tell() % 4 != 0:
+                      f.read(1)
+                  streams[name.decode()] = (off, size)
+              return streams
+
+          def us_strings(path):
+              try:
+                  pe = pefile.PE(path)
+                  com = pe.OPTIONAL_HEADER.DATA_DIRECTORY[14]
+                  if not com.VirtualAddress:
+                      pe.close()
+                      return 0, 0
+                  with open(path, "rb") as f:
+                      streams = parse_streams(pe, f)
+                      off, size = streams.get("#US", (0, 0))
+                      strings_off, strings_size = streams.get("#Strings", (0, 0))
+                      f.seek(off)
+                      data = f.read(size)
+                      f.seek(strings_off)
+                      sh = f.read(strings_size)
+                      pe.close()
+                      readable = 0
+                      i = 1
+                      while i < len(data) - 1:
+                          b0 = data[i]
+                          if b0 < 0x80:
+                              ln = b0 >> 1
+                              i += 1
+                          elif b0 < 0xC0:
+                              ln = ((b0 & 0x3F) << 8 | data[i + 1]) >> 1
+                              i += 2
+                          else:
+                              ln = ((data[i] & 0x1F) << 24 | data[i + 1] << 16 | data[i + 2] << 8 | data[i + 3]) >> 1
+                              i += 4
+                          if 0 < ln and i + ln * 2 <= len(data):
+                              try:
+                                  s = data[i:i + ln * 2].decode("utf-16-le")
+                                  if s and sum(1 for c in s if 32 <= ord(c) < 0xFFFD) / len(s) > 0.7:
+                                      readable += 1
+                              except Exception:
+                                  pass
+                          i += ln * 2
+                      return readable, len(sh)
+              except Exception:
+                  return 0, 0
+
+          pe = pefile.PE(path)
+          rep = {}
+          rep["file"] = os.path.basename(path)
+          rep["size"] = os.path.getsize(path)
+          rep["sha256"] = hashlib.sha256(open(path, "rb").read()).hexdigest()
+          rep["machine"] = hex(pe.FILE_HEADER.Machine)
+          rep["timestamp"] = pe.FILE_HEADER.TimeDateStamp
+          rep["entry_point"] = hex(pe.OPTIONAL_HEADER.AddressOfEntryPoint)
+          rep["is_dotnet"] = bool(pe.OPTIONAL_HEADER.DATA_DIRECTORY[14].VirtualAddress)
+          secs = []
+          for s in pe.sections:
+              secs.append({
+                  "name": s.Name.decode(errors="ignore").rstrip("\x00"),
+                  "virtual_size": s.Misc_VirtualSize,
+                  "raw_size": s.SizeOfRawData,
+                  "entropy": round(entropy(s.get_data()), 2),
+              })
+          rep["sections"] = secs
+          imports = {}
+          try:
+              for e in pe.DIRECTORY_ENTRY_IMPORT:
+                  dll = e.dll.decode()
+                  imports[dll] = [i.name.decode() if i.name else "ord_%d" % i.ordinal for i in e.imports][:300]
+          except Exception:
+              pass
+          rep["imports"] = imports
+          secdir = pe.OPTIONAL_HEADER.DATA_DIRECTORY[4]
+          rep["authenticode_signed"] = bool(secdir.VirtualAddress and secdir.Size)
+          pe.close()
+          if rep["is_dotnet"]:
+              r, sh_len = us_strings(path)
+              rep["readable_us_strings"] = r
+              rep["strings_heap_size"] = sh_len
+
+          os.makedirs(outdir, exist_ok=True)
+          with open(os.path.join(outdir, prefix + "_static_report.json"), "w", encoding="utf-8") as fo:
+              json.dump(rep, fo, ensure_ascii=False, indent=2)
+          with open(os.path.join(outdir, prefix + "_imports.txt"), "w", encoding="utf-8") as fo:
+              fo.write("Import table: " + path + "\n\n")
+              for dll, funcs in imports.items():
+                  fo.write("[%s] (%d functions)\n" % (dll, len(funcs)))
+                  for fn in funcs:
+                      fo.write("    " + fn + "\n")
+          print(json.dumps({"file": rep["file"], "size": rep["size"], "sha256": rep["sha256"],
+                            "is_dotnet": rep["is_dotnet"], "readable_us_strings": rep.get("readable_us_strings")}, ensure_ascii=False))
+          '@
+          $py1 | Set-Content -Encoding UTF8 "$env:GITHUB_WORKSPACE\analyze.py"
+          $py2 = @'
+          import json, sys, os
+
+          a_path, b_path, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
+          a = json.load(open(a_path, encoding="utf-8"))
+          b = json.load(open(b_path, encoding="utf-8"))
+          cmp = {
+              "original": {"file": a["file"], "size": a["size"], "sha256": a["sha256"]},
+              "unpacked": {"file": b["file"], "size": b["size"], "sha256": b["sha256"]},
+              "size_delta": b["size"] - a["size"],
+              "entropy_original": {s["name"]: s["entropy"] for s in a["sections"]},
+              "entropy_unpacked": {s["name"]: s["entropy"] for s in b["sections"]},
+              "readable_us_strings": {
+                  "original": a.get("readable_us_strings"),
+                  "unpacked": b.get("readable_us_strings"),
+              },
+              "imports_original": {k: len(v) for k, v in a["imports"].items()},
+              "imports_unpacked": {k: len(v) for k, v in b["imports"].items()},
+              "changed": a["sha256"] != b["sha256"],
+          }
+          out = os.path.join(outdir, "compare_report.json")
+          with open(out, "w", encoding="utf-8") as fo:
+              json.dump(cmp, fo, ensure_ascii=False, indent=2)
+          print(json.dumps({"changed": cmp["changed"], "size_delta": cmp["size_delta"]}, ensure_ascii=False))
+          '@
+          $py2 | Set-Content -Encoding UTF8 "$env:GITHUB_WORKSPACE\compare.py"
+
+          # 内存dump重建脚本 (minidump -> 文件布局PE)
+          $py3 = @'
+          #!/usr/bin/env python3.13
+          # -*- coding: utf-8 -*-
+          """从 Windows 进程 minidump 中提取托管模块并重建文件布局 PE
+          用法: redump.py <dump.dmp> <输出目录> <模块名1> [模块名2 ...]
+          输出: <目录>/<名字>.Dump.<ext>  (内存映像重建, 方法体等已解密)
+          """
+          import sys, os, struct
+          from minidump.minidumpfile import MinidumpFile
+
+          # Windows 控制台默认 cp1252, 重配置避免中文输出崩溃
+          if hasattr(sys.stdout, 'reconfigure'):
+              try:
+                  sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+                  sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+              except Exception:
+                  pass
+
+          def rebuild_hybrid(orig, mem, secs):
+              # 原始文件模板 + 内存解密节数据: 保留有效PE头/入口, 覆盖解密后的节内容
+              out = bytearray(orig)
+              for (name, vsize, va, rawsize, rawptr) in secs:
+                  if rawsize > 0 and va + rawsize <= len(mem):
+                      out[rawptr:rawptr + rawsize] = mem[va:va + rawsize]
+              # 恢复 CLR 目录结构 (反转储破坏点): 该 0x48 字节结构位于 .text 内, 从原始文件还原
+              e_lfanew = struct.unpack_from('<I', out, 0x3C)[0]
+              opt = e_lfanew + 24
+              dd = opt + 96 + 14 * 8
+              com_rva, com_size = struct.unpack_from('<II', out, dd)
+              if com_rva and com_size:
+                  for (nm, vs, va2, rs, rp) in secs:
+                      if va2 <= com_rva < va2 + max(vs, rs):
+                          off = rp + (com_rva - va2)
+                          out[off:off + com_size] = orig[off:off + com_size]
+                          break
+              return bytes(out)
+
+          def read_span(reader, va, size):
+              # 跨内存段拼接读取 (procdump -ma 中模块映像横跨多个段, 间隙填零)
+              segs = sorted(reader.memory_segments, key=lambda s: s.start_virtual_address)
+              out = bytearray()
+              cur = va
+              end = va + size
+              for seg in segs:
+                  if seg.end_virtual_address <= cur:
+                      continue
+                  if seg.start_virtual_address >= end:
+                      break
+                  if seg.start_virtual_address > cur:
+                      gap = min(seg.start_virtual_address, end) - cur
+                      out += b'\x00' * gap
+                      cur += gap
+                  take = min(seg.end_virtual_address, end) - cur
+                  if take > 0:
+                      out += seg.read(cur, take, reader.file_handle)
+                      cur += take
+              if cur < end:
+                  out += b'\x00' * (end - cur)
+              return bytes(out)
+
+
+          def parse_sections(data):
+              """解析内存映像PE头, 返回 (size_of_headers, [(name, vsize, va, rawsize, rawptr)])"""
+              if data[:2] != b'MZ':
+                  return None
+              e_lfanew = struct.unpack_from('<I', data, 0x3C)[0]
+              if data[e_lfanew:e_lfanew+4] != b'PE\x00\x00':
+                  return None
+              nsec = struct.unpack_from('<H', data, e_lfanew + 6)[0]
+              opthdrsz = struct.unpack_from('<H', data, e_lfanew + 20)[0]
+              opt_off = e_lfanew + 24
+              size_of_headers = struct.unpack_from('<I', data, opt_off + 60)[0]
+              sec_off = opt_off + opthdrsz
+              secs = []
+              for i in range(nsec):
+                  so = sec_off + i * 40
+                  name = data[so:so + 8].rstrip(b'\x00').decode(errors='replace')
+                  vsize, va, rawsize, rawptr = struct.unpack_from('<IIII', data, so + 8)
+                  secs.append((name, vsize, va, rawsize, rawptr))
+              return size_of_headers, secs
+
+
+          def rebuild_pe(data):
+              """内存布局 -> 文件布局重建, 返回 bytes"""
+              parsed = parse_sections(data)
+              if parsed is None:
+                  return None
+              size_of_headers, secs = parsed
+              # 计算输出长度: 最大 rawptr+rawsize
+              max_raw = size_of_headers
+              for (_, _, _, rawsize, rawptr) in secs:
+                  if rawsize:
+                      max_raw = max(max_raw, rawptr + rawsize)
+              out = bytearray(max_raw)
+              hdr = min(size_of_headers, len(data))
+              out[:hdr] = data[:hdr]
+              for (name, vsize, va, rawsize, rawptr) in secs:
+                  # 内存映像: 数据位于 VA; 文件布局: 位于 rawptr, 长度 rawsize
+                  take = min(rawsize, len(data) - va)
+                  if take > 0:
+                      end = min(rawptr + take, len(out))
+                      out[rawptr:end] = data[va:va + (end - rawptr)]
+              return bytes(out), max_raw, secs
+
+
+          def main():
+              args = [a for a in sys.argv[3:] if not a.startswith('--')]
+              template = None
+              if '--template' in sys.argv:
+                  template = sys.argv[sys.argv.index('--template') + 1]
+              dump_path, out_dir = sys.argv[1], sys.argv[2]
+              wanted = [w.lower() for w in args]
+              mdf = MinidumpFile.parse(dump_path)
+              reader = mdf.get_reader()
+              os.makedirs(out_dir, exist_ok=True)
+              found = {}
+              for m in mdf.modules.modules:
+                  nm = (m.name or '').split('\\')[-1].lower()
+                  if nm in wanted:
+                      found[nm] = (m.baseaddress, m.size)
+              print('[redump] 定位模块:', {k: (hex(v[0]), hex(v[1])) for k, v in found.items()})
+              results = []
+              for name, (base, size) in found.items():
+                  try:
+                      data = read_span(reader, base, size)
+                  except Exception as e:
+                      print(f'[redump] 读取失败 {name}: {e}')
+                      continue
+                  rb = rebuild_pe(data)
+                  if rb is None:
+                      print(f'[redump] {name}: 非PE映像, 跳过')
+                      continue
+                  blob, max_raw, secs = rb
+                  base_name = os.path.splitext(name)[0]
+                  ext = os.path.splitext(name)[1]
+                  dest = os.path.join(out_dir, base_name + '.Dump' + ext)
+                  with open(dest, 'wb') as f:
+                      f.write(blob)
+                  tpl = template if (template and os.path.basename(template).lower() == name) else None
+                  if tpl and os.path.exists(tpl):
+                      orig_bytes = open(tpl, 'rb').read()
+                      tparse = parse_sections(orig_bytes)
+                      if tparse:
+                          hybrid = rebuild_hybrid(orig_bytes, data, tparse[1])
+                          hdest = os.path.join(out_dir, base_name + '.Hybrid' + ext)
+                          with open(hdest, 'wb') as f:
+                              f.write(hybrid)
+                          print(f'[redump] 混合重建: {hdest} ({len(hybrid):,} bytes)')
+                  results.append(dest)
+                  print(f'[redump] 重建: {dest} ({len(blob):,} bytes, 节: {[s[0] for s in secs]})')
+              if not results:
+                  print('[redump] 未产出任何模块')
+              for r in results:
+                  print('OUTPUT=' + r)
+
+
+          if __name__ == '__main__':
+              main()
+
+          '@
+          $py3 | Set-Content -Encoding UTF8 "$env:GITHUB_WORKSPACE\redump.py"
+          Write-Host "分析脚本已写入"
+          python "$env:GITHUB_WORKSPACE\analyze.py" $env:TARGET_PATH "$env:OUTPUT_DIR\reports" original
+
+      - name: Detect obfuscator (de4dotEx)
+        shell: pwsh
+        run: |
+          & $env:DE4DOT -d $env:TARGET_PATH 2>&1 | Tee-Object "$env:OUTPUT_DIR\reports\de4dot_detection.txt"
+          $det = (Select-String -Path "$env:OUTPUT_DIR\reports\de4dot_detection.txt" -Pattern 'Detected' | Select-Object -First 1).Line
+          $detValue = if ($det) { $det.Trim() } else { 'unknown' }
+          "DETECTION=$detValue" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "检测结果: $detValue"
+
+      - name: Memory unpack with NETReactorSlayer
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Set-Location $env:WORK_DIR
+          $base = $env:TARGET_BASE
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          & $env:SLAYER $env:TARGET_PATH 2>&1 | Tee-Object "$env:OUTPUT_DIR\reports\NETReactorSlayer_log.txt"
+          Write-Host "Slayer exit code: $LASTEXITCODE (非交互模式 Press any key 异常属预期, 产物已保存)"
+          $slayedOut = Join-Path $env:WORK_DIR ($base + "_Slayed.exe")
+          if (Test-Path $slayedOut) {
+            Copy-Item $slayedOut "$env:OUTPUT_DIR\unpacked\$base.Slayed.exe" -Force
+            Write-Host "脱壳产物: $base.Slayed.exe ($('{0:N0}' -f (Get-Item $slayedOut).Length) bytes)"
+          } else {
+            Write-Host "::warning::NETReactorSlayer 未产出 Slayed 文件"
+          }
+
+      - name: Chain cleanup with de4dotEx (best effort)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $base = $env:TARGET_BASE
+          # 1) 对原始文件尝试 (预期失败: .NET Reactor 加密资源)
+          & $env:DE4DOT $env:TARGET_PATH -o "$env:OUTPUT_DIR\unpacked\$base.de4dot.exe" 2>&1 | Tee-Object "$env:OUTPUT_DIR\reports\de4dot_log.txt" | Select-Object -Last 5
+          if ($LASTEXITCODE -ne 0) { Write-Host "de4dot(原始) 失败 — 符合预期(加密资源), 继续" }
+          # 2) 对 Slayed 产物尝试链式清理
+          $slayed = "$env:OUTPUT_DIR\unpacked\$base.Slayed.exe"
+          if (Test-Path $slayed) {
+            & $env:DE4DOT $slayed -o "$env:OUTPUT_DIR\unpacked\$base.Slayed.de4dot.exe" 2>&1 | Tee-Object "$env:OUTPUT_DIR\reports\de4dot_slayed_log.txt" | Select-Object -Last 5
+            if ($LASTEXITCODE -ne 0) { Write-Host "de4dot(Slayed) 失败 — 继续使用 Slayed 产物" }
+          }
+
+      - name: Unpack other protected modules (best effort)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          # 对其余 .NET Reactor 受保护模块执行 NETReactorSlayer (主目标已在上一步处理)
+          $mods = @('AirExplorerCmd.exe', 'KRBTabControl.dll')
+          $log = "$env:OUTPUT_DIR\reports\NETReactorSlayer_other_modules.txt"
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $slayedMap = @()
+          foreach ($mod in $mods) {
+            $src = Get-ChildItem $env:WORK_DIR -Recurse -File -Filter $mod | Where-Object { $_.FullName -ne $env:TARGET_PATH } | Select-Object -First 1
+            if (-not $src) { Write-Host "跳过(未找到): $mod"; continue }
+            $ext = [IO.Path]::GetExtension($mod)
+            $slayedName = [IO.Path]::GetFileNameWithoutExtension($mod) + '_Slayed' + $ext
+            $expect = Join-Path $env:WORK_DIR $slayedName
+            if (Test-Path $expect) { Write-Host "已存在: $slayedName"; $slayedMap += "$mod=$slayedName"; continue }
+            Write-Host "==> NETReactorSlayer: $mod"
+            & $env:SLAYER $src.FullName 2>&1 | Tee-Object -Append $log | Out-Null
+            Write-Host "    exit=$LASTEXITCODE (非交互 Press any key 异常属预期)"
+            if (Test-Path $expect) {
+              Write-Host "    产出: $slayedName ($('{0:N0}' -f (Get-Item $expect).Length) bytes)"
+              $slayedMap += "$mod=$slayedName"
+            } else {
+              Write-Host "    未产出: $slayedName"
+            }
+          }
+          "SLAYED_OTHER=$(($slayedMap -join ';'))" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "其余模块脱壳映射: $(($slayedMap -join '; '))"
+
+      - name: Memory dump and reconstruct (memory unpacking)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          # 启动原始程序(已证可运行), .NET Reactor 初始化时在内存中解密方法体, dump后重建
+          pip install minidump --quiet --disable-pip-version-check
+          Invoke-WebRequest 'https://download.sysinternals.com/files/Procdump.zip' -OutFile "$env:RUNNER_TEMP\procdump.zip"
+          Expand-Archive "$env:RUNNER_TEMP\procdump.zip" -DestinationPath "$env:TOOLS_DIR\procdump" -Force
+          $procdump = (Get-ChildItem "$env:TOOLS_DIR\procdump" -Recurse -Filter 'procdump64.exe' | Select-Object -First 1).FullName
+          if (-not $procdump) { $procdump = (Get-ChildItem "$env:TOOLS_DIR\procdump" -Recurse -Filter 'procdump.exe' | Select-Object -First 1).FullName }
+          Write-Host "procdump: $procdump"
+
+          $p = Start-Process -FilePath $env:TARGET_PATH -WorkingDirectory $env:WORK_DIR -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) {
+            Write-Host "::warning::原始程序提前退出(码 $($p.ExitCode)), 无法dump"
+            exit 0
+          }
+          $dmpFile = "$env:RUNNER_TEMP\mem.dmp"
+          if (Test-Path $dmpFile) { Remove-Item $dmpFile -Force }
+          & $procdump -accepteula -ma $p.Id $dmpFile 2>&1 | Select-Object -Last 3 | Write-Host
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (-not (Test-Path $dmpFile)) { Write-Host "::warning::dump 未生成"; exit 0 }
+          Write-Host "dump 大小: $('{0:N0}' -f (Get-Item $dmpFile).Length) bytes"
+
+          # 重建主程序与 KRBTabControl.dll (同一进程内均已加载解密)
+          python -X utf8 "$env:GITHUB_WORKSPACE\redump.py" $dmpFile "$env:OUTPUT_DIR\unpacked" $env:TARGET_NAME "KRBTabControl.dll" --template $env:TARGET_PATH 2>&1 | Tee-Object "$env:OUTPUT_DIR\reports\memory_dump.txt"
+
+          # 对 dump 重建产物做不重命名清理 (保留公共符号, 修复跨程序集引用; 移除反篡改/反调试)
+          $base = $env:TARGET_BASE
+          $dumpMain = "$env:OUTPUT_DIR\unpacked\$base.Dump.exe"
+          $dumpKrb = "$env:OUTPUT_DIR\unpacked\KRBTabControl.Dump.dll"
+          foreach ($f in @($dumpMain, $dumpKrb)) {
+            if (-not (Test-Path $f)) { continue }
+            & $env:SLAYER $f --dont-rename True --no-pause True 2>&1 | Tee-Object -Append "$env:OUTPUT_DIR\reports\NETReactorSlayer_dump.txt" | Out-Null
+            $expect = $f -replace '\.exe$', '_Slayed.exe' -replace '\.dll$', '_Slayed.dll'
+            if (Test-Path $expect) {
+              $finalName = $f -replace '\.exe$', '.Slayed.exe' -replace '\.dll$', '.Slayed.dll'
+              Move-Item $expect $finalName -Force
+              Write-Host "dump清理产出: $(Split-Path $finalName -Leaf)"
+            }
+          }
+          Get-ChildItem "$env:OUTPUT_DIR\unpacked" | Select-Object Name, Length | Format-Table | Out-String | Write-Host
+
+      - name: Patch module initializer (empty broken .cctor)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          # 诊断结论: dump+Slayer 后 <Module>::.cctor (Reactor注入的解密存根) IL损坏 Bad IL range
+          # 但方法体已在内存dump时解密完毕, 模块初始化器已无必要 → 清空
+          $cecilZip = "$env:RUNNER_TEMP\cecil.zip"
+          Invoke-WebRequest 'https://www.nuget.org/api/v2/package/Mono.Cecil/0.11.5' -OutFile $cecilZip -UseBasicParsing
+          Expand-Archive $cecilZip -DestinationPath "$env:TOOLS_DIR\cecil" -Force
+          $cecil = "$env:TOOLS_DIR\cecil\lib\net40\Mono.Cecil.dll"
+          if (-not (Test-Path $cecil)) { $cecil = (Get-ChildItem "$env:TOOLS_DIR\cecil\lib" -Recurse -Filter 'Mono.Cecil.dll' | Select-Object -First 1).FullName }
+          Add-Type -Path $cecil
+          Write-Host "Cecil: $cecil"
+
+          $up = "$env:OUTPUT_DIR\unpacked"
+          $base = $env:TARGET_BASE
+          # Hybrid 版: dnlib 清空 .cctor (Cecil 写入失败于内存映像, dnlib 更健壮; dnlib.dll 来自 Slayer 包)
+          Add-Type -Path "$env:TOOLS_DIR\slayer\dnlib.dll" -ErrorAction SilentlyContinue
+          $hyb = "$up\$base.Hybrid.exe"
+          if (Test-Path $hyb) {
+            try {
+              $mod = [dnlib.DotNet.ModuleDefMD]::Load($hyb)
+              $cc = $mod.GlobalType.FindStaticConstructor()
+              if ($cc) {
+                Write-Host "Hybrid .cctor 原指令数: $($cc.Body.Instructions.Count)"
+                $cc.Body.Instructions.Clear()
+                $cc.Body.Instructions.Add([dnlib.DotNet.Emit.Instruction]::new([dnlib.DotNet.Emit.OpCodes]::Ret))
+                $outp = "$up\$base.Hybrid.NoCctor.exe"
+                if (Test-Path $outp) { Remove-Item $outp -Force }
+                $mod.Write($outp)
+                $mod.Dispose()
+                Write-Host "已产出: $base.Hybrid.NoCctor.exe"
+              } else { Write-Host 'Hybrid 无 .cctor'; $mod.Dispose() }
+            } catch {
+              Write-Host "Hybrid dnlib补丁失败: $($_.Exception.Message)"
+              Get-ChildItem $up -Filter '*Hybrid.NoCctor*' -ErrorAction SilentlyContinue | Remove-Item -Force
+            }
+          }
+          foreach ($f in @("$up\$base.Dump.Slayed.exe", "$up\KRBTabControl.Dump.Slayed.dll")) {
+            if (-not (Test-Path $f)) { Write-Host "跳过(不存在): $f"; continue }
+            try {
+              $asm = [Mono.Cecil.AssemblyDefinition]::ReadAssembly($f)
+              $moduleType = $asm.MainModule.GetType('<Module>')
+              $cctor = $null
+              if ($moduleType) { $cctor = $moduleType.Methods | Where-Object { $_.IsConstructor -and $_.IsStatic } | Select-Object -First 1 }
+              if ($cctor) {
+                Write-Host "清空 .cctor: $(Split-Path $f -Leaf) (原指令数: $($cctor.Body.Instructions.Count))"
+                $cctor.Body.Instructions.Clear()
+                $cctor.Body.GetILProcessor().Emit([Mono.Cecil.Cil.OpCodes]::Ret)
+                $tmp = "$f.patched"
+                $asm.Write($tmp)
+                $asm.Dispose()
+                Move-Item $tmp $f -Force
+                Write-Host "已修补: $(Split-Path $f -Leaf)"
+              } else {
+                Write-Host "无 .cctor: $(Split-Path $f -Leaf)"
+                $asm.Dispose()
+              }
+            } catch {
+              Write-Host "补丁失败 $(Split-Path $f -Leaf): $($_.Exception.Message)"
+            }
+          }
+
+      - name: Select final unpacked output
+        shell: pwsh
+        run: |
+          $base = $env:TARGET_BASE
+          $final = $null
+          foreach ($cand in @("$base.Dump.Slayed.exe", "$base.Slayed.exe", "$base.Dump.exe", "$base.Slayed.de4dot.exe", "$base.de4dot.exe")) {
+            $p = Join-Path "$env:OUTPUT_DIR\unpacked" $cand
+            if (Test-Path $p) { $final = $p; break }
+          }
+          if (-not $final) {
+            $final = Join-Path "$env:OUTPUT_DIR\unpacked" "$base.original.exe"
+            Copy-Item $env:TARGET_PATH $final -Force
+            Write-Host "::warning::所有脱壳工具均未产出, 交付原始文件"
+          }
+          "FINAL_OUTPUT=$final" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "最终产物: $final"
+
+      - name: Assemble runnable package + smoke test
+        shell: pwsh
+        run: |
+          $runDir = "$env:OUTPUT_DIR\runnable"
+          $report = "$env:OUTPUT_DIR\reports\smoke_test.txt"
+          $base = $env:TARGET_BASE
+          Remove-Item $report -ErrorAction SilentlyContinue
+
+          # 解析 SLAYED_OTHER ("mod=slayedName;...")
+          $other = @{}
+          foreach ($pair in ($env:SLAYED_OTHER -split ';' | Where-Object { $_ })) {
+            $k, $v = $pair -split '=', 2
+            $other[$k] = $v
+          }
+          $mainSlayed = Join-Path "$env:OUTPUT_DIR\unpacked" "$base.Slayed.exe"
+          $isConsole = $env:TARGET_NAME -like '*Cmd.exe'
+
+          # 启动冒烟测试: 进程存活15秒视为PASS; 控制台程序退出code=0或任意退出均记录
+          function Test-Launch([string]$dir) {
+            $exe = Join-Path $dir $env:TARGET_NAME
+            if (-not (Test-Path $exe)) { return 'FAIL (exe 不存在)' }
+            try {
+              $p = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru
+              Start-Sleep -Seconds 15
+              if (-not $p.HasExited) {
+                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 1
+                return 'PASS (进程持续存活15秒, 已正常终止测试)'
+              }
+              $code = $p.ExitCode
+              if ($code -eq 0) { return "PASS (正常退出 code=0)" }
+              if ($isConsole) { return "PASS (控制台程序运行后退出 code=$code)" }
+              return "FAIL (启动后退出, code=$code)"
+            } catch {
+              return "FAIL ($($_.Exception.Message))"
+            }
+          }
+
+          # 五模式递降: E 内存dump+不重命名清理 → D 内存dump原始 → A 静态全脱壳 → B 仅主程序 → C 原始兜底
+          $up = "$env:OUTPUT_DIR\unpacked"
+          $modes = @(
+            @{ id = 'E4'; desc = '混合重建+清空cctor (原始PE头+内存解密节, 无Slayer)';
+               main = "$base.Hybrid.NoCctor.exe"; krb = $null; cmd = $null },
+            @{ id = 'E2'; desc = '混合重建原样 (cctor存根将重新初始化)';
+               main = "$base.Hybrid.exe"; krb = $null; cmd = $null },
+            @{ id = 'E'; desc = '内存Dump+Slayer不重命名';
+               main = "$base.Dump.Slayed.exe"; krb = 'KRBTabControl.Dump.Slayed.dll'; cmd = $null },
+            @{ id = 'E1'; desc = '内存Dump主程序+原始KRB';
+               main = "$base.Dump.Slayed.exe"; krb = $null; cmd = $null },
+            @{ id = 'C'; desc = '全部原始 (兜底基线)';
+               main = $null; krb = $null; cmd = $null }
+          )
+          $chosen = $null
+          foreach ($m in $modes) {
+            if (Test-Path $runDir) { Remove-Item $runDir -Recurse -Force }
+            New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+            # 复制完整应用目录 (所有依赖/语言/运行时)
+            Copy-Item -Path "$env:WORK_DIR\*" -Destination $runDir -Recurse -Force
+            Get-ChildItem $runDir -Recurse -Filter '*_Slayed*' | Remove-Item -Force
+            # 替换主程序 (指定的脱壳产物缺失时 SKIP 该模式, 避免"原始文件虚过")
+            if ($m.main) {
+              $srcMain = Join-Path $up $m.main
+              if (Test-Path $srcMain) {
+                Copy-Item $srcMain (Join-Path $runDir $env:TARGET_NAME) -Force
+              } else {
+                $skipLine = "模式 $($m.id) [$($m.desc)]: SKIP (产物缺失: $($m.main))"
+                Write-Host $skipLine
+                $skipLine | Out-File -Append $report
+                continue
+              }
+            }
+            # 替换 KRBTabControl.dll
+            if ($m.krb) {
+              $krbSrc = Join-Path $up $m.krb
+              if (-not (Test-Path $krbSrc)) { $krbSrc = Join-Path $env:WORK_DIR $m.krb }
+              if (Test-Path $krbSrc) { Copy-Item $krbSrc (Join-Path $runDir 'KRBTabControl.dll') -Force }
+            }
+            # 替换 AirExplorerCmd.exe
+            if ($m.cmd) {
+              $cmdSrc = Join-Path $env:WORK_DIR $m.cmd
+              if (Test-Path $cmdSrc) { Copy-Item $cmdSrc (Join-Path $runDir 'AirExplorerCmd.exe') -Force }
+            }
+            $result = Test-Launch $runDir
+            $line = "模式 $($m.id) [$($m.desc)]: $result"
+            Write-Host $line
+            $line | Out-File -Append $report
+            if ($result -like 'FAIL*') {
+              # 抓取启动异常详情 (Windows 事件日志)
+              try {
+                $evs = Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddSeconds(-40)} -ErrorAction SilentlyContinue |
+                  Where-Object { $_.ProviderName -match '\.NET Runtime|Application Error' } | Select-Object -First 2
+                foreach ($e in $evs) {
+                  $msg = ($e.Message -replace '\s+', ' ')
+                  if ($msg.Length -gt 320) { $msg = $msg.Substring(0, 320) }
+                  "    事件[$($e.ProviderName)]: $msg" | Out-File -Append $report
+                }
+              } catch {}
+            }
+            if ($result -like 'PASS*') { $chosen = $m; break }
+          }
+          if (-not $chosen) { Write-Error '所有模式均未能启动, 详见 smoke_test.txt'; exit 1 }
+          "RUNNABLE_MODE=$($chosen.desc)" | Out-File -Append $env:GITHUB_ENV
+          "RUNNABLE_DIR=$runDir" | Out-File -Append $env:GITHUB_ENV
+          "选定: $($chosen.desc)" | Out-File -Append $report
+          $cnt = (Get-ChildItem $runDir -Recurse -File | Measure-Object).Count
+          "runnable/ 共 $cnt 个文件" | Out-File -Append $report
+          Write-Host "可运行包组装完成: $($chosen.desc), $cnt 个文件"
+      - name: Diagnose unpacked startup exception (in-process harness)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          # 用 .NET Framework 反射启动器进程内运行脱壳版, 捕获确切启动异常
+          $diag = @'
+          param([string]$ExePath)
+          $ErrorActionPreference = 'Stop'
+          try {
+            Set-Location (Split-Path $ExePath -Parent)
+            $asm = [System.Reflection.Assembly]::LoadFrom($ExePath)
+            Write-Output ("LOADED: " + $asm.FullName)
+            $ep = $asm.EntryPoint
+            Write-Output ("ENTRY: " + $ep.DeclaringType.FullName + "::" + $ep.Name + " params=" + $ep.GetParameters().Count)
+            if ($ep.GetParameters().Count -eq 0) { $null = $ep.Invoke($null, $null) }
+            else { $null = $ep.Invoke($null, (, [string[]]@())) }
+            Write-Output "ENTRY-RETURNED-NORMALLY"
+            exit 0
+          } catch {
+            Write-Output ("EXCEPTION: " + $_.Exception.ToString())
+            if ($_.Exception.InnerException) { Write-Output ("INNER-EXCEPTION: " + $_.Exception.InnerException.ToString()) }
+            exit 3
+          }
+          '@
+
+          $diag | Set-Content -Encoding UTF8 "$env:GITHUB_WORKSPACE\diag.ps1"
+          $diagDir = "$env:OUTPUT_DIR\diag"
+          if (Test-Path $diagDir) { Remove-Item $diagDir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $diagDir | Out-Null
+          Copy-Item -Path "$env:WORK_DIR\*" -Destination $diagDir -Recurse -Force
+          Get-ChildItem $diagDir -Recurse -Filter '*_Slayed*' | Remove-Item -Force
+          $base = $env:TARGET_BASE
+          $diagExe = Join-Path $diagDir $env:TARGET_NAME
+          Copy-Item "$env:OUTPUT_DIR\unpacked\$base.Dump.Slayed.exe" $diagExe -Force
+          $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"$env:GITHUB_WORKSPACE\diag.ps1",'-ExePath',$diagExe) -WorkingDirectory $diagDir -PassThru -RedirectStandardOutput "$env:OUTPUT_DIR\reports\startup_exception.txt" -RedirectStandardError "$env:OUTPUT_DIR\reports\startup_exception_err.txt" -WindowStyle Hidden
+          if (-not $p.WaitForExit(30000)) {
+            $p.Kill()
+            'RESULT: 30秒内未抛异常且未退出 (进程内正常运行/消息循环存活)' | Out-File -Append "$env:OUTPUT_DIR\reports\startup_exception.txt"
+          }
+          Write-Host '=== 启动异常诊断 (E1布局: dump主程序+原始KRB) ==='
+          Get-Content "$env:OUTPUT_DIR\reports\startup_exception.txt" -ErrorAction SilentlyContinue | Select-Object -First 25 | Write-Host
+          Get-Content "$env:OUTPUT_DIR\reports\startup_exception_err.txt" -ErrorAction SilentlyContinue | Select-Object -First 5 | Write-Host
+
+      - name: Static analysis (unpacked) + compare report
+        shell: pwsh
+        run: |
+          python "$env:GITHUB_WORKSPACE\analyze.py" $env:FINAL_OUTPUT "$env:OUTPUT_DIR\reports" unpacked
+          python "$env:GITHUB_WORKSPACE\compare.py" "$env:OUTPUT_DIR\reports\original_static_report.json" "$env:OUTPUT_DIR\reports\unpacked_static_report.json" "$env:OUTPUT_DIR\reports"
+
+      - name: Decompile with ILSpy
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $decompDir = "$env:OUTPUT_DIR\decompiled"
+          New-Item -ItemType Directory -Force -Path $decompDir | Out-Null
+          $ilspy = "$env:USERPROFILE\.dotnet\tools\ilspycmd.exe"
+          $p = Start-Process -FilePath $ilspy -ArgumentList @('-p', '-o', $decompDir, $env:FINAL_OUTPUT) -WorkingDirectory $env:WORK_DIR -NoNewWindow -PassThru -RedirectStandardOutput "$env:OUTPUT_DIR\reports\ilspy_out.txt" -RedirectStandardError "$env:OUTPUT_DIR\reports\ilspy_err.txt"
+          if (-not $p.WaitForExit(1500000)) {
+            $p.Kill()
+            Write-Host "::warning::ILSpy 超时(25分钟)已终止, 继续打包"
+          }
+          Write-Host "ILSpy exit: $($p.ExitCode)"
+          if (Test-Path "$env:OUTPUT_DIR\reports\ilspy_err.txt") {
+            Get-Content "$env:OUTPUT_DIR\reports\ilspy_err.txt" -Tail 3
+          }
+          $n = (Get-ChildItem $decompDir -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+          Write-Host "反编译输出 $n 个文件"
+
+      - name: SHA256 sums
+        shell: pwsh
+        run: |
+          $sums = "$env:OUTPUT_DIR\SHA256SUMS.txt"
+          Remove-Item $sums -ErrorAction SilentlyContinue
+          Get-ChildItem $env:OUTPUT_DIR -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' } | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            $rel = $_.FullName.Substring($env:OUTPUT_DIR.Length + 1)
+            "$h  $rel" | Out-File -Append $sums
+          }
+          Get-Content $sums | Select-Object -First 10
+          Write-Host "共 $((Get-Content $sums | Measure-Object).Count) 个文件哈希"
+
+      - name: Package output zip
+        shell: pwsh
+        run: |
+          $zipPath = "$env:GITHUB_WORKSPACE\analysis_result.zip"
+          Compress-Archive -Path "$env:OUTPUT_DIR\*" -DestinationPath $zipPath -Force
+          Write-Host "打包完成: $zipPath ($('{0:N0}' -f (Get-Item $zipPath).Length) bytes)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unpacked-analysis-result
+          path: analysis_result.zip
+          retention-days: 14
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          Write-Host '=============================================='
+          Write-Host '=== 脱壳分析 Summary ==='
+          Write-Host "目标:        $env:TARGET_NAME"
+          Write-Host "混淆器检测:  $env:DETECTION"
+          Write-Host "最终产物:    $env:FINAL_OUTPUT"
+          $origHash = (Get-FileHash $env:TARGET_PATH -Algorithm SHA256).Hash
+          $finalHash = (Get-FileHash $env:FINAL_OUTPUT -Algorithm SHA256).Hash
+          Write-Host "原始 SHA256: $origHash"
+          Write-Host "产物 SHA256: $finalHash"
+          if ($origHash -ne $finalHash) { Write-Host '脱壳成功: 是 (产物与原始不同)' } else { Write-Host '脱壳成功: 部分/否 — 见报告' }
+          Write-Host "可运行包模式: $env:RUNNABLE_MODE"
+          Write-Host '=============================================='
+          Write-Host 'Artifact 内容: runnable/(完整可运行程序) unpacked/ decompiled/ reports/ SHA256SUMS.txt'
+          Get-ChildItem $env:OUTPUT_DIR -Recurse -File | Group-Object { $_.Directory.Name } | Format-Table Name, Count
+
+  cilantro:
+    runs-on: windows-latest
+    timeout-minutes: 110
+    env:
+      WORK_DIR: D:\a\cilantro\work
+      OUTPUT_DIR: D:\a\cilantro\out
+      TOOLS_DIR: D:\a\cilantro\tools
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract app from source zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:WORK_DIR","$env:OUTPUT_DIR","$env:TOOLS_DIR" | Out-Null
+          $src = Join-Path $env:GITHUB_WORKSPACE "${{ github.event.inputs.source_zip }}"
+          if (-not (Test-Path $src)) { Write-Error "源压缩包不存在"; exit 1 }
+          Expand-Archive -Path $src -DestinationPath "$env:WORK_DIR" -Force
+          $target = Get-ChildItem $env:WORK_DIR -Recurse -File -Filter "${{ github.event.inputs.target_exe }}" | Select-Object -First 1
+          if (-not $target) { Write-Error "未找到目标"; exit 1 }
+          "TARGET_PATH=$($target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "TARGET_NAME=$($target.Name)" | Out-File -Append $env:GITHUB_ENV
+          "APP_DIR=$(Split-Path $target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "目标: $($target.FullName)"
+
+      - name: Run CILantro (static VM lifter, watchdog 80 min)
+        shell: pwsh
+        timeout-minutes: 90
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = "$env:OUTPUT_DIR\case"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $zip = "$env:TOOLS_DIR\cil.zip"
+          Invoke-WebRequest 'https://github.com/jgajek/cilantro/releases/latest/download/cilantro-win-x64.zip' -OutFile $zip -UseBasicParsing
+          Expand-Archive $zip "$env:TOOLS_DIR\cil" -Force
+          $exe = Get-ChildItem "$env:TOOLS_DIR\cil" -Recurse -Filter 'cilantro.exe' | Select-Object -First 1
+          Write-Host "cilantro: $($exe.FullName)"
+          $p = Start-Process $exe.FullName -ArgumentList @("`"$env:TARGET_PATH`"", '-o', "`"$out`"") -RedirectStandardOutput "$env:OUTPUT_DIR\cilantro_stdout.txt" -RedirectStandardError "$env:OUTPUT_DIR\cilantro_stderr.txt" -PassThru -NoNewWindow
+          $deadline = (Get-Date).AddMinutes(80)
+          while (-not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 20; $st = Get-Content "$out\*.status.json" -ErrorAction SilentlyContinue | ConvertFrom-Json; if ($st) { Write-Host "[$(Get-Date -Format HH:mm:ss)] pass $($st.PassesDone)/$($st.PassesTotal): $($st.Pass)" } }
+          if (-not $p.HasExited) { Write-Host 'CILantro 达到80分钟上限, 强制终止 (保留已增量产出)'; Stop-Process -Id $p.Id -Force; Start-Sleep 15 }
+          Write-Host "退出码: $($p.ExitCode)"
+          if (Test-Path "$env:OUTPUT_DIR\cilantro_stdout.txt") { Get-Content "$env:OUTPUT_DIR\cilantro_stdout.txt" -Tail 30 | Write-Host }
+          if (Test-Path "$env:OUTPUT_DIR\cilantro_stderr.txt") { Get-Content "$env:OUTPUT_DIR\cilantro_stderr.txt" -Tail 10 | Write-Host }
+          # 定位恢复产出
+          $cil = Get-ChildItem $out -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'cilantro' } | Sort-Object Length -Descending | Select-Object -First 1
+          if ($cil) {
+            Copy-Item $cil.FullName "$env:OUTPUT_DIR\AirExplorer.Cilantro.exe" -Force
+            Write-Host "CILantro 恢复程序集: $($cil.FullName) ($($cil.Length) bytes)"
+            $cil.FullName | Out-File "$env:OUTPUT_DIR\recovered_path.txt" -Encoding utf8
+          } else {
+            Write-Host 'CILantro 未产出 exe (查看 case 目录)'
+            Get-ChildItem $out -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 12 FullName, Length | Format-Table | Out-String | Write-Host
+          }
+
+      # 先上传 CILantro 核心产物, 再做冒烟测试 (冒烟卡死不影响产物落袋)
+      - name: Upload CILantro result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cilantro-vm-recovery
+          path: |
+            D:/a/cilantro/out/AirExplorer.Cilantro.exe
+            D:/a/cilantro/out/cilantro_stdout.txt
+            D:/a/cilantro/out/cilantro_stderr.txt
+            D:/a/cilantro/out/recovered_path.txt
+            D:/a/cilantro/out/case
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Smoke test recovered exe (15s)
+        if: always()
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $rec = "$env:OUTPUT_DIR\AirExplorer.Cilantro.exe"
+          if (-not (Test-Path $rec)) { Write-Host '无恢复产物, 跳过冒烟'; exit 0 }
+          # 测试目录必须位于 APP_DIR 之外: APP_DIR 即解压根目录(目标在zip根),
+          # 若在其内部建目录再 Copy-Item APP_DIR -Recurse 会自递归无限复制 (run 39209461468 卡死根因)
+          $test = "$env:RUNNER_TEMP\smoketest"
+          if (Test-Path $test) { Remove-Item $test -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $test | Out-Null
+          Copy-Item -Path "$env:APP_DIR\*" -Destination $test -Recurse -Force
+          Copy-Item $rec "$test\$env:TARGET_NAME" -Force
+          # 清理可能残留的同名进程
+          Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          $p = Start-Process "$test\$env:TARGET_NAME" -WorkingDirectory $test -PassThru
+          if ($p.WaitForExit(15000)) {
+            Write-Host "SMOKE RESULT: FAIL (启动后退出, code=$($p.ExitCode))"
+            "FAIL code=$($p.ExitCode)" | Out-File "$env:OUTPUT_DIR\smoke_result.txt" -Encoding utf8
+          } else {
+            Write-Host 'SMOKE RESULT: PASS (进程持续存活15秒)'
+            'PASS' | Out-File "$env:OUTPUT_DIR\smoke_result.txt" -Encoding utf8
+          }
+          # 进程树整体清理 (主进程+子进程), 防止残留进程占住 step
+          & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+          Start-Sleep -Seconds 1
+          Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process -Name 'msedgewebview2' -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$($env:RUNNER_TEMP)*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Write-Host '冒烟测试完成'
+
+      - name: Upload smoke result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cilantro-smoke-result
+          path: D:/a/cilantro/out/smoke_result.txt
+          retention-days: 90
+          if-no-files-found: warn
+
+  # ============ 多路重建之一: AutoReaktor JIT 入口链 ============
+  # 链条: hunt → de4dotEx → NETReactorSlayer → Krypton(VM 去虚拟化) → NecroBit JIT 方法体转储回写
+  # 依据: autoreaktor (github.com/0301091405/autoreaktor) 在 .NET Reactor 7.5.0.0 上验证可产
+  # 出可运行重建程序集; JIT 入口取体结构上对 Reactor 版本升级免疫。
+  # 必须 --keep-work, 否则恢复的二进制位于 _ar_out/work/ 下会被清理删除。
+  autoreaktor:
+    name: AutoReaktor JIT 重建链
+    runs-on: windows-latest
+    timeout-minutes: 110
+    env:
+      AR_REPO: D:\a\ar\repo
+      WORK_DIR: D:\a\ar\work
+      AR_OUT: D:\a\ar\out
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Clone AutoReaktor and fetch tools
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          git clone --depth 1 https://github.com/0301091405/autoreaktor.git "$env:AR_REPO"
+          if ($LASTEXITCODE -ne 0) { Write-Error '克隆 autoreaktor 失败'; exit 1 }
+          # git-bash 可能没有 unzip (setup.sh 依赖) — 提供 bsdtar 兜底 shim (LF 行尾, bash 可执行)
+          $shimDir = "$env:RUNNER_TEMP\shim"
+          New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+          $shimBody = @'
+          #!/usr/bin/env bash
+          # unzip shim: 覆盖 setup.sh 用到的子集 (unzip -o file.zip -d dir)
+          # 注意: git-bash 自带的 tar 是 GNU tar (不支持 zip), 必须用 System32 的 bsdtar
+          set -e
+          dir="."; z=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              -o) shift ;;
+              -d) dir="$2"; shift 2 ;;
+              -*) shift ;;
+              *) if [ -z "$z" ]; then z="$1"; fi; shift ;;
+            esac
+          done
+          [ -n "$z" ] || { echo "unzip-shim: no archive given" >&2; exit 1; }
+          mkdir -p "$dir"
+          BT="/c/Windows/System32/tar.exe"
+          if [ -x "$BT" ]; then
+            exec "$BT" -xf "$z" -C "$dir"
+          fi
+          exec powershell.exe -NoProfile -Command "Expand-Archive -LiteralPath '$z' -DestinationPath '$dir' -Force"
+          '@
+          # 统一 LF 行尾 (CRLF 会导致 bash 报错)
+          $shimBody = $shimBody -replace "`r`n", "`n"
+          [IO.File]::WriteAllText("$shimDir\unzip", $shimBody)
+          Write-Host "unzip shim 就绪: $shimDir"
+          # bash 侧路径转换 (C:\x\y -> /c/x/y)
+          $shimPosix = ('/' + $shimDir.Substring(0,1).ToLower() + $shimDir.Substring(2)).Replace('\','/')
+          Write-Host "shim posix path: $shimPosix"
+          $bashCmd = "chmod +x `"$shimPosix/unzip`" 2>/dev/null; export PATH=`"$shimPosix`":`$PATH; export DE4DOT_URL=`"https://github.com/GDATAAdvancedAnalytics/de4dotEx/releases/download/3.11.0/de4dotEx-3.11.0-net48.zip`"; if command -v unzip >/dev/null 2>&1; then echo `"unzip: native-or-shim present at `$(command -v unzip)`"; else echo `"unzip: MISSING`"; fi; cd `"$env:AR_REPO`" && bash tools/setup.sh"
+          bash -c $bashCmd
+          if ($LASTEXITCODE -ne 0) { Write-Error 'setup.sh 失败'; exit 1 }
+          Write-Host 'AutoReaktor 工具链就绪'
+
+      - name: Extract app from source zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:WORK_DIR","$env:AR_OUT" | Out-Null
+          $src = Join-Path $env:GITHUB_WORKSPACE "${{ github.event.inputs.source_zip }}"
+          if (-not (Test-Path $src)) { Write-Error "源压缩包不存在"; exit 1 }
+          Expand-Archive -Path $src -DestinationPath "$env:WORK_DIR" -Force
+          $target = Get-ChildItem $env:WORK_DIR -Recurse -File -Filter "${{ github.event.inputs.target_exe }}" | Select-Object -First 1
+          if (-not $target) { Write-Error "未找到目标"; exit 1 }
+          "TARGET_PATH=$($target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "TARGET_NAME=$($target.Name)" | Out-File -Append $env:GITHUB_ENV
+          "APP_DIR=$(Split-Path $target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "目标: $($target.FullName)"
+
+      - name: Run AutoReaktor chain (Slayer → Krypton → NecroBit JIT)
+        shell: pwsh
+        timeout-minutes: 85
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Set-Location "$env:AR_REPO"
+          python -u autoreaktor.py "$env:WORK_DIR" --deep --keep-work 2>&1 | Tee-Object -FilePath "$env:AR_OUT\autoreaktor_stdout.txt"
+          Write-Host "退出码: $LASTEXITCODE"
+          $rp = "$env:WORK_DIR\_ar_out\report.json"
+          if (Test-Path $rp) {
+            Copy-Item $rp "$env:AR_OUT\report.json" -Force
+            try {
+              $rep = Get-Content $rp -Raw | ConvertFrom-Json
+              Write-Host '===== AutoReaktor 结果汇总 ====='
+              foreach ($e in $rep.files) {
+                Write-Host ("{0}  ->  {1}" -f $e.input, $e.result)
+                if ($e.runnable_output) { Write-Host ("    runnable: {0}" -f $e.runnable_output) }
+              }
+            } catch { Write-Host "report 解析失败: $_" }
+          } else {
+            Write-Host '未生成 report.json (链条中断或超时)'
+          }
+
+      - name: Package AutoReaktor output
+        if: always()
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $arout = "$env:WORK_DIR\_ar_out"
+          if (-not (Test-Path $arout)) { Write-Host '无 _ar_out'; exit 0 }
+          $zip = "$env:AR_OUT\autoreaktor_result.zip"
+          $sz7 = 'C:\Program Files\7-Zip\7z.exe'
+          if (Test-Path $sz7) {
+            & $sz7 a -tzip $zip "$arout\*" | Out-Null
+          } else {
+            tar -a -cf $zip -C $arout .
+          }
+          if (Test-Path $zip) { Write-Host ("打包: {0} ({1:N0} bytes)" -f $zip, (Get-Item $zip).Length) } else { Write-Host '打包失败' }
+
+      - name: Upload AutoReaktor result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autoreaktor-rebuild-result
+          path: |
+            D:/a/ar/out/autoreaktor_result.zip
+            D:/a/ar/out/report.json
+            D:/a/ar/out/autoreaktor_stdout.txt
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Smoke test rebuilt exe (15s)
+        if: always()
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $rp = "$env:AR_OUT\report.json"
+          if (-not (Test-Path $rp)) { $rp = "$env:WORK_DIR\_ar_out\report.json" }
+          if (-not (Test-Path $rp)) { Write-Host '无 report.json, 跳过冒烟'; exit 0 }
+          $rep = Get-Content $rp -Raw | ConvertFrom-Json
+          $cands = @($rep.files | Where-Object { $_.runnable_output -and (Test-Path $_.runnable_output) })
+          if ($cands.Count -eq 0) { Write-Host '无 runnable 产物, 跳过冒烟'; 'NO-RUNNABLE' | Out-File "$env:AR_OUT\smoke_result.txt" -Encoding utf8; exit 0 }
+          $pri = @{ 'run-recovered' = 0; 'necrobit-recovered' = 1; 'krypton-devirt' = 2; 'slayer-clean' = 3; 'necrobit-partial' = 4 }
+          $best = $cands | Sort-Object { if ($pri.ContainsKey($_.result)) { $pri[$_.result] } else { 99 } } | Select-Object -First 1
+          Write-Host "冒烟对象: $($best.input) -> $($best.result): $($best.runnable_output)"
+          $test = "$env:RUNNER_TEMP\arsmoke"
+          if (Test-Path $test) { Remove-Item $test -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $test | Out-Null
+          Copy-Item -Path "$env:APP_DIR\*" -Destination $test -Recurse -Force
+          foreach ($e in @($rep.files)) {
+            if ($e.runnable_output -and (Test-Path $e.runnable_output)) {
+              $name = Split-Path $e.input -Leaf
+              Copy-Item $e.runnable_output (Join-Path $test $name) -Force
+              Write-Host "替换: $name <- $($e.runnable_output)"
+            }
+          }
+          $exe = Join-Path $test $env:TARGET_NAME
+          Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          $p = Start-Process $exe -WorkingDirectory $test -PassThru
+          if ($p.WaitForExit(15000)) {
+            Write-Host "SMOKE RESULT: FAIL (启动后退出, code=$($p.ExitCode))"
+            "FAIL code=$($p.ExitCode) ($($best.result))" | Out-File "$env:AR_OUT\smoke_result.txt" -Encoding utf8
+          } else {
+            Write-Host 'SMOKE RESULT: PASS (进程持续存活15秒)'
+            "PASS ($($best.result))" | Out-File "$env:AR_OUT\smoke_result.txt" -Encoding utf8
+          }
+          & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+          Start-Sleep -Seconds 1
+          Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process -Name 'msedgewebview2' -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$($env:RUNNER_TEMP)*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Upload smoke result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autoreaktor-smoke-result
+          path: D:/a/ar/out/smoke_result.txt
+          retention-days: 90
+          if-no-files-found: warn
+
+  # ============ 多路重建之二: CILantro 提升预算重试 ============
+  # 依据: cilantro blockers.json 补救方案 — steps 预算 4,000,000 → 10,000,000,
+  # 尝试解决基线轮 21,549 处未解加密字符串。
+  cilantro-budget:
+    name: CILantro 预算10M重试
+    runs-on: windows-latest
+    timeout-minutes: 110
+    env:
+      WORK_DIR: D:\a\cilb\work
+      OUTPUT_DIR: D:\a\cilb\out
+      TOOLS_DIR: D:\a\cilb\tools
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract app from source zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:WORK_DIR","$env:OUTPUT_DIR","$env:TOOLS_DIR" | Out-Null
+          $src = Join-Path $env:GITHUB_WORKSPACE "${{ github.event.inputs.source_zip }}"
+          if (-not (Test-Path $src)) { Write-Error "源压缩包不存在"; exit 1 }
+          Expand-Archive -Path $src -DestinationPath "$env:WORK_DIR" -Force
+          $target = Get-ChildItem $env:WORK_DIR -Recurse -File -Filter "${{ github.event.inputs.target_exe }}" | Select-Object -First 1
+          if (-not $target) { Write-Error "未找到目标"; exit 1 }
+          "TARGET_PATH=$($target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "TARGET_NAME=$($target.Name)" | Out-File -Append $env:GITHUB_ENV
+          "APP_DIR=$(Split-Path $target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "目标: $($target.FullName)"
+
+      - name: Run CILantro with 10M step budget (watchdog 80 min)
+        shell: pwsh
+        timeout-minutes: 90
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = "$env:OUTPUT_DIR\case"
+          # 声明文件必须位于 case 输出目录之外 (输出目录要求全新)
+          $decl = "$env:TOOLS_DIR\budgets.json"
+          @'
+          {
+            "budgets": { "steps": 10000000 }
+          }
+          '@ | Set-Content -Path $decl -Encoding utf8
+          Write-Host "预算声明: $decl"
+          $zip = "$env:TOOLS_DIR\cil.zip"
+          Invoke-WebRequest 'https://github.com/jgajek/cilantro/releases/latest/download/cilantro-win-x64.zip' -OutFile $zip -UseBasicParsing
+          Expand-Archive $zip "$env:TOOLS_DIR\cil" -Force
+          $exe = Get-ChildItem "$env:TOOLS_DIR\cil" -Recurse -Filter 'cilantro.exe' | Select-Object -First 1
+          Write-Host "cilantro: $($exe.FullName)"
+          $p = Start-Process $exe.FullName -ArgumentList @("`"$env:TARGET_PATH`"", '--declarations', "`"$decl`"", '-o', "`"$out`"") -RedirectStandardOutput "$env:OUTPUT_DIR\cilantro_stdout.txt" -RedirectStandardError "$env:OUTPUT_DIR\cilantro_stderr.txt" -PassThru -NoNewWindow
+          $deadline = (Get-Date).AddMinutes(80)
+          while (-not $p.HasExited -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 20
+            $st = Get-ChildItem "$out\*.status.json" -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_ -Raw | ConvertFrom-Json } -ErrorAction SilentlyContinue
+            if ($st) {
+              $phase = ($st | Select-Object -Last 1).Phase
+              $done = ($st | Select-Object -Last 1).PassesDone
+              $total = ($st | Select-Object -Last 1).PassesTotal
+              Write-Host "[watchdog] phase=$phase pass=$done/$total 存活=$(-not $p.HasExited)"
+            }
+          }
+          if (-not $p.HasExited) {
+            Write-Host 'CILantro 达到80分钟上限, 强制终止'
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 15
+          }
+          Write-Host "退出码: $($p.ExitCode)"
+          if (Test-Path "$env:OUTPUT_DIR\cilantro_stdout.txt") { Get-Content "$env:OUTPUT_DIR\cilantro_stdout.txt" -Tail 25 | Write-Host }
+          if (Test-Path "$env:OUTPUT_DIR\cilantro_stderr.txt") { Get-Content "$env:OUTPUT_DIR\cilantro_stderr.txt" -Tail 10 | Write-Host }
+          $cil = Get-ChildItem $out -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'cilantro' } | Sort-Object Length -Descending | Select-Object -First 1
+          if ($cil) {
+            Copy-Item $cil.FullName "$env:OUTPUT_DIR\AirExplorer.CilantroBudget.exe" -Force
+            Write-Host "CILantro 恢复程序集: $($cil.FullName) ($($cil.Length) bytes)"
+          } else {
+            Write-Host 'CILantro 未产出 exe (查看 case 目录)'
+          }
+
+      - name: Upload CILantro budget result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cilantro-budget-recovery
+          path: |
+            D:/a/cilb/out/AirExplorer.CilantroBudget.exe
+            D:/a/cilb/out/cilantro_stdout.txt
+            D:/a/cilb/out/cilantro_stderr.txt
+            D:/a/cilb/out/case
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Smoke test budget exe (15s)
+        if: always()
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $rec = "$env:OUTPUT_DIR\AirExplorer.CilantroBudget.exe"
+          if (-not (Test-Path $rec)) { Write-Host '无恢复产物, 跳过冒烟'; exit 0 }
+          $test = "$env:RUNNER_TEMP\smoketest"
+          if (Test-Path $test) { Remove-Item $test -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $test | Out-Null
+          Copy-Item -Path "$env:APP_DIR\*" -Destination $test -Recurse -Force
+          Copy-Item $rec "$test\$env:TARGET_NAME" -Force
+          Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          $p = Start-Process "$test\$env:TARGET_NAME" -WorkingDirectory $test -PassThru
+          if ($p.WaitForExit(15000)) {
+            Write-Host "SMOKE RESULT: FAIL (启动后退出, code=$($p.ExitCode))"
+            "FAIL code=$($p.ExitCode)" | Out-File "$env:OUTPUT_DIR\smoke_result.txt" -Encoding utf8
+          } else {
+            Write-Host 'SMOKE RESULT: PASS (进程持续存活15秒)'
+            'PASS' | Out-File "$env:OUTPUT_DIR\smoke_result.txt" -Encoding utf8
+          }
+          & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+          Start-Sleep -Seconds 1
+          Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Upload budget smoke result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cilantro-budget-smoke
+          path: D:/a/cilb/out/smoke_result.txt
+          retention-days: 90
+          if-no-files-found: warn

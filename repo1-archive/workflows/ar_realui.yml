@@ -1,0 +1,196 @@
+# .github/workflows/ar_realui.yml
+# v1: 真 UI 验证层 — 对 nb_slayer (Slayer去保护+16040个JIT恢复体, 从未冒烟测试) 做功能性验收
+# 与 v83c 的"标题探针"不同, 本层验证:
+#   1. UIA 控件树: 真主窗有数十控件 (按钮/树视图/标签页), 空白壳只有 0~3 个
+#   2. 窗口尺寸 (GetWindowRect): 原版主窗约 1200x800+
+#   3. CPU 累计: 原版 15s≈2.5s, 空壳 0.1s
+#   4. 12/45/90s 三次采样截图 (懒解密推进观测)
+#   5. md5 必须≠ a12b5c573e1b54e98cccc29351eaa066 (原始壳)
+# 目标矩阵: orig(对照) / nbsl(nb_slayer) / nborig(nb_original)
+name: Real UI Verify Tier
+
+on:
+  workflow_dispatch:
+
+env:
+  APP_DIR: D:\a\_temp\app
+  OUT_DIR: D:\a\_temp\realui
+
+jobs:
+  realui:
+    name: 真UI验证 (UIA控件树+窗口尺寸+截图)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract app and stage variants
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $src = "$env:GITHUB_WORKSPACE\1.zip"
+          if (-not (Test-Path $src)) { Write-Error "1.zip 不存在"; exit 1 }
+          Expand-Archive -Path $src -DestinationPath "$env:RUNNER_TEMP\app_extract" -Force
+          $target = Get-ChildItem "$env:RUNNER_TEMP\app_extract" -Recurse -File -Filter "AirExplorer.exe" | Select-Object -First 1
+          if (-not $target) { Write-Error "未找到原版"; exit 1 }
+          $appRoot = $target.DirectoryName
+          Copy-Item "$appRoot\*" $env:APP_DIR -Recurse -Force
+          Write-Host "APP_DIR: $((Get-ChildItem $env:APP_DIR -Recurse -File | Measure-Object).Count) 文件"
+          "原始壳 md5: $((Get-FileHash $env:APP_DIR\AirExplorer.exe -Algorithm MD5).Hash)" | Tee-Object -FilePath "$out\md5_table.txt"
+          foreach ($v in @('nb_slayer','nb_original')) {
+            $src2 = "$env:GITHUB_WORKSPACE\bin\AirExplorer_$v.exe"
+            if (Test-Path $src2) {
+              "$v md5: $((Get-FileHash $src2 -Algorithm MD5).Hash)" | Tee-Object -FilePath "$out\md5_table.txt" -Append
+            } else { Write-Host "缺 $v (跳过)"; "$v md5: MISSING" | Out-File "$out\md5_table.txt" -Append }
+          }
+          "PATCH_OUT=$out" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Probe matrix (orig / nbsl / nborig) with UIA control tree
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:PATCH_OUT
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          $sig = '[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r); public struct RECT { public int Left, Top, Right, Bottom; }'
+          Add-Type -Namespace W -Name U32 -MemberDefinition $sig
+          $rectType = [type]'W.U32+RECT'
+
+          function Probe-Target([string]$tag, [string]$exePath, [string]$workDir) {
+            $rep = "$out\report_$tag.txt"
+            "===== $tag ($exePath) =====" | Out-File $rep -Encoding utf8
+            "时间: $(Get-Date -Format 'HH:mm:ss')" | Out-File $rep -Append -Encoding utf8
+            try {
+              $p = Start-Process $exePath -WorkingDirectory $workDir -PassThru
+            } catch {
+              "启动失败: $_" | Out-File $rep -Append -Encoding utf8
+              return
+            }
+            # 三阶段采样: 12s / 45s / 90s (累计等待)
+            $phases = @( @{label='12'; sleep=12}, @{label='45'; sleep=33}, @{label='90'; sleep=45} )
+            foreach ($ph in $phases) {
+              $t = $ph.label
+              Start-Sleep -Seconds $ph.sleep
+              if ($p.HasExited) { "[$t s] 进程已退出 code=$($p.ExitCode)" | Out-File $rep -Append -Encoding utf8; break }
+              $p.Refresh()
+              $title = $p.MainWindowTitle; $h = $p.MainWindowHandle
+              $cpu = [Math]::Round($p.TotalProcessorTime.TotalSeconds, 1)
+              $rw = 0; $rh = 0; $rect = [System.Activator]::CreateInstance($rectType)
+              if ($h -ne 0) { [W.U32]::GetWindowRect($h, [ref]$rect) | Out-Null; $rw = $rect.Right - $rect.Left; $rh = $rect.Bottom - $rect.Top }
+              $line = "[$t s] 存活=True 标题='$title' 窗口=${rw}x${rh} CPU=${cpu}s 线程=$($p.Threads.Count) 句柄=$($p.HandleCount)"
+              $line | Out-File $rep -Append -Encoding utf8; Write-Host $line
+              if ($h -ne 0) {
+                # UIA 控件树 (BFS)
+                try {
+                  $root = [System.Windows.Automation.AutomationElement]::FromHandle($h)
+                  $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+                  $queue = New-Object System.Collections.Queue
+                  $queue.Enqueue($root)
+                  $count = 0; $names = @()
+                  while ($queue.Count -gt 0 -and $count -lt 600) {
+                    $el = $queue.Dequeue()
+                    $child = $walker.GetFirstChildElement($el)
+                    while ($null -ne $child) {
+                      $count++
+                      if ($names.Count -lt 30) {
+                        $ct = ''
+                        try { $ct = $child.Current.ControlType.ProgrammaticName -replace 'ControlType\.', '' } catch {}
+                        $nm = ''
+                        try { $nm = $child.Current.Name } catch {}
+                        if ($nm.Length -gt 40) { $nm = $nm.Substring(0, 40) }
+                        $names += ("  [$count] $ct '${nm}'" -replace "`r|`n", ' ')
+                      }
+                      $queue.Enqueue($child)
+                      $child = $walker.GetNextSiblingElement($child)
+                    }
+                  }
+                  "[$t s] UIA 控件数: $count" | Out-File $rep -Append -Encoding utf8
+                  if ($count -gt 0) { $names | Out-File $rep -Append -Encoding utf8 }
+                  Write-Host "[$t s] UIA 控件数: $count"
+                } catch { "[$t s] UIA 失败: $_" | Out-File $rep -Append -Encoding utf8 }
+                # 窗口区域截图
+                try {
+                  if ($rw -gt 0 -and $rh -gt 0) {
+                    $bmp = New-Object System.Drawing.Bitmap($rw, $rh)
+                    $g = [System.Drawing.Graphics]::FromImage($bmp)
+                    $g.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bmp.Size)
+                    $bmp.Save("$out\${tag}_$($t)s.png", [System.Drawing.Imaging.ImageFormat]::Png)
+                    $g.Dispose(); $bmp.Dispose()
+                    "[$t s] 窗口截图: ${tag}_$($t)s.png" | Out-File $rep -Append -Encoding utf8
+                  }
+                } catch { "[$t s] 截图失败: $_" | Out-File $rep -Append -Encoding utf8 }
+              }
+            }
+            # 全屏兜底截图
+            try {
+              $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+              $bmp2 = New-Object System.Drawing.Bitmap($b.Width, $b.Height)
+              $g2 = [System.Drawing.Graphics]::FromImage($bmp2)
+              $g2.CopyFromScreen($b.X, $b.Y, 0, 0, $bmp2.Size)
+              $bmp2.Save("$out\${tag}_full.png", [System.Drawing.Imaging.ImageFormat]::Png)
+              $g2.Dispose(); $bmp2.Dispose()
+            } catch {}
+            if (-not $p.HasExited) { & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null }
+            Start-Sleep -Seconds 2
+          }
+
+          # ---- 对照组: 原版 ----
+          Probe-Target 'orig' "$env:APP_DIR\AirExplorer.exe" $env:APP_DIR
+
+          # ---- nb_slayer: Slayer 去保护 + JIT 体回写 (从未测过) ----
+          $nbSrc = "$env:GITHUB_WORKSPACE\bin\AirExplorer_nb_slayer.exe"
+          if (Test-Path $nbSrc) {
+            $d1 = "$env:RUNNER_TEMP\run_nbsl"
+            New-Item -ItemType Directory -Force -Path $d1 | Out-Null
+            Copy-Item "$env:APP_DIR\*" $d1 -Recurse -Force
+            Copy-Item $nbSrc "$d1\AirExplorer.exe" -Force
+            Probe-Target 'nbsl' "$d1\AirExplorer.exe" $d1
+          }
+
+          # ---- nb_original: 原基座+JIT体回写 (对照) ----
+          $nbO = "$env:GITHUB_WORKSPACE\bin\AirExplorer_nb_original.exe"
+          if (Test-Path $nbO) {
+            $d2 = "$env:RUNNER_TEMP\run_nborig"
+            New-Item -ItemType Directory -Force -Path $d2 | Out-Null
+            Copy-Item "$env:APP_DIR\*" $d2 -Recurse -Force
+            Copy-Item $nbO "$d2\AirExplorer.exe" -Force
+            Probe-Target 'nborig' "$d2\AirExplorer.exe" $d2
+          }
+
+          # ---- 汇总判定 ----
+          $summary = "$out\realui_summary.txt"
+          "===== 真 UI 验证汇总 =====" | Out-File $summary -Encoding utf8
+          foreach ($tag in @('orig','nbsl','nborig')) {
+            $rp = "$out\report_$tag.txt"
+            if (-not (Test-Path $rp)) { "$tag : 未测试" | Out-File $summary -Append -Encoding utf8; continue }
+            $txt = Get-Content $rp -Raw
+            $ctrl = 0
+            if ($txt -match 'UIA 控件数: (\d+)') { $ctrl = [int]$Matches[1] }
+            $win = ''
+            if ($txt -match "窗口=(\d+)x(\d+)") { $win = "$($Matches[1])x$($Matches[2])" }
+            $alive = $txt -match '存活=True'
+            $crashed = $txt -match '进程已退出'
+            "$tag : 控件=$ctrl 窗口=$win 存活=$alive 崩溃=$crashed" | Out-File $summary -Append -Encoding utf8
+            Write-Host "$tag : 控件=$ctrl 窗口=$win 存活=$alive 崩溃=$crashed"
+          }
+          exit 0
+
+      - name: Upload real UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realui-evidence
+          path: |
+            D:/a/_temp/realui/report_orig.txt
+            D:/a/_temp/realui/report_nbsl.txt
+            D:/a/_temp/realui/report_nborig.txt
+            D:/a/_temp/realui/realui_summary.txt
+            D:/a/_temp/realui/md5_table.txt
+            D:/a/_temp/realui/*.png
+          retention-days: 30
+          if-no-files-found: warn

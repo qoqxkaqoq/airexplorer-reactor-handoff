@@ -1,0 +1,446 @@
+# .github/workflows/ar_fix.yml
+# v87: ccfix 反馈驱动修复循环 — 复刻 autoreaktor stage5 (runnable recovery), 单独针对 nb_slayer
+# 诊断实证 (run 39529932644): nb_slayer 崩于 <Module>.cctor → DefineEfficientProfiler → InvalidProgramException
+# 循环: 启动 → stderr 解析首个非 BCL 栈帧 → ccfix fix 剪除该 cctor 调用 → 重启, 最多 10 轮
+# 验收: 不再抛未处理异常 + 真 UI (UIA 控件数, 原版基线=86) + 窗口尺寸 + 截图
+name: ccfix Repair Loop
+
+on:
+  workflow_dispatch:
+
+env:
+  APP_DIR: D:\a\_temp\app
+  RUN_DIR: D:\a\_temp\run
+  OUT_DIR: D:\a\_temp\fixout
+  AR_REPO: D:\a\_temp\ar
+
+jobs:
+  fix:
+    name: 反馈循环修复 + 真UI验收
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Clone AutoReaktor and build ccfix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          git clone --depth 1 https://github.com/0301091405/autoreaktor.git $env:AR_REPO
+          if ($LASTEXITCODE -ne 0) { Write-Error '克隆 autoreaktor 失败'; exit 1 }
+          # net48 目标在纯 .NET 8 SDK 下缺引用程序集 → 注入 ReferenceAssemblies 包 (Directory.Build.props)
+          $xml = '<Project><ItemGroup><PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" /></ItemGroup></Project>'
+          [IO.File]::WriteAllText("$env:AR_REPO\Directory.Build.props", $xml)
+          # 上游源码 bug: Program.cs(97) lambda 参数 t 与外层 foreach (var m in t.Methods) 冲突 (CS0136) → 重命名
+          $ccfixSrc = "$env:AR_REPO\v3\ccfix\Program.cs"
+          $src = [IO.File]::ReadAllText($ccfixSrc)
+          $src = $src.Replace('Any(t => t.Trim() == m.DeclaringType.Name.String)', 'Any(x => x.Trim() == m.DeclaringType.Name.String)')
+          [IO.File]::WriteAllText($ccfixSrc, $src)
+          dotnet build "$env:AR_REPO\v3\ccfix\ccfix.csproj" -c Release --nologo 2>&1 | ForEach-Object { Write-Host $_ }
+          $ccfix = "$env:AR_REPO\v3\ccfix\bin\Release\ccfix.exe"
+          if (-not (Test-Path $ccfix)) { Write-Error "ccfix 编译失败: $ccfix"; exit 1 }
+          Write-Host "ccfix: $ccfix"
+          # bodytrans: 方法体移植器 (repo bin/tools, 自带 ReferenceAssemblies 引用)
+          dotnet build "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.csproj" -c Release --nologo 2>&1 | ForEach-Object { Write-Host $_ }
+          $btOut = "$env:GITHUB_WORKSPACE\bin\tools\bin\Release\bodytrans.exe"
+          if (-not (Test-Path $btOut)) { Write-Error "bodytrans 编译失败: $btOut"; exit 1 }
+          Copy-Item $btOut "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" -Force
+          Copy-Item "$env:GITHUB_WORKSPACE\bin\tools\bin\Release\dnlib.dll" "$env:GITHUB_WORKSPACE\bin\tools\dnlib.dll" -Force
+          Write-Host "bodytrans: $env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe"
+
+      - name: Download jitdump data (10-19 run 的 16040 方法体)
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39217550487
+          name: autoreaktor-rebuild-result
+          path: D:/a/_temp/jd
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract jitdump
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Expand-Archive -Path "D:\a\_temp\jd\autoreaktor_result.zip" -DestinationPath "D:\a\_temp\jd\inner" -Force
+          $jd = Get-ChildItem "D:\a\_temp\jd\inner" -Recurse -Directory -Filter "jitdump" | Select-Object -First 1
+          if (-not $jd) { Write-Error "jitdump 目录未找到"; exit 1 }
+          Add-Content -Path $env:GITHUB_ENV -Value "JD_DIR=$($jd.FullName)"
+          Write-Host "jitdump: $($jd.FullName), m_*.bin = $((Get-ChildItem "$($jd.FullName)\m_*.bin" -ErrorAction SilentlyContinue | Measure-Object).Count)"
+
+      - name: Extract and stage nb_slayer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path $env:APP_DIR, $env:RUN_DIR, $env:OUT_DIR | Out-Null
+          Expand-Archive -Path "$env:GITHUB_WORKSPACE\1.zip" -DestinationPath $env:APP_DIR -Force
+          # 顺序: 先铺应用文件, 再用 nb_slayer 覆盖主程序 (上版顺序颠倒导致测的是原版)
+          Get-ChildItem $env:APP_DIR -File | ForEach-Object { Copy-Item $_.FullName "$env:RUN_DIR\" -Force -ErrorAction SilentlyContinue }
+          Get-ChildItem $env:APP_DIR -Directory | ForEach-Object { Copy-Item $_.FullName "$env:RUN_DIR\" -Recurse -Force -ErrorAction SilentlyContinue }
+          Copy-Item "$env:GITHUB_WORKSPACE\bin\AirExplorer_nb_slayer.exe" "$env:RUN_DIR\AirExplorer.exe" -Force
+          # md5 断言: 必须是 nb_slayer (DDD375...), 不得回退成原始壳 (A12B5C...)
+          $stagedMd5 = (Get-FileHash "$env:RUN_DIR\AirExplorer.exe" -Algorithm MD5).Hash
+          Write-Host "staged md5: $stagedMd5"
+          if ($stagedMd5 -eq 'A12B5C573E1B54E98CCCC29351EAA066') { Write-Error '断言失败: run 目录里是原始壳而非 nb_slayer!'; exit 1 }
+          if ($stagedMd5 -ne 'DDD375054BCF2CDB903FC3DB6DFCF7A9') { Write-Warning "md5 与预期 nb_slayer 不符 (可能上游更新), 继续但记录" }
+          Write-Host "staged: $((Get-ChildItem $env:RUN_DIR -Recurse -File | Measure-Object).Count) 文件"
+          # fixmodrefs 预处理: 同步 <Module> 全局成员 + 改写坏 TypeRef (v93 实证 <Module>{MVID} TypeLoadException)
+          $fmrOut = "$env:OUT_DIR\AirExplorer_fmr.exe"
+          # 预处理0: 全模块 bodyfix — maxstack 修复 (2921 个 Slayer 恢复体 maxstack 偏小 = InvalidProgram 总根因)
+          $bfOut = "$env:OUT_DIR\AirExplorer_bfix.exe"
+          & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" rbindall "$env:GITHUB_WORKSPACE\bin\AirExplorer_nb_slayer.exe" $bfOut 2>&1 | ForEach-Object { Write-Host $_ }
+          if (Test-Path $bfOut) {
+            Copy-Item $bfOut "$env:RUN_DIR\AirExplorer.exe" -Force
+            Write-Host "bodyfix 完成 (md5=$((Get-FileHash "$env:RUN_DIR\AirExplorer.exe" -Algorithm MD5).Hash))"
+          } else { Write-Host "bodyfix 失败 (继续用原始 nb_slayer)" }
+          # 预处理0.5: clonetree — DefineEfficientProfiler (<Module>.cctor 解密初始化) 调用树批量补齐
+          # v108 实证: 循环每轮只补一个方法, 14 轮不够; clonetree BFS 一次移植整棵树 (本地实测 78 处)
+          $ctOut = "$env:OUT_DIR\AirExplorer_tree.exe"
+          & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" clonetree "$env:GITHUB_WORKSPACE\bin\AirExplorer_nb_original.exe" "$env:RUN_DIR\AirExplorer.exe" $ctOut "CloudClient.Templating.DispatcherInitializer" "DefineEfficientProfiler" 4 2>&1 | ForEach-Object { Write-Host $_ }
+          if (Test-Path $ctOut) {
+            Copy-Item $ctOut "$env:RUN_DIR\AirExplorer.exe" -Force
+            Write-Host "clonetree 完成 (md5=$((Get-FileHash "$env:RUN_DIR\AirExplorer.exe" -Algorithm MD5).Hash))"
+          } else { Write-Host "clonetree 失败 (继续)" }
+          # 预处理0.6: 关键路径插桩 (v114 实证进程存活无UI → 追踪执行流)
+          $trPts = @(
+            @("CloudClient.Models.StatelessModel", "SearchAdapter", "SearchAdapter入口"),
+            @("CloudClient.Templating.DispatcherInitializer", "DefineEfficientProfiler", "解密初始化"),
+            @("AirExplorer.Values.ArgumentGateway", "EvaluateVisibleAttribute", "参数求值"),
+            @("CloudClient.Templating.DispatcherInitializer", "InstantiateTransferableProgram", "实例化传输程序"),
+            @("AirExplorer.App", "Main", "App.Main")
+          )
+          $cur2 = "$env:RUN_DIR\AirExplorer.exe"
+          foreach ($tp in $trPts) {
+            $trOut = "$env:OUT_DIR\AirExplorer_tr.exe"
+            & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" trace "$cur2" $trOut $tp[0] $tp[1] $tp[2] "D:\a\_temp\run\trace.log" 2>&1 | ForEach-Object { Write-Host $_ }
+            if (Test-Path $trOut) { Copy-Item $trOut "$env:RUN_DIR\AirExplorer.exe" -Force; $cur2 = "$env:RUN_DIR\AirExplorer.exe" }
+          }
+          & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" fixmodrefs "$env:GITHUB_WORKSPACE\bin\AirExplorer_nb_original.exe" "$env:RUN_DIR\AirExplorer.exe" $fmrOut 2>&1 | ForEach-Object { Write-Host $_ }
+          if (Test-Path $fmrOut) {
+            Copy-Item $fmrOut "$env:RUN_DIR\AirExplorer.exe" -Force
+            Write-Host "fixmodrefs 预处理完成 (md5=$((Get-FileHash "$env:RUN_DIR\AirExplorer.exe" -Algorithm MD5).Hash))"
+          } else { Write-Host "fixmodrefs 跳过 (失败, 用原始 nb_slayer)" }
+          # 预处理2: 派发枢纽真身回填 — InstantiateStatelessUser<T> 在 slayer 是静默桩 (ldnull;ret, 不抛异常
+          # → 反馈循环看不见), 真身 888 指令在 CILantro 静态VM提升版 (本地实测引用同名对齐)
+          $dsOut = "$env:OUT_DIR\AirExplorer_ds.exe"
+          & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" "$env:GITHUB_WORKSPACE\bin\AirExplorer_cilantro.exe" "$env:RUN_DIR\AirExplorer.exe" $dsOut "CloudClient.Templating.TemplateArgument" "InstantiateStatelessUser" 2>&1 | ForEach-Object { Write-Host $_ }
+          if (Test-Path $dsOut) {
+            Copy-Item $dsOut "$env:RUN_DIR\AirExplorer.exe" -Force
+            Write-Host "派发枢纽真身回填完成 (md5=$((Get-FileHash "$env:RUN_DIR\AirExplorer.exe" -Algorithm MD5).Hash))"
+          } else { Write-Host "派发枢纽回填失败 (继续)" }
+          # 预处理3: 克隆 CILantro 的 GeneratedEnum_* 嵌套枚举家族 (派发真身的依赖类型, v100 轮次12 TypeLoad 实证)
+          $geOut = "$env:OUT_DIR\AirExplorer_ge.exe"
+          & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" clonetypes "$env:GITHUB_WORKSPACE\bin\AirExplorer_cilantro.exe" "$env:RUN_DIR\AirExplorer.exe" $geOut "Generated" 2>&1 | ForEach-Object { Write-Host $_ }
+          if (Test-Path $geOut) {
+            Copy-Item $geOut "$env:RUN_DIR\AirExplorer.exe" -Force
+            Write-Host "GeneratedEnum 家族克隆完成 (md5=$((Get-FileHash "$env:RUN_DIR\AirExplorer.exe" -Algorithm MD5).Hash))"
+          } else { Write-Host "GeneratedEnum 克隆失败 (继续)" }
+          exit 0
+
+      - name: Run repair loop (max 14 iterations, ccfix + bodytrans 双轨)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          $run = $env:RUN_DIR
+          $ccfix = "$env:AR_REPO\v3\ccfix\bin\Release\ccfix.exe"
+          $rep = "$out\repair_loop.txt"
+          "===== ccfix+bodytrans 反馈循环 (nb_slayer 起点) =====" | Out-File $rep -Encoding utf8
+          "起点: nb_slayer md5=$((Get-FileHash "$run\AirExplorer.exe" -Algorithm MD5).Hash)" | Out-File $rep -Append -Encoding utf8
+          $nbo = "$env:GITHUB_WORKSPACE\bin\AirExplorer_nb_original.exe"
+          $cil = "$env:GITHUB_WORKSPACE\bin\AirExplorer_cilantro.exe"
+
+          $cur = "$run\AirExplorer.exe"
+          $history = @()
+          $finalState = 'unknown'
+          for ($i = 1; $i -le 14; $i++) {
+            $errf = "$out\iter_$i`_stderr.txt"
+            "---- 轮次 $i : $(Split-Path $cur -Leaf) ----" | Out-File $rep -Append -Encoding utf8
+            $outf = "$out\iter_$i`_stdout.txt"
+            $p = Start-Process $cur -WorkingDirectory $run -PassThru -RedirectStandardError $errf -RedirectStandardOutput $outf
+            $exited = $p.WaitForExit(45000)
+            if (-not $exited) {
+              & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+              "45s 未退出 — 无未处理启动异常" | Out-File $rep -Append -Encoding utf8
+              # stdout 里的 TRACE 插桩日志 (进程存活场景唯一执行流证据)
+              if (Test-Path $outf) { "===== stdout =====" | Out-File $rep -Append -Encoding utf8; Get-Content $outf -ErrorAction SilentlyContinue | Select-Object -First 40 | ForEach-Object { $_ | Out-File $rep -Append -Encoding utf8 } }
+              # trace.log 插桩日志 (GUI 程序写文件, v118)
+              if (Test-Path "$run\trace.log") { "===== trace.log =====" | Out-File $rep -Append -Encoding utf8; Get-Content "$run\trace.log" -ErrorAction SilentlyContinue | Select-Object -First 40 | ForEach-Object { $_ | Out-File $rep -Append -Encoding utf8 } }
+              else { "(无 trace.log)" | Out-File $rep -Append -Encoding utf8 }
+              $finalState = 'no-startup-exception'
+              break
+            }
+            $code = $p.ExitCode
+            "已退出 code=$code" | Out-File $rep -Append -Encoding utf8
+            $err = ''
+            if (Test-Path $errf) { $err = Get-Content $errf -Raw -ErrorAction SilentlyContinue }
+            if ($err) { ($err.Substring(0, [Math]::Min(1200, $err.Length))) | Out-File $rep -Append -Encoding utf8 }
+            if ($err -notmatch 'Unhandled Exception') {
+              $finalState = "clean-exit-code-$code"
+              break
+            }
+            # 解析首个非 BCL 栈帧 (需完整类型名供体移植)
+            $meth = $null; $tfull = $null; $isMissing = $false; $isAccess = $false
+            # 特例: MissingMethodException → 提取缺失的方法本体 (而非调用者帧)
+            if ($err -match "Method not found: '([^']+)'") {
+              $isMissing = $true
+              $sigStr = $Matches[1]
+              if ($sigStr -match '^(\S+)\s+([A-Za-z0-9_.<>`+]+)\((.*)\)$') {
+                $mparts = $Matches[2].Split('.')
+                $meth = $mparts[-1]
+                if ($mparts.Count -ge 2) { $tfull = ($mparts[0..($mparts.Count - 2)] -join '.') }
+              }
+            }
+            # 特例: MethodAccessException → 提取被拒访问的目标方法 (可见性修复)
+            if (-not $meth -and $err -match "Attempt by method '[^']+' to access method '([^']+)'") {
+              $isAccess = $true
+              $sigStr = $Matches[1]
+              if ($sigStr -match '^([A-Za-z0-9_.<>`+]+)\.([A-Za-z0-9_<>`]+)\(') {
+                $tfull = $Matches[1]
+                $meth = $Matches[2]
+              }
+            }
+            if (-not $meth) {
+              foreach ($l in ($err -split "`n")) {
+                $l = $l.Trim()
+                if (-not $l.StartsWith('at ')) { continue }
+                $full = $l.Substring(3).Split('(')[0].Trim()
+                if ($full.StartsWith('System.') -or $full.StartsWith('Microsoft.')) { continue }
+                $parts = $full.Split('.')
+                $meth = $parts[-1]
+                $tfull = ($parts[0..($parts.Count - 2)] -join '.')
+                break
+              }
+            }
+            if (-not $meth) {
+              $finalState = 'no-frame-parse'
+              "无法解析栈帧, 停止" | Out-File $rep -Append -Encoding utf8
+              break
+            }
+            "栈帧方法: $tfull :: $meth" | Out-File $rep -Append -Encoding utf8
+            if ($history -contains "$tfull::$meth") {
+              $finalState = "fixed-point-$meth"
+              "定点: $meth 重复出现 — 两条路都修不动, 停止" | Out-File $rep -Append -Encoding utf8
+              break
+            }
+            $history += "$tfull::$meth"
+            $nxt = "$out\AirExplorer_fix$i.exe"
+            # 轨道 A0: MethodAccessException → makepublic 可见性放开 (v96 轮次9实证)
+            if ($isAccess) {
+              $nxt = "$out\AirExplorer_fix$i.exe"
+              "轨道A0(makepublic) 可见性修复: $tfull :: $meth" | Out-File $rep -Append -Encoding utf8
+              & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" makepublic $cur $nxt $tfull $meth 2>&1 | ForEach-Object { "$_" | Out-File $rep -Append -Encoding utf8 }
+              if ($LASTEXITCODE -eq 0 -and (Test-Path $nxt)) {
+                "轨道A0(makepublic) 成功" | Out-File $rep -Append -Encoding utf8
+                Copy-Item $nxt "$run\AirExplorer.exe" -Force
+                $cur = "$run\AirExplorer.exe"
+                continue
+              }
+              "轨道A0 失败 → 回落常规轨道" | Out-File $rep -Append -Encoding utf8
+            }
+            # 轨道顺序 (v107b 实证): TypeInit 包裹的 InvalidProgram 内层帧 = 需要跑的初始化方法
+            # → 先移植真身 (nb_original 体更大更完整), 移植失败才剪调用。剪掉初始化会让解密链数据全错。
+            $bareInvalid = $err -match 'Unhandled Exception: System\.InvalidProgramException'
+            $ccOk = $false
+            if ($false) {
+              # (原轨道A 已移到 B 之后 — 见下)
+              & $ccfix fix $cur $nxt $meth all 2>&1 | ForEach-Object { "$_" | Out-File $rep -Append -Encoding utf8 }
+              if ($LASTEXITCODE -eq 0 -and (Test-Path $nxt)) { $ccOk = $true; "轨道A(ccfix) 成功" | Out-File $rep -Append -Encoding utf8 }
+            } elseif ($bareInvalid) { "裸InvalidProgram → 跳过轨道A (体坏剪调用是错药), 直走轨道B 移植" | Out-File $rep -Append -Encoding utf8 }
+            else { "MissingMethod → 跳过轨道A (剪调用是错药), 直走轨道B 克隆" | Out-File $rep -Append -Encoding utf8 }
+            if (-not $ccOk) {
+              # 轨道 B: 从 nb_original 移植方法体 (适配方法本体无效: InvalidProgram 无 cctor 包裹)
+              "轨道A失败 → 轨道B(bodytrans 移植体)" | Out-File $rep -Append -Encoding utf8
+              & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" $nbo $cur $nxt $tfull $meth 2>&1 | ForEach-Object { "$_" | Out-File $rep -Append -Encoding utf8 }
+              if ($LASTEXITCODE -eq 0 -and (Test-Path $nxt)) { "轨道B(bodytrans) 成功" | Out-File $rep -Append -Encoding utf8 }
+              if (-not (Test-Path $nxt)) {
+                # 轨道 B2: CILantro 静态VM提升版作源 (派发枢纽 InstantiateStatelessUser<T> 的 888 指令真身在此; nb_original 也是桩)
+                "轨道B失败 → 轨道B2(cilantro 源)" | Out-File $rep -Append -Encoding utf8
+                & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" $cil $cur $nxt $tfull $meth 2>&1 | ForEach-Object { "$_" | Out-File $rep -Append -Encoding utf8 }
+                if ($LASTEXITCODE -eq 0 -and (Test-Path $nxt)) { "轨道B2(cilantro) 成功" | Out-File $rep -Append -Encoding utf8 }
+              }
+              if (-not (Test-Path $nxt)) {
+                # 轨道 C: JIT 转储恢复 (运行时生成体: nb_original 中 RVA=0 无体, 但 dump 里有运行时 IL)
+                if ($env:JD_DIR) {
+                  "轨道B失败 → 轨道C(jitdump 运行时体)" | Out-File $rep -Append -Encoding utf8
+                  & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" jitdump $nbo $cur $nxt $env:JD_DIR $tfull $meth 2>&1 | ForEach-Object { "$_" | Out-File $rep -Append -Encoding utf8 }
+                  if ($LASTEXITCODE -eq 0 -and (Test-Path $nxt)) { "轨道C(jitdump) 成功" | Out-File $rep -Append -Encoding utf8 }
+                }
+              }
+              if (-not (Test-Path $nxt)) {
+                # 轨道 D: 合成桩兜底 (条件性运行时生成体, 如 VerifyActiveCalc 激活校验: Boolean→true)
+                "轨道C失败 → 轨道D(合成桩)" | Out-File $rep -Append -Encoding utf8
+                & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" stub $nbo $cur $nxt $tfull $meth 2>&1 | ForEach-Object { "$_" | Out-File $rep -Append -Encoding utf8 }
+                if ($LASTEXITCODE -eq 0 -and (Test-Path $nxt)) { "轨道D(合成桩) 成功" | Out-File $rep -Append -Encoding utf8 }
+              }
+            }
+            if (-not (Test-Path $nxt)) {
+              $finalState = "both-fail-$meth"
+              "ccfix+bodytrans 双失败 ($meth), 停止" | Out-File $rep -Append -Encoding utf8
+              break
+            }
+            Copy-Item $nxt "$run\AirExplorer.exe" -Force
+            $cur = "$run\AirExplorer.exe"
+          }
+          # TRACE 插桩重跑 (v118b 实证: 轨道B重移植会覆盖预处理插桩 → 循环后重新插桩再跑一次抓执行流)
+          if ($finalState -eq 'no-startup-exception') {
+            Remove-Item "$run\trace.log" -ErrorAction SilentlyContinue
+            $tcur = "$run\AirExplorer.exe"
+            $tPts = @(
+              @("<Module>", ".cctor", "A:Cctor"),
+              @("CloudClient.Templating.DispatcherInitializer", "DefineEfficientProfiler", "B:DefEffProf入口"),
+              @("CloudClient.Templating.DispatcherInitializer", "StartLogger", "C:StartLogger"),
+              @("CloudClient.Templating.DispatcherInitializer", "StoreDic", "D:StoreDic"),
+              @("CloudClient.Templating.DispatcherInitializer", "ReplaceUser", "E:ReplaceUser"),
+              @("CloudClient.Templating.DispatcherInitializer", "VerifyStatelessRequestWorker", "F:VerifyStateless"),
+              @("CloudClient.Templating.DispatcherInitializer", "VerifySegmentedProcInterpreter", "G:VerifySegmented"),
+              @("CloudClient.Templating.DispatcherInitializer", "UpdatePredictor", "H:UpdatePredictor"),
+              @("CloudClient.Templating.DispatcherInitializer", "VerifyScalableWatcherPublisher", "I:VerifyScalable"),
+              @("CloudClient.Templating.DispatcherInitializer", "AssetFactory", "J:AssetFactory"),
+              @("CloudClient.Templating.DispatcherInitializer", "ValidateConfigurableProxyThread", "K:ValidateProxy"),
+              @("CloudClient.Templating.DispatcherInitializer", "StopClient", "L:StopClient桩"),
+              @("CloudClient.Templating.DispatcherInitializer", "GenerateConfigurableSpec", "M:GenSpec桩"),
+              @("CloudClient.Models.StatelessModel", "SearchAdapter", "N:Main入口")
+            )
+            $lastT = ''
+            $ti = 0
+            foreach ($tp in $tPts) {
+              $tOut = "$env:OUT_DIR\AirExplorer_t$ti.exe"; $ti++
+              & "$env:GITHUB_WORKSPACE\bin\tools\bodytrans.exe" trace "$tcur" $tOut $tp[0] $tp[1] $tp[2] "D:\a\_temp\run\trace.log" 2>&1 | ForEach-Object { Write-Host $_ }
+              if (Test-Path $tOut) { $tcur = $tOut; $lastT = $tOut }
+            }
+            "===== TRACE 重跑 =====" | Out-File $rep -Append -Encoding utf8
+            "插桩版: $lastT md5=$((Get-FileHash $lastT -Algorithm MD5 -ErrorAction SilentlyContinue).Hash) 原版md5=$((Get-FileHash "$run\AirExplorer.exe" -Algorithm MD5 -ErrorAction SilentlyContinue).Hash)" | Out-File $rep -Append -Encoding utf8
+            if ($lastT -and (Test-Path $lastT)) {
+              $trErr = "$env:OUT_DIR\trace_run_stderr.txt"
+              $trOut = "$env:OUT_DIR\trace_run_stdout.txt"
+              $tp2 = Start-Process $lastT -WorkingDirectory $run -PassThru -RedirectStandardError $trErr -RedirectStandardOutput $trOut
+              $tExited = $tp2.WaitForExit(30000)
+              if (-not $tExited) { & taskkill.exe /PID $tp2.Id /T /F 2>&1 | Out-Null } else { "插桩版退出码: $($tp2.ExitCode)" | Out-File $rep -Append -Encoding utf8 }
+              $tp2.Refresh()
+              "插桩版 30s 存活=$(-not $tp2.HasExited)" | Out-File $rep -Append -Encoding utf8
+              if (Test-Path "D:\a\_temp\run\trace.log") { Get-Content "D:\a\_temp\run\trace.log" -ErrorAction SilentlyContinue | Select-Object -First 30 | ForEach-Object { $_ | Out-File $rep -Append -Encoding utf8 } }
+              else { "(重跑后仍无 trace.log)" | Out-File $rep -Append -Encoding utf8 }
+              if (Test-Path $trErr) { Get-Content $trErr -ErrorAction SilentlyContinue | Select-Object -First 8 | ForEach-Object { $_ | Out-File $rep -Append -Encoding utf8 } }
+              Copy-Item "D:\a\_temp\run\trace.log" "$env:OUT_DIR\trace.log" -ErrorAction SilentlyContinue
+              Copy-Item $trErr "$env:OUT_DIR\trace_run_stderr.txt" -ErrorAction SilentlyContinue
+            }
+          }
+          "最终状态: $finalState" | Out-File $rep -Append -Encoding utf8
+          "修复链: $($history -join ' -> ')" | Out-File $rep -Append -Encoding utf8
+          Write-Host "===== 修复循环摘要 ====="
+          Get-Content $rep | ForEach-Object { Write-Host $_ }
+          "FIX_FINAL_STATE=$finalState" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          exit 0
+
+      - name: Real UI probe of final exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          $run = $env:RUN_DIR
+          $rep = "$out\final_probe.txt"
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          Add-Type -AssemblyName System.Drawing
+          Add-Type -AssemblyName System.Windows.Forms
+          $sig = '[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r); public struct RECT { public int Left, Top, Right, Bottom; } [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f); [DllImport("user32.dll")] public static extern bool EnumWindows(System.EnumWindowsProc cb, IntPtr lp); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid); [DllImport("user32.dll")] public static extern int GetWindowTextW(IntPtr h, System.Text.StringBuilder sb, int max); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); public delegate bool EnumWindowsProc(IntPtr h, IntPtr lp);'
+          Add-Type -MemberDefinition $sig -Name U32 -Namespace W
+
+          "===== 终版真 UI 探针 =====" | Out-File $rep -Encoding utf8
+          "状态: $env:FIX_FINAL_STATE" | Out-File $rep -Append -Encoding utf8
+          try {
+            $p = Start-Process "$run\AirExplorer.exe" -WorkingDirectory $run -PassThru
+            Start-Sleep -Seconds 15
+            $p.Refresh()
+            $alive = -not $p.HasExited
+            "[15 s] 存活=$alive 标题='$($p.MainWindowTitle)' 句柄=$($p.MainWindowHandle)" | Out-File $rep -Append -Encoding utf8
+            # 全窗口枚举 (C# 封装, v115 首版 delegate 引用失败)
+              if (-not ('W.WinEnum' -as [type])) {
+                Add-Type -TypeDefinition 'namespace W { public class WinEnum { public delegate bool EnumProc(System.IntPtr h, System.IntPtr lp); [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, System.IntPtr lp); [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid); [System.Runtime.InteropServices.DllImport("user32.dll")] static extern int GetWindowText(System.IntPtr h, System.Text.StringBuilder sb, int max); [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool IsWindowVisible(System.IntPtr h); public static System.Collections.Generic.List<string> List(uint targetPid) { var r = new System.Collections.Generic.List<string>(); EnumProc cb = delegate(System.IntPtr h, System.IntPtr lp) { uint wpid; GetWindowThreadProcessId(h, out wpid); if (wpid == targetPid) { var sb = new System.Text.StringBuilder(256); GetWindowText(h, sb, 256); r.Add("窗口 0x" + h.ToString("X") + " 可见=" + IsWindowVisible(h) + " 标题=" + sb.ToString()); } return true; }; EnumWindows(cb, System.IntPtr.Zero); return r; } } }' | Out-Null
+              }
+              $winList = [W.WinEnum]::List([uint32]$p.Id)
+              "全部窗口 $($winList.Count) 个:" | Out-File $rep -Append -Encoding utf8
+              $winList | ForEach-Object { $_ | Out-File $rep -Append -Encoding utf8 }
+              if (Test-Path "$run\trace.log") { "===== trace.log =====" | Out-File $rep -Append -Encoding utf8; Get-Content "$run\trace.log" -ErrorAction SilentlyContinue | Select-Object -First 30 | ForEach-Object { $_ | Out-File $rep -Append -Encoding utf8 } }
+            if (-not $p.HasExited -and $p.MainWindowHandle -ne 0) {
+              $r = New-Object 'W.U32+RECT'
+              [W.U32]::GetWindowRect($p.MainWindowHandle, [ref]$r) | Out-Null
+              $w = $r.Right - $r.Left; $h = $r.Bottom - $r.Top
+              "窗口尺寸: ${w}x${h}" | Out-File $rep -Append -Encoding utf8
+              # 前置窗口 (原版首启弹注册账户窗)
+              try { [W.U32]::SetWindowPos($p.MainWindowHandle, [IntPtr]::Zero, 0, 0, 0, 0, 0x0002 -bor 0x0001 -bor 0x0010 -bor 0x0040) | Out-Null } catch {}
+              # UIA 控件树
+              try {
+                $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+                $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+                $queue = New-Object System.Collections.Queue
+                $queue.Enqueue($root)
+                $count = 0; $names = New-Object System.Collections.Generic.List[string]
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                while ($queue.Count -gt 0 -and $sw.Elapsed.TotalSeconds -lt 15) {
+                  $el = $queue.Dequeue(); $count++
+                  if ($names.Count -lt 60) {
+                    $cn = ''; try { $cn = $el.Current.Name } catch {}
+                    $ct = ''; try { $ct = $el.Current.ControlType.ProgrammaticName -replace 'ControlType\.','' } catch {}
+                    if ($cn) { $names.Add("$($ct):'$([string]$cn)'") }
+                  }
+                  $c = $walker.GetFirstChild($el)
+                  while ($c -and $sw.Elapsed.TotalSeconds -lt 15) {
+                    $queue.Enqueue($c)
+                    $c = $walker.GetNextSibling($c)
+                  }
+                }
+                "UIA 控件数: $count" | Out-File $rep -Append -Encoding utf8
+                "控件样例: $($names -join ' | ')" | Out-File $rep -Append -Encoding utf8
+              } catch { "UIA 失败: $_" | Out-File $rep -Append -Encoding utf8 }
+              # 截图 (窗口置前)
+              try {
+                $r2 = New-Object 'W.U32+RECT'
+                [W.U32]::GetWindowRect($p.MainWindowHandle, [ref]$r2) | Out-Null
+                $ww = [Math]::Max(50, $r2.Right - $r2.Left); $hh = [Math]::Max(50, $r2.Bottom - $r2.Top)
+                $bmp = New-Object System.Drawing.Bitmap($ww, $hh)
+                $g = [System.Drawing.Graphics]::FromImage($bmp)
+                $g.CopyFromScreen($r2.Left, $r2.Top, 0, 0, (New-Object System.Drawing.Size($ww, $hh)))
+                $bmp.Save("$out\final_window.png", [System.Drawing.Imaging.ImageFormat]::Png)
+                $g.Dispose(); $bmp.Dispose()
+                "截图: final_window.png (${ww}x${hh})" | Out-File $rep -Append -Encoding utf8
+              } catch { "截图失败: $_" | Out-File $rep -Append -Encoding utf8 }
+              # 二次采样 (45s, 观测懒加载)
+              Start-Sleep -Seconds 30
+              $p.Refresh()
+              "[45 s] 存活=$(-not $p.HasExited) 标题='$($p.MainWindowTitle)' CPU=$([Math]::Round($p.TotalProcessorTime.TotalSeconds,1))s 线程=$($p.Threads.Count)" | Out-File $rep -Append -Encoding utf8
+            } else {
+              "无主窗口 — 探针结束" | Out-File $rep -Append -Encoding utf8
+            }
+            if (-not $p.HasExited) { & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null }
+          } catch { "启动异常: $_" | Out-File $rep -Append -Encoding utf8 }
+
+          # 汇总判据 (原版基线: UIA=86, 945x788)
+          $txt = Get-Content $rep -Raw -ErrorAction SilentlyContinue
+          $ctrl = 0
+          if ($txt -match 'UIA 控件数: (\d+)') { $ctrl = [int]$Matches[1] }
+          $win = ''
+          if ($txt -match '窗口尺寸: (\d+x\d+)') { $win = $Matches[1] }
+          $PASS = ($ctrl -ge 40) -and ($win -ne '')
+          "真UI验收: 控件=$ctrl 窗口=$win → $(if ($PASS) { 'PASS ✓ 真 UI 已恢复' } else { '未达标' })" | Out-File $rep -Append -Encoding utf8
+          Get-Content $rep | ForEach-Object { Write-Host $_ }
+          exit 0
+
+      - name: Upload repair result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccfix-repair-result
+          path: |
+            D:/a/_temp/fixout/repair_loop.txt
+            D:/a/_temp/fixout/final_probe.txt
+            D:/a/_temp/fixout/AirExplorer_fix*.exe
+            D:/a/_temp/fixout/iter_*_stderr.txt
+            D:/a/_temp/fixout/final_window.png
+          retention-days: 30
+          if-no-files-found: warn

@@ -1,0 +1,100 @@
+# .github/workflows/ar_dumpres.yml
+# v1: 资源明文采集层 — 跑原版 (资源解密器正常工作) → 全内存 MiniDump → 扫描 BEEFCACE
+# (.resources 魔数) → .NET ResourceReader 验证提取 → 上传明文资源
+# 背景: v98 实证修复链已啃到资源解密层 (InstantiateTransferableProgram 的
+#       BitConverter.ToInt32 越界 = 喂了密文), 5 个嵌入资源在 slayer 产物中仍是密文
+name: Dump Decrypted Resources Tier
+
+on:
+  workflow_dispatch:
+
+env:
+  APP_DIR: D:\a\_temp\app
+  OUT_DIR: D:\a\_temp\dumpres
+
+jobs:
+  dumpres:
+    name: 原版运行→内存dump→资源提取
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Extract app and build tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          New-Item -ItemType Directory -Force -Path $out, "$out\cand", "$out\ok" | Out-Null
+          $src = "$env:GITHUB_WORKSPACE\1.zip"
+          if (-not (Test-Path $src)) { Write-Error "缺少 1.zip"; exit 1 }
+          Expand-Archive -Path $src -DestinationPath "$env:RUNNER_TEMP\app_extract" -Force
+          $orig = Get-ChildItem "$env:RUNNER_TEMP\app_extract" -Recurse -File -Filter "AirExplorer.exe" | Select-Object -First 1
+          if (-not $orig) { Write-Error "未找到 AirExplorer.exe"; exit 1 }
+          New-Item -ItemType Directory -Force -Path $env:APP_DIR | Out-Null
+          Copy-Item $orig.FullName "$env:APP_DIR\AirExplorer.exe" -Force
+          # 依赖文件就位
+          Get-ChildItem $orig.Directory -File | Where-Object { $_.Name -ne 'AirExplorer.exe' } | Copy-Item -Destination $env:APP_DIR -Force
+          # 编译 stackdump (MiniDump) 与 verifyres (ResourceReader)
+          Push-Location "$env:GITHUB_WORKSPACE\bin\tools"
+          dotnet build stackdump.csproj -c Release --nologo 2>&1 | Select-Object -Last 2
+          dotnet build verifyres.csproj -c Release --nologo 2>&1 | Select-Object -Last 2
+          Pop-Location
+          Write-Host "tools 就绪"
+
+      - name: Run original and take full-memory dump
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          $p = Start-Process "$env:APP_DIR\AirExplorer.exe" -WorkingDirectory $env:APP_DIR -PassThru
+          Start-Sleep -Seconds 75
+          if ($p.HasExited) { Write-Host "原版提前退出 code=$($p.ExitCode)"; }
+          else {
+            $p.Refresh()
+            Write-Host "原版存活 PID=$($p.Id) 主窗=$($p.MainWindowTitle)"
+            $sd = "$env:GITHUB_WORKSPACE\bin\tools\bin\Release\net48\stackdump.exe"
+            if (-not (Test-Path $sd)) { $sd = "$env:GITHUB_WORKSPACE\bin\tools\bin\Release\stackdump.exe" }
+            & $sd --minidump $p.Id "$out\orig_full.dmp" 2>&1 | Write-Host
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+          if (Test-Path "$out\orig_full.dmp") {
+            Write-Host "dump 大小: $((Get-Item "$out\orig_full.dmp").Length)"
+          } else {
+            Write-Host "dump 未生成 (进程可能已退出)"
+          }
+
+      - name: Extract .resources candidates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          if (-not (Test-Path "$out\orig_full.dmp")) { Write-Host "无 dump, 跳过"; exit 0 }
+          python "$env:GITHUB_WORKSPACE\bin\tools\extract_res.py" "$out\orig_full.dmp" "$out\cand" 2>&1 | Write-Host
+
+      - name: Verify with ResourceReader
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:OUT_DIR
+          if ((Get-ChildItem "$out\cand" -File -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0) {
+            Write-Host "无候选, 跳过验证"; exit 0
+          }
+          & "$env:GITHUB_WORKSPACE\bin\tools\bin\Release\verifyres.exe" "$out\cand" "$out\ok" 2>&1 | Write-Host
+          $oks = Get-ChildItem "$out\ok" -File -ErrorAction SilentlyContinue
+          Write-Host "验证通过: $($oks.Count) 个"
+          foreach ($f in $oks) { Write-Host "  $($f.Name) ($($f.Length) B)" }
+
+      - name: Upload extracted resources
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: decrypted-resources
+          path: D:/a/_temp/dumpres/
+          retention-days: 30

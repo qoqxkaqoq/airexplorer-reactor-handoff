@@ -1,0 +1,120 @@
+# .github/workflows/ar_decomp.yml
+# 运行级攻坚: 恢复版 PE 反编译 (定向优先 + 全量尽力)
+# v5: 定向类型先出先传 (秒级), 全量项目模式兜底 (可能超时, 尽力而为)
+name: Decompile Recovered PE
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'bin/ 下的目标文件名'
+        required: true
+        default: 'AirExplorer_nb_original.exe'
+
+jobs:
+  decomp:
+    name: 反编译 - ${{ github.event.inputs.target }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      TARGET_NAME: ${{ github.event.inputs.target }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Targeted decompile (crash-stack types first)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $tgt = Join-Path $env:GITHUB_WORKSPACE "bin\$env:TARGET_NAME"
+          if (-not (Test-Path $tgt)) { Write-Error "目标不存在: $tgt"; exit 1 }
+          Write-Host "目标: $tgt ($((Get-Item $tgt).Length)B)"
+          dotnet tool install --global ilspycmd 2>&1 | Select-Object -Last 2
+          $ilspy = "$env:USERPROFILE\.dotnet\tools\ilspycmd.exe"
+          if (-not (Test-Path $ilspy)) { $ilspy = (Get-Command ilspycmd -ErrorAction SilentlyContinue).Source }
+          if (-not $ilspy) { Write-Error 'ilspycmd 安装失败'; exit 1 }
+          $src = "$env:GITHUB_WORKSPACE\src"
+          New-Item -ItemType Directory -Force -Path $src | Out-Null
+          # 类型清单
+          & $ilspy $tgt -l c 2>&1 | Out-File "$env:GITHUB_WORKSPACE\types.txt" -Encoding utf8
+          Write-Host "类型清单: $((Get-Content "$env:GITHUB_WORKSPACE\types.txt" | Measure-Object -Line).Lines) 行"
+          # 定向集合: 崩溃栈关键类型 + 启动/许可证相关
+          $allTypes = Get-Content "$env:GITHUB_WORKSPACE\types.txt" -ErrorAction SilentlyContinue | ForEach-Object { ($_ -replace '^Class ','').Trim() }
+          $targets = @(
+            'AirExplorer.Values.ArgumentGateway',
+            'CloudClient.Models.StatelessModel',
+            'AirExplorer.Execution.CommandSystem',
+            'XamlGeneratedNamespace.GeneratedInternalTypeHelper',
+            '<Module>'
+          )
+          $extra = $allTypes | Where-Object { $_ -match '(Program|Startup|License|Nag|MainForm|App)$' } | Select-Object -First 12
+          $targets = ($targets + $extra) | Select-Object -Unique
+          foreach ($t in $targets) {
+            $safe = ($t -replace '[^A-Za-z0-9._]', '_')
+            & $ilspy $tgt -t $t 2>&1 | Out-File "$src\$safe.cs" -Encoding utf8
+            $sz = (Get-Item "$src\$safe.cs" -ErrorAction SilentlyContinue).Length
+            Write-Host "类型 $t -> $safe.cs ($sz B, exit=$LASTEXITCODE)"
+          }
+          $n = (Get-ChildItem $src -Recurse -Filter *.cs | Measure-Object).Count
+          Write-Host "定向产出: $n 个 .cs"
+          if ($n -eq 0) { Write-Error '定向反编译无产出'; exit 1 }
+          exit 0
+
+      - name: Upload targeted source
+        uses: actions/upload-artifact@v4
+        with:
+          name: decomp-key-types
+          path: |
+            src/
+            types.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Full project decompile (best effort)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $tgt = Join-Path $env:GITHUB_WORKSPACE "bin\$env:TARGET_NAME"
+          $ilspy = "$env:USERPROFILE\.dotnet\tools\ilspycmd.exe"
+          $full = "$env:GITHUB_WORKSPACE\fullsrc"
+          New-Item -ItemType Directory -Force -Path $full | Out-Null
+          Write-Host '===== 全量项目反编译 (尽力而为) ====='
+          & $ilspy $tgt -p -o $full 2>&1 | Select-Object -Last 4
+          Write-Host "exit=$LASTEXITCODE"
+          $n = (Get-ChildItem $full -Recurse -Filter *.cs | Measure-Object).Count
+          Write-Host "全量产出: $n 个 .cs"
+          if ($n -gt 0) { Compress-Archive -Path "$full\*" -DestinationPath "$env:GITHUB_WORKSPACE\fullsrc.zip" -Force }
+          Write-Host "完成"
+
+      - name: Startup hang probe with screenshot
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $tgt = Join-Path $env:GITHUB_WORKSPACE "bin\$env:TARGET_NAME"
+          try {
+            $p = Start-Process $tgt -WorkingDirectory $env:GITHUB_WORKSPACE -PassThru
+            Start-Sleep -Seconds 12
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+            $bmp.Save("$env:GITHUB_WORKSPACE\hang_probe.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+            $alive = -not $p.HasExited
+            Write-Host "12秒后进程存活: $alive (窗口标题: '$($p.MainWindowTitle)')"
+            if ($alive) { & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null }
+          } catch { Write-Host "挂起探测异常: $_" }
+
+      - name: Upload full source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decomp-full
+          path: |
+            fullsrc.zip
+            hang_probe.png
+          retention-days: 30
+          if-no-files-found: warn
