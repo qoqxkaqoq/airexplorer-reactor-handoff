@@ -200,3 +200,47 @@ ArgumentOutOfRangeException: Token 0x0a000996 is not valid in the scope of modul
    但要求方法体长度不变或 RVA 重排后仍能对上（PE 允许改 RVA，token 表不动，这条其实可行）。
 
 第 3 条是目前看来最有希望的：**只改 MethodDef.RVA 与代码字节，绝不碰元数据表**。
+
+---
+
+## 9. 补记二：又修掉三个真 bug，并撞到一个绕不过的约束
+
+### 修掉的三个 bug（都会让"体是对的却跑不起来"）
+
+| # | Bug | 症状 | 修法 |
+|---|---|---|---|
+| 1 | `ldstr` 从 `#Strings` 读 | 所有字符串是元数据名字碎片 | 改 `mod.USStream.Read(offset)` |
+| 2 | `InitLocals=true` 但 `LocalVarSigTok=0` | `BadImageFormatException: Bad IL range` | `body.InitLocals = oldVars.Count > 0` |
+| 3 | `bodytrans` 缺 `PreserveAll` | `MemberRef` 从 5818 掉到 2242 → `TrackCompiler` 报 `Token 0x0a000996 is not valid` | 写盘加 `PreserveAll`（表行号保持 5818） |
+
+第 3 条尤其隐蔽：`TrackCompiler` 用**写死在字段 RVA 数据里的 metadata token** 做 `ResolveMethod`，
+而 dnlib 默认会把"当前没被引用"的 MemberRef 行整批丢掉，行号一错，token 立刻失效。
+
+### 撞到的约束
+
+修完上面三条后，链路推进到：
+
+```
+ArgumentGateway..cctor
+  -> <Module>{a8c2e9b2}..cctor
+    -> TemplateArgument.InstantiateStatelessUser[T]     (从 cilantro 移植)
+      -> TemplateThread.PlanRunner
+        -> TemplateThread.GenerateAdaptableExtractor
+           AccessViolationException
+```
+
+`InstantiateStatelessUser` 是字符串表的初始化器，而它在**原模块里是桩**（`ldnull;ret`），
+JIT 收割也没拿到（泛型方法被跳过，目录里只有 `.eh` 没有 `.bin`）。
+唯一的真体来源是 cilantro —— 但那是**另一个模块**，方法体里带着该模块自己的常量/偏移，
+搬到 nb_original/官方模块里就 AV。**跨模块移植这个方法是不可行的**。
+
+### 因此
+
+- `nb_strip3/4`（nb_slayer 基座 + 正确表行号 + 移植初始化器）已经能跑到字符串表解码这一步，但过不去；
+- 真正的解法只剩"**在同一个模块内拿到这个方法体**"，也就是必须让 JIT 收割覆盖泛型实例化
+  （现在的 hook 只对 MethodDef 落盘，泛型实例化走的是 MethodDesc 路径）。
+
+### 可运行的产物
+
+仓库里唯一**真的能起来并显示主窗口**的是 `exes/AirExplorer_v84b_window.exe`（v84b，300×300 空窗体）。
+它是"能运行"意义上的下限交付：进程存活、窗口出现，但网盘内容为空。
