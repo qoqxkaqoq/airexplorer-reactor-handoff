@@ -301,6 +301,48 @@ try {
   } else { W "H|joinexecutor|<type missing>" }
 } catch { W "H|joinexecutor|fatal $($_.Exception.GetType().Name)" }
 
+# 7) TemplateThread::StoreLogger -> _TemplateConfig -> m_ProjectDecorators
+#    m_ProjectDecorators 是 List<DistributorProfile>, 由 InstantiateStatelessUser 排序/遍历,
+#    每个 profile 决定一个 handler. 我们卡在 "AddEfficientHandler 收到的 setup 是
+#    VirtualInitializer 而它 castclass ProgramFinder" -> 说明这个列表的内容/顺序不对。
+try {
+  $tt = $asm.GetType("CloudClient.Templating.TemplateArgument+TemplateThread")
+  if ($tt) {
+    $fSL = $tt.GetField("StoreLogger", [Reflection.BindingFlags]"Static,Public,NonPublic")
+    $sl = $null
+    if ($fSL) { try { $sl = $fSL.GetValue($null) } catch { W ("H|storelogger|throw " + $_.Exception.Message) } }
+    W ("H|storelogger|" + $(if ($null -eq $sl) { "<null>" } else { "ok" }))
+    if ($null -ne $sl) {
+      $fCfg = $tt.GetField("_TemplateConfig", [Reflection.BindingFlags]"Instance,Public,NonPublic")
+      $cfg = $null
+      if ($fCfg) { try { $cfg = $fCfg.GetValue($sl) } catch { } }
+      W ("H|templateconfig|" + $(if ($null -eq $cfg) { "<null>" } else { $cfg.GetType().FullName }))
+      if ($null -ne $cfg) {
+        $fL = $cfg.GetType().GetField("m_ProjectDecorators", [Reflection.BindingFlags]"Instance,Public,NonPublic")
+        $lst = $null
+        if ($fL) { try { $lst = $fL.GetValue($cfg) } catch { } }
+        if ($null -eq $lst) { W "H|projectdecorators|<null>" }
+        else {
+          W ("H|projectdecorators|count=" + $lst.Count)
+          $i = 0
+          foreach ($p in $lst) {
+            $pn = "?"; $id = ""; $cnt = ""; $fs = ""
+            try { $pn = $p.GetType().FullName } catch { }
+            try { $id = $p.GetType().GetField("_SegmentedFilterId","Instance,Public,NonPublic").GetValue($p) } catch { }
+            try { $cnt = $p.GetType().GetField("m_InterruptibleListCounter","Instance,Public,NonPublic").GetValue($p) } catch { }
+            try {
+              $wc = $p.GetType().GetField("m_AdjustableDistributor","Instance,Public,NonPublic").GetValue($p)
+              if ($null -ne $wc) { $fs = $wc.GetType().GetField("filterSetSize","Instance,Public,NonPublic").GetValue($wc) }
+            } catch { }
+            W "P|$i|$pn|$id|$cnt|$fs"
+            $i++
+          }
+        }
+      }
+    }
+  } else { W "H|templatethread|<type missing>" }
+} catch { W ("H|pdump|fatal " + $_.Exception.GetType().Name) }
+
 W "H|end|$(Get-Date -Format o)  total=$($script:lines.Count)"
 $dir = Split-Path -Parent $Out
 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }

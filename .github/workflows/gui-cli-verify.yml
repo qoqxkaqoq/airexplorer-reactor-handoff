@@ -65,6 +65,7 @@ jobs:
           # 看不到真正抛异常的方法
           if ("${{ matrix.exe }}" -eq "v55" -or "${{ inputs.debug }}" -eq "1") {
             $env:COMPlus_JitNoInline = "1"
+            $env:COMPlus_JITMinOpts = "1"
             $env:COMPlus_TieredCompilation = "0"
             Write-Host "[debug] JIT inlining disabled"
           }
