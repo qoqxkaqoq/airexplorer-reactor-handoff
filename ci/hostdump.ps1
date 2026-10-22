@@ -144,6 +144,66 @@ foreach ($t in $targets) {
   }
 }
 
+# 3) 触发字符串表加载（官方 exe 里解释器能跑），再补一次字节数组导出。
+#    InstantiateTransferableProgram 开头有 "调用方必须是本程序集" 的反篡改检查，
+#    所以走 SearchStrategy：它是脚本 44 的入口，直接把资源解密进 _ExtractorVisitors。
+$script:lines | Out-File -FilePath $Out -Encoding utf8   # 先落盘, 后面若 AV 也不至于全丢
+try {
+  $di = $asm.GetType("CloudClient.Templating.DispatcherInitializer")
+  W "H|di|$($di.FullName)"
+  if ($di) {
+    $res = $asm.GetManifestResourceStream("GlobalValidator.FactoryValidator")
+    if ($null -eq $res) { W "H|resource|<null>" } else { W "H|resource|len=$($res.Length)" }
+    $ss = $di.GetMethod("SearchStrategy", [Reflection.BindingFlags]"Static,Public,NonPublic")
+    W "H|searchstrategy_method|$($ss -ne $null)"
+    if ($ss -and $res) {
+      try { $res.Position = 0 } catch {}
+      $t1 = Get-Date
+      try {
+        $null = $ss.Invoke($null, @($res, 0))
+        W "H|searchstrategy|ok elapsed=$([int]((Get-Date) - $t1).TotalMilliseconds)ms"
+      } catch {
+        $ie = $_.Exception.InnerException
+        if ($ie) { W "H|searchstrategy|throw: $($ie.ToString())" } else { W "H|searchstrategy|throw: $($_.Exception.ToString())" }
+      }
+    }
+    # 导出 _ExtractorVisitors
+    $evf = $di.GetField("_ExtractorVisitors", [Reflection.BindingFlags]"Static,Public,NonPublic")
+    if ($evf) {
+      $ev = $evf.GetValue($null)
+      if ($null -eq $ev) { W "H|extractor|<null>" }
+      else {
+        W "H|extractor|len=$($ev.Length)"
+        $binPath = $Out + ".extractor.bin"
+        try { [IO.File]::WriteAllBytes($binPath, $ev); W "H|extractor_bin|$binPath" } catch { W "H|extractor_bin|throw $($_.Exception.Message)" }
+        # 头 8 个字符串（验证）
+        try {
+          $n = 0; $off = 0
+          while ($n -lt 8 -and $off + 4 -le $ev.Length) {
+            $len = [BitConverter]::ToInt32($ev, $off)
+            if ($len -lt 0 -or $off + 4 + $len -gt $ev.Length) { W "A|xstr|$n|<bad len=$len off=$off>"; break }
+            $s = [Text.Encoding]::Unicode.GetString($ev, $off + 4, $len)
+            W "A|xstr|$n|off=$off len=$len|$(Esc $s)"
+            $off += 4 + $len
+            $n++
+          }
+          W "H|extractor_first|ok"
+        } catch { W "H|extractor_first|throw $($_.Exception.Message)" }
+      }
+    }
+    # editableMonitorTemplates / _RecommenderTemplates 概览
+    try {
+      $lt = $di.GetField("editableMonitorTemplates", [Reflection.BindingFlags]"Static,Public,NonPublic").GetValue($null)
+      $ri = $di.GetField("_RecommenderTemplates", [Reflection.BindingFlags]"Static,Public,NonPublic").GetValue($null)
+      W "H|editableMonitorTemplates|$(if ($null -eq $lt) { '<null>' } else { 'count=' + $lt.Count })"
+      W "H|_RecommenderTemplates|$(if ($null -eq $ri) { '<null>' } else { 'count=' + $ri.Count })"
+      if ($lt -and $lt.Count -gt 0) {
+        for ($i = 0; $i -lt [Math]::Min(20, $lt.Count); $i++) { W "T|$i|$(Esc $lt[$i])" }
+      }
+    } catch { W "H|lists|throw $($_.Exception.Message)" }
+  }
+} catch { W "H|trigger|throw: $($_.Exception.ToString())" }
+
 W "H|end|$(Get-Date -Format o)  total=$($script:lines.Count)"
 $dir = Split-Path -Parent $Out
 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
