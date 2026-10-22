@@ -8,6 +8,22 @@ using dnlib.DotNet.Emit;
 // 并检查源模块(cilantro)里同名同签名的方法是否有真体, 输出可移植清单。
 // 用法: stubscan <dst> <src> [--list] [--out file]
 class StubScan {
+    // 签名指纹: 参数个数 + 每个参数的简单类型名(去命名空间/泛型实参)
+    // 用来在重载之间区分 —— 之前 fromlist 只按名字找, 每组重载只填第一个
+    internal static string SigKey(MethodSig ms) {
+        if (ms == null) return "0:";
+        var parts = new List<string>();
+        foreach (var p in ms.Params) {
+            var n = p == null ? "?" : (p.TypeName ?? "?");
+            int i = n.LastIndexOf('.');
+            if (i >= 0) n = n.Substring(i + 1);
+            int j = n.IndexOf('<');
+            if (j > 0) n = n.Substring(0, j);
+            parts.Add(n);
+        }
+        return ms.Params.Count + ":" + string.Join(",", parts);
+    }
+
     static void Main(string[] a) {
         if (a.Length < 2) { Console.WriteLine("usage: stubscan <dst> <src> [--list] [--out file]"); return; }
         var dst = ModuleDefMD.Load(a[0]);
@@ -43,13 +59,14 @@ class StubScan {
                     var real = cands.FirstOrDefault(x => x.HasBody && x.Body.Instructions.Count > 4);
                     if (real != null) {
                         transplantable++;
-                        lines.Add("T|" + t.FullName + "|" + m.Name + "|dst=" + ins.Count + "|src=" + real.Body.Instructions.Count);
+                        // 第 4 段带签名指纹: bodytrans fromlist 靠它区配重载
+                        lines.Add("T|" + t.FullName + "|" + m.Name + "|" + SigKey(m.MethodSig) + "|dst=" + ins.Count + "|src=" + real.Body.Instructions.Count);
                         if (list) Console.WriteLine("[T] " + t.FullName + "::" + m.Name + "  dst=" + ins.Count + " src=" + real.Body.Instructions.Count);
                         continue;
                     }
                 }
                 noSig++;
-                lines.Add("X|" + t.FullName + "|" + m.Name + "|" + ins.Count);
+                lines.Add("X|" + t.FullName + "|" + m.Name + "|" + SigKey(m.MethodSig) + "|" + ins.Count);
                 if (list) Console.WriteLine("[X] " + t.FullName + "::" + m.Name + "  (" + ins.Count + ") 源无真体");
             }
         }

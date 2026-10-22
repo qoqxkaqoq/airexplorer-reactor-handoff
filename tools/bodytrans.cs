@@ -551,13 +551,20 @@ class BodyTrans {
             var p = line.Split('|');
             if (p.Length < 3) continue;
             string tfull = p[1], mname = p[2];
-            var srcM = FindMethod(srcMod, tfull, mname);
-            var dstM = FindMethod(dstMod, tfull, mname);
+            // 第 4 段是签名指纹(形如 "2:IntPtr,Int32"), 用来在重载之间挑对的那一个
+            string sig = (p.Length > 3 && p[3].IndexOf(':') > 0) ? p[3] : null;
+            var srcM = FindMethodBySig(srcMod, tfull, mname, sig);
+            var dstM = FindMethodBySig(dstMod, tfull, mname, sig);
             if (srcM == null || !srcM.HasBody || dstM == null || !dstM.HasBody) { skip++; continue; }
             var codes = dstM.Body.Instructions.Select(x => x.OpCode.Code).ToList();
-            // 授权桩 (ldc.i4.1; ret) 不要动
-            if (codes.Count <= 4 && codes.Contains(Code.Ldc_I4_1)) { skip++; continue; }
-            if (srcM.Body.Instructions.Count <= 4) { skip++; continue; }
+            var srcCodes = srcM.Body.Instructions.Select(x => x.OpCode.Code).ToList();
+            // 只有"目标与源都是授权桩(仅 nop/ldc.i4.1/ret)"才跳过。
+            // 之前的判据只看目标, 结果把 76 个"被 Reactor 破坏成 return true"
+            // 的真方法(如 RegSolver::Equals 源 53 指令)也一起跳过了。
+            bool dstAuth = codes.Count <= 6 && codes.All(c => c == Code.Nop || c == Code.Ldc_I4_1 || c == Code.Ret);
+            bool srcAuth = srcCodes.Count <= 6 && srcCodes.All(c => c == Code.Nop || c == Code.Ldc_I4_1 || c == Code.Ret);
+            if (dstAuth && srcAuth) { skip++; continue; }
+            if (srcCodes.Count <= 4) { skip++; continue; }
             try {
                 TransplantBody(dstM, srcM, importer);
                 RebindRefs(dstM, dstMod);
@@ -860,6 +867,40 @@ class BodyTrans {
             if (m.Name == mname) return m;
         return null;
     }
+    // 签名指纹(与 stubscan 里的一致): 参数个数 + 每个参数的简单类型名
+    static string SigKey(MethodSig ms) {
+        if (ms == null) return "0:";
+        var parts = new System.Collections.Generic.List<string>();
+        foreach (var p in ms.Params) {
+            var n = p == null ? "?" : (p.TypeName ?? "?");
+            int i = n.LastIndexOf('.');
+            if (i >= 0) n = n.Substring(i + 1);
+            int j = n.IndexOf('<');
+            if (j > 0) n = n.Substring(0, j);
+            parts.Add(n);
+        }
+        return ms.Params.Count + ":" + string.Join(",", parts);
+    }
+
+    // 按 (名字 + 签名指纹) 找方法; 没有指纹时退回"名字优先, 取指令最多的"
+    static MethodDef FindMethodBySig(ModuleDefMD mod, string tfull, string mname, string sig) {
+        var t = FindType(mod, tfull);
+        if (t == null) return null;
+        var cands = new System.Collections.Generic.List<MethodDef>();
+        foreach (var m in t.Methods) if (m.Name == mname) cands.Add(m);
+        if (cands.Count == 0) return null;
+        if (cands.Count == 1) return cands[0];
+        if (sig != null) {
+            foreach (var m in cands) if (SigKey(m.MethodSig) == sig) return m;
+        }
+        MethodDef best = null; int bestN = -1;
+        foreach (var m in cands) {
+            int n = (m.HasBody ? m.Body.Instructions.Count : -1);
+            if (n > bestN) { bestN = n; best = m; }
+        }
+        return best;
+    }
+
     static dnlib.DotNet.TypeDef FindType(ModuleDefMD mod, string tfull) {
         foreach (var t in mod.GetTypes())
             if (t.FullName == tfull) return t;
