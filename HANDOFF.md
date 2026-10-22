@@ -147,3 +147,10 @@ b) 给 v59 的 InstantiateStatelessUser 关键状态点插 trace（Console.Error
 ThreadException + COMPlus_JitNoInline=1。注意：宿主 Assembly.LoadFrom 会绕过
 native stub → `<Module>` cctor 链在宿主里必炸 InvalidProgramException
 （VerifyCombinedStateRequest）——宿主路线只适用于数据导出，不适用于整程序运行。
+
+**work/ 数据资产（本轮固化，直接复用）**：
+- `tokmap_official.tsv.gz` / `tokmap_v59.tsv.gz`：两版全量 token→签名指纹映射（解压后对账，tokmap8 可重新生成）
+- `ui_official.tsv` / `ui_v59.tsv`：92 窗体类方法覆盖明细（uiscan8）
+- `gae_full.txt`：GenerateAdaptableExtractor 491 指令完整 IL（不截断）——ANE 因果链证据
+- `isu_full.txt`：InstantiateStatelessUser 914 指令完整 IL——m_ProjectDecorators 唯一写入点在 IL_045E
+- `ydh81.txt` / `tt_full.txt`：委托三连相关类完整 IL
