@@ -305,6 +305,38 @@ stloc V_104 (fe 0e 68 00) 出现 0 次      ← 无陷阱特征
    再逐步放开——可快速判断 `Bad method token` 是否只来自少数方法。
 3. 用 v84b 的元数据做基座（它的 token 布局与 Reactor 运行时一致），把 nbjit 的真体灌进去。
 
+### 最终结论（2026-10-22 08:0x，本轮收尾）
+
+**从 `Bad method token` 一路推进到 `ArgumentNullException`，然后撞上一堵结构性的墙：**
+
+| 版本 | 结果 |
+|---|---|
+| `nbjit_restored3`（12768 真体，含完整初始化链） | `ArgumentNullException @ <Module>::.cctor` |
+| `nbjit_mininit`（12768 真体 + 把 DefineEfficientProfiler / DefineActiveEvent 置空） | 同样 `ArgumentNullException` |
+
+桩化两条之后仍然崩，说明剩下的 `InstantiateGlobalCalculator` 真体就是崩点——
+而它正是 v84b 作者当年被逼"重写成最小字段初始化"的那个方法。
+
+**所以矛盾的形状是清晰的：**
+
+> **Reactor 初始化链的真体** 与 **脱壳后的运行时** 是互斥的。
+> 真体内部依赖 Reactor 的加密资源与运行时状态（AES 解密器、委托表、静态字段）；
+> 而"脱壳"这个动作本身就把这些依赖剥离了。于是：
+> - 保留真体 → `ArgumentNullException`（依赖缺失）
+> - 换成最小实现 → 字段/资源没初始化 → 窗体建出来但内容空白（v84b 的 300×300）
+
+这不是再修一个 bug 能解决的，而是要求**把初始化链本身也完整静态解密**——
+也就是把 `InstantiateGlobalCalculator` 那 2521 条指令里"做解密"的部分换成"直接给结果"，
+逐指令读懂它到底初始化了哪些字段、给了什么值。这是本项目剩下唯一有意义的攻坚方向。
+
+**本轮净收益（可被下一棒直接使用）**
+1. `work/nj_art/jitout/` 与 CI artifact `nbjit-dump`：**16586 个真体的 m_<token>.bin + 2218 个 .eh**，
+   格式已在本文档第 7 节写明。这是全项目最硬的资产——前任 126 轮从未拿到过。
+2. `tools2/nbrestore.cs`：可用的写回器（token 认原版、locals 认 nb_original、自己解析 IL、EH 重挂）。
+   已知坑：`StringsStream.Read` 返回 `UTF8String` 不是 `string`，直接塞给 dwriter 会报
+   `InlineString got UTF8String` 而把方法静默丢弃。
+3. 陷阱判定与组合工具链（trapscan / merge2 / normalize2 / nbrestore），以及可复现的 Windows CI。
+
 ## 8. 与其他 agent 的协作
 
 - 仓库建了 `board/` 留言板（规则见 `board/README.md`），我在 `board/agents/wb-reverser.md`。
