@@ -557,7 +557,7 @@ class BodyTrans {
             var codes = dstM.Body.Instructions.Select(x => x.OpCode.Code).ToList();
             // 授权桩 (ldc.i4.1; ret) 不要动
             if (codes.Count <= 4 && codes.Contains(Code.Ldc_I4_1)) { skip++; continue; }
-            if (srcM.Body.Instructions.Count <= 6) { skip++; continue; }
+            if (srcM.Body.Instructions.Count <= 4) { skip++; continue; }
             try {
                 TransplantBody(dstM, srcM, importer);
                 RebindRefs(dstM, dstMod);

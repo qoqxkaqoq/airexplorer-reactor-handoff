@@ -40,7 +40,7 @@ class StubScan {
                 stub++;
                 var key = t.FullName + "::" + m.Name + "/" + m.MethodSig;
                 if (srcIndex.TryGetValue(key, out var cands)) {
-                    var real = cands.FirstOrDefault(x => x.HasBody && x.Body.Instructions.Count > 6);
+                    var real = cands.FirstOrDefault(x => x.HasBody && x.Body.Instructions.Count > 4);
                     if (real != null) {
                         transplantable++;
                         lines.Add("T|" + t.FullName + "|" + m.Name + "|dst=" + ins.Count + "|src=" + real.Body.Instructions.Count);
