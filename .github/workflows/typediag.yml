@@ -12,7 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: exes
+          sparse-checkout: |
+            exes
+            ci
           sparse-checkout-cone-mode: false
           path: repo
       - name: run
