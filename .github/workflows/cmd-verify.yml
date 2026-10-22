@@ -54,6 +54,7 @@ jobs:
             "help"     { $argv = @("--help") }
             "rawhelp"  { $argv = @("help") }     # 入口里 args[0]=="help" 会跳过授权直接启动
             "version"  { $argv = @("--version") }
+            "accounts" { $argv = @("accounts") }   # 真实命令: 无 Pro 授权时应当给出授权提示
             default    { $argv = @() }
           }
           Write-Host ("argset=" + $argset + " argv=" + ($argv -join " "))
