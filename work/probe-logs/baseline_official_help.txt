@@ -1,0 +1,32 @@
+Air Explorer 5.11.0 command line
+Air Explorer command line client help.
+
+Usage: AirExplorerCmd <command> [parameters] /password=<password>
+
+Available commands:
+accounts     Lists all the accounts defined in Air Explorer.                     
+copy         Copies a file or a folder to another location in a cloud server.    
+delete       Deletes a file or a folder in a cloud server.                       
+dir          Lists all the files and folders in a cloud server folder.           
+download     Downloads a file or a folder from a cloud server to a local folder. 
+mkdir        Creates a new folder in a cloud server.                             
+move         Moves a file or a folder to another location in a cloud server.     
+quota        Shows the used and free space in a cloud server.                    
+rename       Renames a file or a folder in a cloud server.                       
+search       Searches for files and folders in a cloud server.                   
+sharelink    Creates a shared link for a file or a folder in a cloud server.     
+runsavedsync Loads and runs a saved synchronization.                             
+startsync    Starts a synchronization of two folders                             
+transfer     Transfers a file from one cloud to another.                         
+upload       Uploads a file or a folder to a cloud server.                       
+zipupload    Zip and upload a file or a folder to a cloud server.                
+
+/password=<password>	Password for the command line configured in the Air Explorer preferences.
+
+/logfile=<logFileName>	Write the log lines to a file. It can include the macros {DATE} or {DATETIME} or {DATETIMESECONDS} to include the current date (and time) in the log file name, for example: /logfile="C:\MyLogFolder\MyLogFile-{DATE}.txt"
+
+/emailresult	Sends an email with the result of the operation
+
+The command exit codes are listed in www.airexplorer.net/help 
+
+Type AirExplorerCmd <command> to get more help about each command specific parameters.

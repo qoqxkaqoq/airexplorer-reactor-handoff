@@ -1,0 +1,45 @@
+[21:30:56.109] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[21:30:56.148] size = 11143168  md5 = 3A81ADEFA510F7CEF00103F2CE025813
+[21:30:56.156] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[21:30:56.229] started pid = 4420
+[21:30:57.766] WINDOW hwnd=0x3018A visible=False class='WindowsForms10.Window.8.app.0.2eeeb2e_r6_ad1' title='Air Explorer v5.11.0' rect=78,78,1023,678
+[21:30:57.768] WINDOW hwnd=0x40192 visible=False class='GDI+ Hook Window Class' title='GDI+ Window (AirExplorer.exe)' rect=0,0,1,1
+[21:30:57.769] WINDOW hwnd=0x40170 visible=False class='.NET-BroadcastEventWindow.4.0.0.0.2eeeb2e.0' title='.NET-BroadcastEventWindow.4.0.0.0.2eeeb2e.0' rect=0,0,0,0
+[21:30:57.770] WINDOW hwnd=0x500B8 visible=False class='IME' title='Default IME' rect=0,0,0,0
+[21:30:57.771] WINDOW hwnd=0x30176 visible=False class='IME' title='Default IME' rect=0,0,0,0
+[21:30:59.288] WINDOW hwnd=0x30208 visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[21:31:00.805] WINDOW hwnd=0x20218 visible=False class='HwndWrapper[AirExplorer.exe;;7171b960-0aa7-4bd8-8d29-97d5260d44ee]' title='SystemResourceNotifyWindow' rect=0,0,0,0
+[21:31:00.807] WINDOW hwnd=0x2020E visible=False class='HwndWrapper[AirExplorer.exe;;5a67823d-9e00-45bb-9e65-96e495b88dd7]' title='MediaContextNotificationWindow' rect=0,0,0,0
+[21:31:02.308] WINDOW hwnd=0x10240 visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[21:31:02.309] WINDOW hwnd=0x10228 visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[21:31:02.310] WINDOW hwnd=0x5024A visible=False class='tooltips_class32' title='' rect=0,0,0,0
+[21:31:02.311] WINDOW hwnd=0x10236 visible=False class='WindowsForms10.tooltips_class32.app.0.2eeeb2e_r6_ad1' title='' rect=0,0,136,39
+[21:31:02.311] WINDOW hwnd=0x10230 visible=False class='HwndWrapper[AirExplorer.exe;;abaa870e-fb14-4c11-84cf-d5bde38b78a9]' title='' rect=0,0,136,39
+[21:31:03.827] WINDOW hwnd=0x1025A visible=True class='WindowsForms10.Window.8.app.0.2eeeb2e_r6_ad1' title='Error detected' rect=104,104,592,420
+[21:31:04.012]   screenshot -> probe\window1_hwnd66138.png (PrintWindow=True)
+[21:31:04.017] WINDOW hwnd=0x1025C visible=False class='WindowsForms10.Window.0.app.0.2eeeb2e_r6_ad1' title='' rect=0,0,16,16
+[21:31:04.018] WINDOW hwnd=0x10278 visible=False class='MSCTFIME UI' title='MSCTFIME UI' rect=0,0,0,0
+[21:31:41.584] still alive, windows = 16
+[21:31:41.593] responding = True  threads = 17  WS(MB) = 134.8  CPU = 00:00:01.3125000
+[21:31:41.615] modules(head40) = AirExplorer.exe,ntdll.dll,MSCOREE.DLL,KERNEL32.dll,KERNELBASE.dll,ADVAPI32.dll,msvcrt.dll,sechost.dll,RPCRT4.dll,mscoreei.dll,SHLWAPI.dll,ucrtbase.dll,kernel.appcore.dll,VERSION.dll,clr.dll,USER32.dll,win32u.dll,VCRUNTIME140_1_CLR0400.dll,GDI32.dll,VCRUNTIME140_CLR0400.dll,gdi32full.dll,ucrtbase_clr0400.dll,msvcp_win.dll,IMM32.DLL,mscorlib.ni.dll,ole32.dll,combase.dll,bcryptPrimitives.dll,uxtheme.dll,clrjit.dll,shell32.dll,wintypes.dll,windows.storage.dll,SHCORE.dll,profapi.dll,bcrypt.dll,CRYPTSP.dll,rsaenh.dll,CRYPTBASE.dll,System.ni.dll
+[21:31:41.618]   hwnd=0x10240 visible=False class='tooltips_class32' title=''
+[21:31:41.619]   hwnd=0x10228 visible=False class='tooltips_class32' title=''
+[21:31:41.620]   hwnd=0x1025A visible=True class='WindowsForms10.Window.8.app.0.2eeeb2e_r6_ad1' title='Error detected'
+[21:31:41.620]   hwnd=0x1025C visible=False class='WindowsForms10.Window.0.app.0.2eeeb2e_r6_ad1' title=''
+[21:31:41.621]   hwnd=0x5024A visible=False class='tooltips_class32' title=''
+[21:31:41.622]   hwnd=0x10236 visible=False class='WindowsForms10.tooltips_class32.app.0.2eeeb2e_r6_ad1' title=''
+[21:31:41.623]   hwnd=0x3018A visible=False class='WindowsForms10.Window.8.app.0.2eeeb2e_r6_ad1' title='Air Explorer v5.11.0'
+[21:31:41.623]   hwnd=0x10230 visible=False class='HwndWrapper[AirExplorer.exe;;abaa870e-fb14-4c11-84cf-d5bde38b78a9]' title=''
+[21:31:41.624]   hwnd=0x20218 visible=False class='HwndWrapper[AirExplorer.exe;;7171b960-0aa7-4bd8-8d29-97d5260d44ee]' title='SystemResourceNotifyWindow'
+[21:31:41.625]   hwnd=0x2020E visible=False class='HwndWrapper[AirExplorer.exe;;5a67823d-9e00-45bb-9e65-96e495b88dd7]' title='MediaContextNotificationWindow'
+[21:31:41.626]   hwnd=0x30208 visible=False class='tooltips_class32' title=''
+[21:31:41.627]   hwnd=0x40192 visible=False class='GDI+ Hook Window Class' title='GDI+ Window (AirExplorer.exe)'
+[21:31:41.628]   hwnd=0x40170 visible=False class='.NET-BroadcastEventWindow.4.0.0.0.2eeeb2e.0' title='.NET-BroadcastEventWindow.4.0.0.0.2eeeb2e.0'
+[21:31:41.628]   hwnd=0x10278 visible=False class='MSCTFIME UI' title='MSCTFIME UI'
+[21:31:41.629]   hwnd=0x30176 visible=False class='IME' title='Default IME'
+[21:31:41.630]   hwnd=0x500B8 visible=False class='IME' title='Default IME'
+[21:31:41.642] close dialog: 'Error detected'
+[21:31:45.647] killed
+[21:31:46.069] EVENT [10/22/2026 9:31:42 PM] Application Error: Faulting application name: AirExplorer.exe, version: 5.11.0.0, time stamp: 0x6a671a98 | Faulting module name: KERNELBASE.dll, version: 10.0.26100.33648, time stamp: 0x3ddf2783 | Exception code: 0xe0434352 | Fault offset: 0x00000000000c7d9a | Faulting process id: 0x1144 | Faulting application start time: 0x1DD626C9F75482A | Faulting application path: D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe | Faulting module path: C:\Windows\System32\KERNELBASE.dll | Report Id: b18d88aa-0892-4fbe-a13e-a4e6bdc347ce | Faulting package full name:  | Faulting package-relative application ID: 
+[21:31:46.070] EVENT [10/22/2026 9:31:41 PM] .NET Runtime: Application: AirExplorer.exe | Framework Version: v4.0.30319 | Description: The process was terminated due to an unhandled exception. | Exception Info: System.ArgumentNullException |    at CloudClient.Templating.TemplateArgument+TemplateThread.GenerateAdaptableExtractor(Boolean ByRef) |    at CloudClient.Templating.TemplateArgument+TemplateThread.PlanRunner() |    at CloudClient.Templating.TemplateArgument.InstantiateStatelessUser[[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]](Int32, System.Object[], System.Object, Int32 ByRef) |    at CloudClient.Templating.TemplateArgument.InstantiateAccessibleProcessor(Int32, System.Object[], System.Object) |    at AirExplorer.Processing.AggregatorEvaluator.Start() |    at CloudClient.Registry.InitializerReg..ctor() |    at CloudClient.Registry.InitializerReg.ValidateDynamicEncryptor() |    at CloudClient.Models.StatelessModel.SearchAdapter(System.String[]) |  | 
+[21:31:46.071] done
