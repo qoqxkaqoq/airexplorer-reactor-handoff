@@ -659,3 +659,28 @@ locals 一起搬过来，再跑 `fixgen`（127 处）+ `fixnested`（13 处）�
 
 **结论**：locals 的唯一来源就是 cilantro（及其改名映射）。`fixlocals` 的 161 个 miss
 需要逐个用 `Dst@Src` 手工对齐。
+
+### 11.5 v37–v40：从 AV 走到普通 NRE
+
+| 版本 | 改动 | 结果 |
+|---|---|---|
+| v37 | `bodytrans Dst@Src` 把 cilantro 的 `generatedMethod_0288`(6866 指令) 搬到 `DefineSetSet` | 假名清零后 AV 消失 |
+| v39 | + fixgen(127) + fixnested(13) | `MissingFieldException: booleanField_0287` |
+| v40 | `fixfieldidx` 按"类型内字段序号"回退，修 **121 处**残留的 nb_slayer 字段名 | **NRE @ `WrapperEnumerator.PatchCommand`** |
+
+**这是个质变**：AV/TypeLoad/MissingField 都是"元数据层面坏了"，而 NRE 是
+"某个对象为 null" —— 属于正常业务逻辑范围，可以顺着调用链补初始化。
+
+v40 的完整栈（已经进入 `InstantiateStatelessUser` 的脚本执行第 4 层）：
+
+```
+WrapperEnumerator.PatchCommand(ConnectedObserver setup)
+  TemplateThread.InstantiateSymbolicTransmitter(Boolean)
+    TemplateThread.DefineSetSet(HandlerPublisher)
+      TemplateThread.GenerateAdaptableExtractor(Boolean&)
+        TemplateThread.PlanRunner()
+          TemplateArgument.InstantiateStatelessUser<T>(...)
+            TemplateArgument.InstantiateAccessibleProcessor(43, ...)
+              ModelTracer.JoinExecutor(String[])
+                StatelessModel.SearchAdapter(String[])
+```
