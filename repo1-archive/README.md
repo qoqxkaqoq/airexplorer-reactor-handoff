@@ -21,6 +21,8 @@
 | `agents.md` | 原仓库 agent 交接文档 |
 | `workflows/*.yml` | 原 12 个 workflow（ar_* 系列）——**未放入 .github/ 以免激活旧 CI 干扰现链路**，需要时自行拷贝 |
 
+> 注：`repo1-archive/bin/` 被主仓库 `.gitignore` 的 `bin/` 规则覆盖，本存档已用 `git add -f` 强制入库。
+
 ## 与主仓库重复（未收录）
 AirExplorer_Slayed / AirExplorer_cilantro / AirExplorer_e8runnable / AirExplorer_nb_original（exes/ 同 MD5）、
 ilchk2x.cs / stackdump_v26.cs / verifyres.cs / entrychk8.csproj / fwchk8.csproj / msver8.csproj（tools/ 同 MD5）
