@@ -975,3 +975,80 @@ v55:  IL_0075  castclass ProgramFinder  [tok 0x0100090F]   <- TypeRef
 **下一步唯一有希望的方向**：`ci/hostdump.ps1` 里在官方宿主进程跑
 `SearchAdapter(["help"])`，把 `m_ProjectDecorators` 的实际内容（类型名+顺序）
 dump 出来，和我们的版本逐项对比，差在哪一项就补哪一项。
+
+---
+
+## 14. 验收：文本模式 PASS，主窗口创建成功（v59 → v61）
+
+### 14.1 v59：文本模式验收通过
+
+```
+=== gui-cli label=v59 ===
+exit_code = 0  killed_by_timeout = False
+has_version_title = True  command_lines_matched = 16 / 16
+VERDICT = PASS
+```
+
+与官方 `official` 基线做逐行 diff：**32 行完全一致**。
+
+这一刻的关键是 `noopcast`（v59）：去掉 `AddEfficientHandler` 里
+`castclass ProgramFinder` 那一条。它后面紧跟的是
+
+```
+callvirt ConnectedObserver::AddEfficientHandler(ConnectedObserver)
+```
+
+参数类型本来就是基类，cast 是 Reactor 加的混淆；去掉后 `setup` 直接按
+`ConnectedObserver` 传，不再要求它是 `ProgramFinder`。**卡了很久的
+`InvalidCastException` 到此结束。**
+
+### 14.2 v59 的 UI：主窗口出来了，但随后崩
+
+`ui-probe` 结果：
+
+```
+[16:10:08.276] WINDOW hwnd=0x80026 visible=False class='WindowsForms10.Window.8...'
+               title='Air Explorer v5.11.0' rect=78,78,1023,678
+[16:10:11.290] WINDOW hwnd=0x2020C visible=True  title='Error detected'
+[16:10:46.727] still alive, windows = 9   responding = True  threads = 13
+```
+
+**主窗体已经创建**（1023x678，标题 `Air Explorer v5.11.0`），
+进程存活且响应 —— 但弹出了程序自己的 "Error detected" 对话框，最后崩于
+
+```
+System.ArgumentNullException
+  at TemplateThread.GenerateAdaptableExtractor(Boolean&)
+  at PlanRunner()
+  at InstantiateStatelessUser[Int32](...)
+  at InstantiateAccessibleProcessor(...)
+  at AggregatorEvaluator.Start()
+  at InitializerReg..ctor()
+  at InitializerReg.ValidateDynamicEncryptor()
+  at StatelessModel.SearchAdapter(String[])
+```
+
+### 14.3 两次定位
+
+| 版本 | 改了什么 | 结果 |
+|---|---|---|
+| v60 | `InstantiateConfigurableModule` 的 `ldnull; ret` → 返回空 `List<DistributorProfile>`（2 处）。它原本在 `_TemplateConfig.m_ProjectDecorators == null` 时直接返回 null，调用方 `AddRange(null)` 崩 | 文本模式仍 PASS（16/16），**UI 的 ANE 不变** |
+| v61 | 跳过 `GenerateAdaptableExtractor IL_06D5` 的 `List::Sort(Comparison<DistributorProfile>)` | 待验证 |
+
+**真正的抛出点是 Sort**，不是 `AddRange`。那个 comparison 是这样造出来的：
+
+```
+06C4  ldftn       Ydh81W3oqC8p0tN46wa::vcQwAk1jyY(DistributorProfile, DistributorProfile)
+06CA  newobj      Comparison<DistributorProfile>::.ctor(Object, IntPtr)
+06CF  dup
+06D0  stsfld      Ydh81W3oqC8p0tN46wa::<>9__12_0
+06D5  callvirt    List<DistributorProfile>::Sort(Comparison<DistributorProfile>)
+```
+
+`ldftn` 是**实例**方法指针，但栈上没有先压 `<>c` 的 target 实例，
+`newobj Comparison::.ctor(object, IntPtr)` 拿到的 target 是无效引用 ——
+`Sort` 一进去就抛 `ArgumentNullException`。
+
+（注：清言在 HANDOFF 第 14 节把 ANE 归到 `m_ProjectDecorators == null`，
+方向对了一半：null 确实存在，但 v60 修掉 null 之后 ANE 依旧，
+说明真正的抛出点是这个 Sort。）
