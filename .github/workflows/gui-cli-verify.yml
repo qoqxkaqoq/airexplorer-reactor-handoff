@@ -37,14 +37,18 @@ jobs:
           if ("${{ matrix.exe }}" -ne "official") {
             $cand = "AirExplorer_${{ matrix.exe }}.exe"
             # raw.githubusercontent 对刚 push 的文件有缓存/传播延迟, 重试 8 次
+            # raw.githubusercontent 对刚 push 的文件有明显 CDN 延迟(几分钟),
+            # 改用 GitHub API 的 raw 媒体类型直接取 blob, 没有缓存问题。
             $ok = $false
-            for ($i = 1; $i -le 8; $i++) {
+            $api = "https://api.github.com/repos/qoqxkaqoq/airexplorer-reactor-handoff/contents/exes/$cand?ref=main"
+            for ($i = 1; $i -le 6; $i++) {
               try {
-                Invoke-WebRequest -Uri "$base/exes/$cand" -OutFile "app\AirExplorer.exe" -Headers @{ "Cache-Control" = "no-cache" } -ErrorAction Stop
+                Invoke-WebRequest -Uri $api -OutFile "app\AirExplorer.exe" -Headers @{ "Accept" = "application/vnd.github.raw"; "User-Agent" = "ci-probe" } -ErrorAction Stop
+                if ((Get-Item "app\AirExplorer.exe").Length -lt 1000000) { throw "too small" }
                 $ok = $true; break
               } catch {
                 Write-Host ("retry $i : " + $_.Exception.Message)
-                Start-Sleep -Seconds 6
+                Start-Sleep -Seconds 8
               }
             }
             if (-not $ok) { throw ("download failed: " + $cand) }
