@@ -31,8 +31,12 @@ class BodyTrans {
         for (int k = 3; k + 1 < a.Length; k += 2) {
             string tfull = a[k].Replace('+', '/');
             string mname = StripGeneric(a[k + 1]);
-            var srcM = FindMethod(srcMod, tfull, mname);
-            var dstM = FindMethod(dstMod, tfull, mname);
+            // "DstName@SrcName": 目标方法名与源方法名不同时(nb_slayer 改名)显式指定
+            string srcName = mname, dstName = mname;
+            int at = mname.IndexOf('@');
+            if (at > 0) { dstName = mname.Substring(0, at); srcName = mname.Substring(at + 1); }
+            var srcM = FindMethod(srcMod, tfull, srcName);
+            var dstM = FindMethod(dstMod, tfull, dstName);
             if (srcM == null) { Console.WriteLine("[trans] src 未找到: " + tfull + "::" + mname); continue; }
             if (!srcM.HasBody) { Console.WriteLine("[trans] src 无体: " + mname); continue; }
             // 防桩覆盖: 源体疑似桩 (≤4 指令且 ldnull/ret 或 ret-only) → 不移植 (v103 轮次12 实证: 桩覆盖了回填真身)
