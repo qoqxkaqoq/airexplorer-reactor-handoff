@@ -1,0 +1,14 @@
+=== 现场 attach PID 1556 ===
+== 线程 osTid=488 mngTid=1
+    InlinedCallFrame
+    InlinedCallFrame
+    DomainBoundILStubClass.IL_STUB_PInvoke()
+    System.Windows.Forms.Application+ComponentManager.System.Windows.Forms.UnsafeNativeMethods.IMsoComponentManager.FPushMessageLoop(IntPtr, Int32, Int32)
+    System.Windows.Forms.Application+ThreadContext.RunMessageLoopInner(Int32, System.Windows.Forms.ApplicationContext)
+    System.Windows.Forms.Application+ThreadContext.RunMessageLoop(Int32, System.Windows.Forms.ApplicationContext)
+    LiteralContextValidator.ExecuteExplorer(System.Windows.Forms.ApplicationContext, LiteralContextValidator)
+    CloudClient.Models.StatelessModel.SearchAdapter(System.String[])
+    GCFrame
+== 线程 osTid=9504 mngTid=2
+    DebuggerU2MCatchHandlerFrame
+=== 共 2 个线程 ===
