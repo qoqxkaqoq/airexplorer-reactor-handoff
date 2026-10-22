@@ -17,9 +17,15 @@ jobs:
         shell: pwsh
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          winget install --id Microsoft.WinDbg -e --accept-source-agreements --accept-package-agreements --silent
+          winget install --id Microsoft.WinDbg -e --source winget --accept-source-agreements --accept-package-agreements --silent
+          # 定位包目录(两种方式都试)
           $pkg = Get-ChildItem "$env:ProgramFiles\WindowsApps" -Directory -Filter "Microsoft.WinDbg_*" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $pkg) { Write-Host "WinDbg 包未找到"; exit 1 }
+          if (-not $pkg) {
+            $ttdAny = Get-ChildItem "$env:ProgramFiles\WindowsApps" -Recurse -Filter "TTD.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($ttdAny) { $pkg = $ttdAny.Directory.Parent.Parent.Parent.Parent }
+          }
+          if (-not $pkg) { Write-Host "WinDbg 包未找到"; winget list --name WinDbg; exit 1 }
+          Write-Host "pkg = $($pkg.FullName)"
           # WindowsApps 有执行 ACL, 复制出来后从工作目录跑
           Copy-Item "$($pkg.FullName)\amd64" "D:\wd" -Recurse -Force
           $ttd = "D:\wd\ttd\TTD.exe"

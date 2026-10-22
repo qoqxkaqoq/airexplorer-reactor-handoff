@@ -35,8 +35,14 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
           $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
-          $runner = Get-ChildItem -Recurse kf -Filter "Krypton.Runner.exe" | Select-Object -First 1
-          if (-not $runner) { Write-Host "Runner 未找到, 列出产物"; Get-ChildItem -Recurse kf -Filter "*.exe" | Select-Object -First 15 | ForEach-Object { Write-Host $_.FullName }; exit 0 }
+          # Runner(net48 沙箱主机) 可能不在 build-all 范围内, 单独构建
+          $rproj = Get-ChildItem -Recurse kf -Filter "*.csproj" | Where-Object { $_.Name -match "Runner" } | Select-Object -First 1
+          if ($rproj) {
+            Write-Host "构建 Runner: $($rproj.FullName)"
+            dotnet build $rproj.FullName -c Release -v q --nologo 2>&1 | Select-Object -Last 5
+          } else { Write-Host "无 Runner csproj" }
+          $runner = Get-ChildItem -Recurse kf -Filter "Krypton.Runner*.exe" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "bin" } | Select-Object -First 1
+          if (-not $runner) { Write-Host "Runner 未找到, 列出 exe"; Get-ChildItem -Recurse kf -Filter "*.exe" | Select-Object -First 15 | ForEach-Object { Write-Host $_.FullName }; exit 0 }
           Write-Host "runner = $($runner.FullName)"
           $env:KRYPTON_ALLOW_PARTIAL_OUTPUT = "1"
           & $runner.FullName --standalone-check $exe 2>&1 | Tee-Object -FilePath out\standalone-check.txt | Select-Object -Last 40
@@ -54,7 +60,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $work | Out-Null
           Copy-Item $exe "$work\input.exe"
           # 30 分钟上限, 卡住就结束(报告仍会落盘)
-          $p = Start-Process -FilePath $krypton.FullName -ArgumentList "`"$work\input.exe`" --no-pause" -WorkingDirectory $work -PassThru -NoNewWindow -RedirectStandardOutput out\krypton-stdout.txt -RedirectStandardError out\krypton-stderr.txt
+          $p = Start-Process -FilePath $krypton.FullName -ArgumentList @("$work\input.exe", "--no-pause") -WorkingDirectory $work -PassThru -NoNewWindow -RedirectStandardOutput out\krypton-stdout.txt -RedirectStandardError out\krypton-stderr.txt
           if (-not $p.WaitForExit(1800000)) { $p.Kill(); Write-Host "[timeout] 30min 超时, 保留部分产物" }
           Get-ChildItem $work | ForEach-Object { Write-Host ("  " + $_.Name + "  " + $_.Length) }
           Get-ChildItem $work -Filter "*.exe" | Where-Object { $_.Name -ne "input.exe" } | ForEach-Object { Copy-Item $_.FullName "out\" }
