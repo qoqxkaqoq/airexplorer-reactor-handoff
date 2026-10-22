@@ -684,3 +684,25 @@ WrapperEnumerator.PatchCommand(ConnectedObserver setup)
               ModelTracer.JoinExecutor(String[])
                 StatelessModel.SearchAdapter(String[])
 ```
+
+### 11.6 v41：又一层（`WrapperEnumerator::.ctor` 被阈值漏掉）
+
+v40 的 NRE 在 `WrapperEnumerator.PatchCommand`：`m_ProfileWrapperList` 为 null。
+`WrapperEnumerator::.ctor` 在 v40 里是 `nop;nop;nop;ret` 桩，而 cilantro 里是 6 条指令
+（`new List<ConnectedObserver>()` + `stfld`）。
+
+**为什么批量移植漏了它**：`stubscan` 的"源必须有真体"判据写的是 `> 6` 条指令，
+而 6 条正是最简单的字段初始化构造函数 —— 一批 `.ctor` 因此全部漏掉。
+
+移植后（v41）NRE 上移到 `TemplateThread.InstantiateSymbolicTransmitter` 内部。
+**下一轮该做的**：把 `stubscan`/`fromlist` 的阈值从 `>6` 改成 `>4`，重跑批量移植，
+把这类"6 条指令的构造函数"一次补齐。
+
+### 11.7 本轮到 v41 的净收益
+
+- **根因级发现**：`locals` 全 `System.Object`（5126 个方法）—— 这是之前所有 AV 的真正来源，
+  而且 JIT 不验证、堆栈不可读，极难定位。修了 4965 个（33847 个 locals）。
+- **6 个新工具**：`fixlocals` / `fixlocals2`（官方路线，已证伪）/ `fixfieldidx` /
+  `patchsort` / `nestedchk` / `lvchk`
+- **1 个语法扩展**：`bodytrans DstName@SrcName`（源方法被改名时显式映射）
+- **错误层级**：`TypeLoad` → `AV` → `MissingField` → `NRE`（元数据问题基本清完）
