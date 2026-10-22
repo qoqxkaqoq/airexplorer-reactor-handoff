@@ -1,0 +1,113 @@
+name: gui-cli-verify
+
+# 用 AirExplorer.exe 自己的文本模式做验收。
+# 依据: AirExplorerCmd.exe 只是转发器 —— 它把参数拼成 "help" 交给同目录的 AirExplorer.exe,
+# 再把子进程 stdout 打到控制台。也就是说帮助文本是 AirExplorer.exe 自己产生的。
+# 于是 "AirExplorer.exe help" 就是一条**不需要窗口**的验收通道:
+# 输出对得上 = 方法体/字符串基本完好; 输出为空或异常 = 还原失败。
+#
+# 判据(硬): exit_code==0 且 stdout 含 "Air Explorer 5.11.0 command line" 与 16 个命令名。
+on:
+  workflow_dispatch:
+    inputs:
+      exes:
+        description: 'candidate list (JSON array; "official" = shipped exe)'
+        required: false
+        default: '["official"]'
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        exe: ${{ fromJSON(inputs.exes) }}
+    steps:
+      - name: 取本仓库 exes（sparse checkout）
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: exes
+          sparse-checkout-cone-mode: false
+          path: repo
+
+      - name: 准备运行目录
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $base = "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main"
+          New-Item -ItemType Directory -Force -Path app, out | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { throw "installer extract failed" }
+          if ("${{ matrix.exe }}" -ne "official") {
+            $cand = "AirExplorer_${{ matrix.exe }}.exe"
+            # raw.githubusercontent 对刚 push 的文件有缓存/传播延迟, 重试 8 次
+            # 不用 raw.githubusercontent(对新 push 的文件有数分钟 CDN 延迟),
+            # 也不用 contents API(raw 媒体类型只支持 <=1MB), 直接用 sparse checkout 下来的文件。
+            $src = Join-Path (Get-Location) "repo\exes\$cand"
+            if (-not (Test-Path $src)) { throw ("candidate missing: " + $src) }
+            Copy-Item $src "app\AirExplorer.exe" -Force
+            Write-Host ("candidate = " + $cand)
+          } else { Write-Host "baseline = official" }
+          Write-Host ("md5 = " + (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)
+
+      - name: 运行文本模式 help
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          # 注意: 不能用 ReadToEnd —— 若程序不退出(例如直接开窗口不处理参数),
+          # 标准输出不会关闭, ReadToEnd 会永远阻塞。改用重定向到文件 + 限时等待。
+          $outFile = Join-Path (Get-Location) "out\raw_${{ matrix.exe }}.txt"
+          $errFile = Join-Path (Get-Location) "out\raw_${{ matrix.exe }}.err.txt"
+          # 调试: 禁用 JIT 内联, 否则 InvalidCastException 的栈会被内联折叠到调用者,
+          # 看不到真正抛异常的方法
+          if ("${{ matrix.exe }}" -eq "v55" -or "${{ inputs.debug }}" -eq "1") {
+            $env:COMPlus_JitNoInline = "1"
+            $env:COMPlus_JITMinOpts = "1"
+            $env:COMPlus_TieredCompilation = "0"
+            Write-Host "[debug] JIT inlining disabled"
+          }
+          $p = Start-Process -FilePath (Resolve-Path "app\AirExplorer.exe").Path `
+                             -WorkingDirectory (Resolve-Path "app").Path `
+                             -ArgumentList "help" `
+                             -RedirectStandardOutput $outFile `
+                             -RedirectStandardError $errFile `
+                             -NoNewWindow -PassThru
+          $done = $p.WaitForExit(60000)
+          $killed = $false
+          if (-not $done) { $killed = $true; try { $p.Kill() } catch {} }
+          $code = if ($done) { $p.ExitCode } else { -999 }
+          Start-Sleep -Seconds 1
+          $so = if (Test-Path $outFile) { Get-Content $outFile -Raw } else { "" }
+          $se = if (Test-Path $errFile) { Get-Content $errFile -Raw } else { "" }
+          if ($null -eq $so) { $so = "" }
+          if ($null -eq $se) { $se = "" }
+
+          $cmds = @("accounts","copy","delete","dir","download","mkdir","move","quota","rename","search","sharelink","runsavedsync","startsync","transfer","upload","zipupload")
+          $hits = 0
+          foreach ($c in $cmds) { if ($so -match ("(?m)^" + $c + "\s")) { $hits++ } }
+          $hasTitle = $so.Contains("Air Explorer 5.11.0 command line")
+
+          $verdict = if ($code -eq 0 -and $hasTitle -and $hits -ge 16) { "PASS" } else { "FAIL" }
+
+          $o = @()
+          $o += "=== gui-cli label=${{ matrix.exe }} ==="
+          $o += "exit_code = $code  killed_by_timeout = $killed"
+          $o += "has_version_title = $hasTitle  command_lines_matched = $hits / 16"
+          $o += "VERDICT = $verdict"
+          $o += "--- stdout (first 60 lines) ---"
+          $o += ($so -split "`n" | Select-Object -First 60)
+          $o += "--- stderr ---"
+          $o += $se
+          $o | Out-File -FilePath "out\gui-cli.${{ matrix.exe }}.log" -Encoding utf8
+          Write-Host ($o -join "`n")
+
+      - name: 上传日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-cli-${{ matrix.exe }}
+          path: out/
+          if-no-files-found: warn

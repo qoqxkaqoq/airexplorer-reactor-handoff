@@ -1,0 +1,492 @@
+===== CloudClient.Templating.TemplateArgument/TemplateThread::GenerateAdaptableExtractor =====
+  IL_0000: ldc.i4 1927793163
+  IL_0005: stloc V_6
+  IL_0009: ldc.i4 5
+  IL_000E: stloc V_3
+  IL_0012: br.s IL_0045: ldarg.0
+  IL_0014: ldloc V_3
+  IL_0018: switch dnlib.DotNet.Emit.Instruction[]
+  IL_0045: ldarg.0 
+  IL_0046: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_004B: ldc.i4.s -2
+  IL_004D: ldc.i4 2
+  IL_0052: stloc V_3
+  IL_0056: ldc.i4 146253507
+  IL_005B: stloc V_6
+  IL_005F: ble.s IL_0014: ldloc V_3
+  IL_0061: ldc.i4 4
+  IL_0066: stloc V_3
+  IL_006A: ldc.i4 723561955
+  IL_006F: stloc V_6
+  IL_0073: ldarg.0 
+  IL_0074: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::isIntegratedProcessor : System.Boolean
+  IL_0079: brfalse IL_0173: ldarg.0
+  IL_007E: ldloc V_6
+  IL_0082: ldc.i4 -723561949
+  IL_0087: add 
+  IL_0088: stloc V_3
+  IL_008C: ldloc V_6
+  IL_0090: ldc.i4 484326962
+  IL_0095: add 
+  IL_0096: stloc V_6
+  IL_009A: br IL_0014: ldloc V_3
+  IL_009F: ldarg.0 
+  IL_00A0: ldc.i4.0 
+  IL_00A1: stfld CloudClient.Templating.TemplateArgument/TemplateThread::m_IsSystemQueue : System.Boolean
+  IL_00A6: br IL_06F0: ret
+  IL_00AB: ldarg.0 
+  IL_00AC: ldarg.0 
+  IL_00AD: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_00B2: ldc.i4.1 
+  IL_00B3: add 
+  IL_00B4: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_00B9: br IL_0000: ldc.i4 1927793163
+  IL_00BE: ldarg.0 
+  IL_00BF: ldc.i4.0 
+  IL_00C0: stfld CloudClient.Templating.TemplateArgument/TemplateThread::isIntegratedProcessor : System.Boolean
+  IL_00C5: ldloc V_6
+  IL_00C9: ldc.i4 -1207888909
+  IL_00CE: add 
+  IL_00CF: stloc V_3
+  IL_00D3: ldloc V_6
+  IL_00D7: ldc.i4 301520251
+  IL_00DC: add 
+  IL_00DD: stloc V_6
+  IL_00E1: br IL_0014: ldloc V_3
+  IL_00E6: ldarg.0 
+  IL_00E7: ldarg.0 
+  IL_00E8: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_00ED: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_00F2: br.s IL_0111: ldarg.0
+  IL_00F4: ldarg.0 
+  IL_00F5: ldloc.s V_1
+  IL_00F7: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_00FC: br.s IL_0173: ldarg.0
+  IL_00FE: ret 
+  IL_00FF: ldarg.0 
+  IL_0100: ldloc.s V_0
+  IL_0102: ldfld CloudClient.Templating.TemplateArgument/HandlerPublisher::_CommonBuilderObj : System.Object
+  IL_0107: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_SequentialFormatterTemplateObj : System.Object
+  IL_010C: br IL_019C: ldarg.0
+  IL_0111: ldarg.0 
+  IL_0112: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_TemplateConfig : CloudClient.Templating.TemplateArgument/DetachedCalculator
+  IL_0117: ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator::m_SequentialCalculators : System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/HandlerPublisher>
+  IL_011C: ldarg.0 
+  IL_011D: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_0122: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/HandlerPublisher>::get_Item : ?
+  IL_0127: stloc.s V_0
+  IL_0129: ldc.i4 3
+  IL_012E: stloc V_3
+  IL_0132: ldc.i4 767800116
+  IL_0137: stloc V_6
+  IL_013B: br.s IL_00FF: ldarg.0
+  IL_013D: ldarg.0 
+  IL_013E: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_0143: stloc.s V_1
+  IL_0145: ldloc V_6
+  IL_0149: ldc.i4 -1509409159
+  IL_014E: add 
+  IL_014F: stloc V_3
+  IL_0153: ldloc V_6
+  IL_0157: ldc.i4 -1153557304
+  IL_015C: add 
+  IL_015D: stloc V_6
+  IL_0161: br IL_0014: ldloc V_3
+  IL_0166: ldarg.0 
+  IL_0167: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_016C: stloc.s V_2
+  IL_016E: br IL_0710: ldarg.0
+  IL_0173: ldarg.0 
+  IL_0174: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_IsVisualPublisherTemplate : System.Boolean
+  IL_0179: brfalse IL_0731: ldarg.0
+  IL_017E: ldc.i4 1
+  IL_0183: stloc V_3
+  IL_0187: ldc.i4 72068700
+  IL_018C: stloc V_6
+  IL_0190: ldarg.0 
+  IL_0191: ldc.i4.0 
+  IL_0192: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_IsVisualPublisherTemplate : System.Boolean
+  IL_0197: br IL_00FE: ret
+  IL_019C: ldarg.0 
+  IL_019D: ldloc.s V_0
+  IL_019F: call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::DefineSetSet(CloudClient.Templating.TemplateArgument/HandlerPublisher)
+  IL_01A4: ldc.i4 0
+  IL_01A9: stloc V_3
+  IL_01AD: ldc.i4 496201961
+  IL_01B2: stloc V_6
+  IL_01B6: leave IL_00AB: ldarg.0
+  IL_01BB: stloc.s V_12
+  IL_01BD: ldc.i4 4
+  IL_01C2: stloc V_3
+  IL_01C6: ldc.i4 1992958799
+  IL_01CB: stloc V_6
+  IL_01CF: br IL_049F: ldloc.s V_12
+  IL_01D4: ldloc V_3
+  IL_01D8: switch dnlib.DotNet.Emit.Instruction[]
+  IL_0219: newobj System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::.ctor : ?
+  IL_021E: stloc.s V_7
+  IL_0220: br IL_05BB: ldloc.s V_5
+  IL_0225: ldarg.0 
+  IL_0226: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIndex : System.Int32
+  IL_022B: ldc.i4.0 
+  IL_022C: blt IL_06EE: leave.s IL_0741
+  IL_0231: ldc.i4 13
+  IL_0236: stloc V_3
+  IL_023A: ldc.i4 698487938
+  IL_023F: stloc V_6
+  IL_0243: br IL_069C: ldarg.0
+  IL_0248: ldloc.s V_13
+  IL_024A: brfalse IL_04DC: ldloc.s V_7
+  IL_024F: br IL_041C: ldloc.s V_13
+  IL_0254: ldarg.0 
+  IL_0255: call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::PlanRunner()
+  IL_025A: br IL_06EE: leave.s IL_0741
+  IL_025F: ldarg.0 
+  IL_0260: ldloc.s V_4
+  IL_0262: ldc.i4.0 
+  IL_0263: call System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile> CloudClient.Templating.TemplateArgument/TemplateThread::InstantiateConfigurableModule(System.Int32,System.Boolean)
+  IL_0268: stloc.s V_13
+  IL_026A: ldloc V_6
+  IL_026E: ldc.i4 -260380495
+  IL_0273: add 
+  IL_0274: stloc V_3
+  IL_0278: ldloc V_6
+  IL_027C: ldc.i4 64769705
+  IL_0281: add 
+  IL_0282: stloc V_6
+  IL_0286: br IL_01D4: ldloc V_3
+  IL_028B: ldarg.0 
+  IL_028C: ldloc.s V_12
+  IL_028E: stfld CloudClient.Templating.TemplateArgument/TemplateThread::templateRunner : System.Exception
+  IL_0293: br IL_04EE: ldarg.1
+  IL_0298: ldc.i4 1888946851
+  IL_029D: stloc V_6
+  IL_02A1: ldc.i4 4
+  IL_02A6: stloc V_3
+  IL_02AA: ldc.i4 1619301905
+  IL_02AF: stloc V_6
+  IL_02B3: br.s IL_0320: ldloca.s V_10
+  IL_02B5: ldloc V_3
+  IL_02B9: switch dnlib.DotNet.Emit.Instruction[]
+  IL_02DA: ldc.i4 4
+  IL_02DF: stloc V_3
+  IL_02E3: ldc.i4 1619301905
+  IL_02E8: stloc V_6
+  IL_02EC: br.s IL_0320: ldloca.s V_10
+  IL_02EE: ldarg.0 
+  IL_02EF: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::identifiableGatewayProxy : CloudClient.Templating.TemplateArgument/WrapperEnumerator
+  IL_02F4: ldloc.s V_12
+  IL_02F6: newobj System.Void CloudClient.Templating.TemplateArgument/ProgramFinder::.ctor(System.Object)
+  IL_02FB: callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::PatchCommand(CloudClient.Templating.TemplateArgument/ConnectedObserver)
+  IL_0300: ldc.i4 0
+  IL_0305: stloc V_3
+  IL_0309: ldc.i4 656293920
+  IL_030E: stloc V_6
+  IL_0312: br IL_03C3: ldarg.0
+  IL_0317: ldloc.s V_11
+  IL_0319: stloc.s V_8
+  IL_031B: br IL_03F9: leave IL_0596
+  IL_0320: ldloca.s V_10
+  IL_0322: call System.Collections.Generic.List`1/Enumerator<CloudClient.Templating.TemplateArgument/DistributorProfile>::MoveNext : ?
+  IL_0327: brtrue.s IL_0378: ldloca.s V_10
+  IL_0329: br IL_03F9: leave IL_0596
+  IL_032E: ldloc.s V_11
+  IL_0330: ldfld CloudClient.Templating.TemplateArgument/DistributorProfile::m_AdjustableDistributor : CloudClient.Templating.TemplateArgument/WrapperConfiguration
+  IL_0335: ldfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::m_WrapperContextScore : System.Int32
+  IL_033A: brtrue.s IL_02EE: ldarg.0
+  IL_033C: ldloc V_6
+  IL_0340: ldc.i4 -1971868974
+  IL_0345: add 
+  IL_0346: stloc V_3
+  IL_034A: ldloc V_6
+  IL_034E: ldc.i4 -1633164629
+  IL_0353: add 
+  IL_0354: stloc V_6
+  IL_0358: br IL_02B5: ldloc V_3
+  IL_035D: ldarg.0 
+  IL_035E: ldc.i4.0 
+  IL_035F: stfld CloudClient.Templating.TemplateArgument/TemplateThread::m_IsInitializerAllocator : System.Boolean
+  IL_0364: ldc.i4 6
+  IL_0369: stloc V_3
+  IL_036D: ldc.i4 1027293407
+  IL_0372: stloc V_6
+  IL_0376: br.s IL_0317: ldloc.s V_11
+  IL_0378: ldloca.s V_10
+  IL_037A: call System.Collections.Generic.List`1/Enumerator<CloudClient.Templating.TemplateArgument/DistributorProfile>::get_Current : ?
+  IL_037F: stloc.s V_11
+  IL_0381: ldc.i4 5
+  IL_0386: stloc V_3
+  IL_038A: ldc.i4 1971868975
+  IL_038F: stloc V_6
+  IL_0393: br.s IL_032E: ldloc.s V_11
+  IL_0395: ldloc.s V_11
+  IL_0397: stloc.s V_8
+  IL_0399: br.s IL_03F9: leave IL_0596
+  IL_039B: ldarg.0 
+  IL_039C: call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::PlanRunner()
+  IL_03A1: br.s IL_03D7: ldarg.0
+  IL_03A3: ldarg.0 
+  IL_03A4: ldarg.0 
+  IL_03A5: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_03AA: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_03AF: ldc.i4 3
+  IL_03B4: stloc V_3
+  IL_03B8: ldc.i4 909687587
+  IL_03BD: stloc V_6
+  IL_03C1: br.s IL_039B: ldarg.0
+  IL_03C3: ldarg.0 
+  IL_03C4: ldloc.s V_11
+  IL_03C6: ldfld CloudClient.Templating.TemplateArgument/DistributorProfile::m_AdjustableDistributor : CloudClient.Templating.TemplateArgument/WrapperConfiguration
+  IL_03CB: ldfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::m_DividedChainFreq : System.Int32
+  IL_03D0: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_03D5: br.s IL_03A3: ldarg.0
+  IL_03D7: ldarg.0 
+  IL_03D8: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::m_IsInitializerAllocator : System.Boolean
+  IL_03DD: ldc.i4 4
+  IL_03E2: stloc V_3
+  IL_03E6: ldc.i4 1619301905
+  IL_03EB: stloc V_6
+  IL_03EF: brfalse IL_02B5: ldloc V_3
+  IL_03F4: br IL_035D: ldarg.0
+  IL_03F9: leave IL_0596: ldloc.s V_8
+  IL_03FE: ldloca.s V_10
+  IL_0400: constrained. System.Collections.Generic.List`1/Enumerator<CloudClient.Templating.TemplateArgument/DistributorProfile>
+  IL_0406: callvirt System.IDisposable::Dispose : ?
+  IL_040B: endfinally 
+  IL_040C: ldarg.0 
+  IL_040D: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_0412: stloc.s V_4
+  IL_0414: br IL_0568: ldarg.0
+  IL_0419: ldloc.s V_12
+  IL_041B: throw 
+  IL_041C: ldloc.s V_13
+  IL_041E: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::get_Count : ?
+  IL_0423: ldc.i4.0 
+  IL_0424: ble IL_04DC: ldloc.s V_7
+  IL_0429: ldc.i4 1
+  IL_042E: stloc V_3
+  IL_0432: ldc.i4 1702929057
+  IL_0437: stloc V_6
+  IL_043B: br.s IL_0494: ldloc.s V_7
+  IL_043D: ldloc.s V_9
+  IL_043F: callvirt System.Exception::get_InnerException : ?
+  IL_0444: ldloc V_6
+  IL_0448: ldc.i4 -555024515
+  IL_044D: add 
+  IL_044E: stloc V_3
+  IL_0452: ldloc V_6
+  IL_0456: ldc.i4 724899079
+  IL_045B: add 
+  IL_045C: stloc V_6
+  IL_0460: brfalse IL_01D4: ldloc V_3
+  IL_0465: ldloc V_6
+  IL_0469: ldc.i4 -1279923592
+  IL_046E: add 
+  IL_046F: stloc V_3
+  IL_0473: ldloc V_6
+  IL_0477: ldc.i4 611671200
+  IL_047C: add 
+  IL_047D: stloc V_6
+  IL_0481: br IL_01D4: ldloc V_3
+  IL_0486: ldloc.s V_7
+  IL_0488: ldloc.s V_5
+  IL_048A: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::Add : ?
+  IL_048F: br IL_0248: ldloc.s V_13
+  IL_0494: ldloc.s V_7
+  IL_0496: ldloc.s V_13
+  IL_0498: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::AddRange : ?
+  IL_049D: br.s IL_04DC: ldloc.s V_7
+  IL_049F: ldloc.s V_12
+  IL_04A1: isinst System.Reflection.TargetInvocationException
+  IL_04A6: ldloc V_6
+  IL_04AA: ldc.i4 -1992958791
+  IL_04AF: add 
+  IL_04B0: stloc V_3
+  IL_04B4: ldloc V_6
+  IL_04B8: ldc.i4 -713035197
+  IL_04BD: add 
+  IL_04BE: stloc V_6
+  IL_04C2: brfalse IL_01D4: ldloc V_3
+  IL_04C7: br IL_0654: ldloc.s V_12
+  IL_04CC: ldarg.0 
+  IL_04CD: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::identifiableGatewayProxy : CloudClient.Templating.TemplateArgument/WrapperEnumerator
+  IL_04D2: callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::EncapsulateStatelessOrder()
+  IL_04D7: br IL_040C: ldarg.0
+  IL_04DC: ldloc.s V_7
+  IL_04DE: ldsfld CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::<>9__12_0 : System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile>
+  IL_04E3: dup 
+  IL_04E4: brtrue IL_06D5: callvirt System.Void System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::Sort(System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile>)
+  IL_04E9: br IL_06BE: pop
+  IL_04EE: ldarg.1 
+  IL_04EF: ldc.i4.1 
+  IL_04F0: stind.i1 
+  IL_04F1: ldc.i4 14
+  IL_04F6: stloc V_3
+  IL_04FA: ldc.i4 582946537
+  IL_04FF: stloc V_6
+  IL_0503: ldarg.0 
+  IL_0504: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::identifiableGatewayProxy : CloudClient.Templating.TemplateArgument/WrapperEnumerator
+  IL_0509: callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::EncapsulateStatelessOrder()
+  IL_050E: ldarg.0 
+  IL_050F: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_0514: stloc.s V_4
+  IL_0516: ldarg.0 
+  IL_0517: ldloc.s V_4
+  IL_0519: ldloc.s V_12
+  IL_051B: call CloudClient.Templating.TemplateArgument/DistributorProfile CloudClient.Templating.TemplateArgument/TemplateThread::InstantiateLocalSpec(System.Int32,System.Exception)
+  IL_0520: stloc.s V_5
+  IL_0522: ldc.i4 260380507
+  IL_0527: stloc V_6
+  IL_052B: ldarg.0 
+  IL_052C: ldloc.s V_4
+  IL_052E: ldc.i4.0 
+  IL_052F: call System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile> CloudClient.Templating.TemplateArgument/TemplateThread::InstantiateConfigurableModule(System.Int32,System.Boolean)
+  IL_0534: stloc.s V_13
+  IL_0536: br IL_0219: newobj System.Void System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::.ctor()
+  IL_053B: ldarg.0 
+  IL_053C: ldarg.0 
+  IL_053D: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_0542: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_0547: ldloc V_6
+  IL_054B: ldc.i4 -489474050
+  IL_0550: add 
+  IL_0551: stloc V_3
+  IL_0555: ldloc V_6
+  IL_0559: ldc.i4 -111114792
+  IL_055E: add 
+  IL_055F: stloc V_6
+  IL_0563: br IL_01D4: ldloc V_3
+  IL_0568: ldarg.0 
+  IL_0569: ldloc.s V_4
+  IL_056B: ldloc.s V_12
+  IL_056D: call CloudClient.Templating.TemplateArgument/DistributorProfile CloudClient.Templating.TemplateArgument/TemplateThread::InstantiateLocalSpec(System.Int32,System.Exception)
+  IL_0572: stloc.s V_5
+  IL_0574: ldc.i4 11
+  IL_0579: stloc V_3
+  IL_057D: ldc.i4 260380507
+  IL_0582: stloc V_6
+  IL_0586: ldarg.0 
+  IL_0587: ldloc.s V_4
+  IL_0589: ldc.i4.0 
+  IL_058A: call System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile> CloudClient.Templating.TemplateArgument/TemplateThread::InstantiateConfigurableModule(System.Int32,System.Boolean)
+  IL_058F: stloc.s V_13
+  IL_0591: br IL_0219: newobj System.Void System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::.ctor()
+  IL_0596: ldloc.s V_8
+  IL_0598: brtrue IL_062B: ldarg.0
+  IL_059D: br IL_0419: ldloc.s V_12
+  IL_05A2: ldarg.0 
+  IL_05A3: ldloc.s V_4
+  IL_05A5: ldloc.s V_8
+  IL_05A7: ldfld CloudClient.Templating.TemplateArgument/DistributorProfile::m_AdjustableDistributor : CloudClient.Templating.TemplateArgument/WrapperConfiguration
+  IL_05AC: ldfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::filterSetSize : System.Int32
+  IL_05B1: call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::GenerateLogicalProfiler(System.Int32,System.Int32)
+  IL_05B6: br IL_0225: ldarg.0
+  IL_05BB: ldloc.s V_5
+  IL_05BD: brfalse IL_0248: ldloc.s V_13
+  IL_05C2: ldc.i4 9
+  IL_05C7: stloc V_3
+  IL_05CB: ldc.i4 811680764
+  IL_05D0: stloc V_6
+  IL_05D4: br IL_0486: ldloc.s V_7
+  IL_05D9: ldloc.s V_9
+  IL_05DB: callvirt System.Exception::get_InnerException : ?
+  IL_05E0: stloc.s V_12
+  IL_05E2: ldloc V_6
+  IL_05E6: ldc.i4 -1891594794
+  IL_05EB: add 
+  IL_05EC: stloc V_3
+  IL_05F0: ldloc V_6
+  IL_05F4: ldc.i4 -611671200
+  IL_05F9: add 
+  IL_05FA: stloc V_6
+  IL_05FE: br IL_01D4: ldloc V_3
+  IL_0603: ldarg.0 
+  IL_0604: ldc.i4.m1 
+  IL_0605: stfld CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIndex : System.Int32
+  IL_060A: ldloc V_6
+  IL_060E: ldc.i4 -378359256
+  IL_0613: add 
+  IL_0614: stloc V_3
+  IL_0618: ldloc V_6
+  IL_061C: ldc.i4 1426405981
+  IL_0621: add 
+  IL_0622: stloc V_6
+  IL_0626: br IL_01D4: ldloc V_3
+  IL_062B: ldarg.0 
+  IL_062C: ldloc.s V_8
+  IL_062E: ldfld CloudClient.Templating.TemplateArgument/DistributorProfile::m_AdjustableDistributor : CloudClient.Templating.TemplateArgument/WrapperConfiguration
+  IL_0633: ldfld CloudClient.Templating.TemplateArgument/WrapperConfiguration::filterSetSize : System.Int32
+  IL_0638: stfld CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIndex : System.Int32
+  IL_063D: ldc.i4 6
+  IL_0642: stloc V_3
+  IL_0646: ldc.i4 283775349
+  IL_064B: stloc V_6
+  IL_064F: br IL_05A2: ldarg.0
+  IL_0654: ldloc.s V_12
+  IL_0656: castclass System.Reflection.TargetInvocationException
+  IL_065B: stloc.s V_9
+  IL_065D: ldc.i4 2
+  IL_0662: stloc V_3
+  IL_0666: ldc.i4 555024523
+  IL_066B: stloc V_6
+  IL_066F: br IL_043D: ldloc.s V_9
+  IL_0674: ldarg.0 
+  IL_0675: ldarg.0 
+  IL_0676: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIndex : System.Int32
+  IL_067B: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_0680: ldc.i4 3
+  IL_0685: stloc V_3
+  IL_0689: ldc.i4 489474055
+  IL_068E: stloc V_6
+  IL_0692: br IL_053B: ldarg.0
+  IL_0697: ldnull 
+  IL_0698: stloc.s V_8
+  IL_069A: br.s IL_06B0: ldloc.s V_7
+  IL_069C: ldarg.0 
+  IL_069D: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::identifiableGatewayProxy : CloudClient.Templating.TemplateArgument/WrapperEnumerator
+  IL_06A2: ldloc.s V_12
+  IL_06A4: newobj System.Void CloudClient.Templating.TemplateArgument/ProgramFinder::.ctor(System.Object)
+  IL_06A9: callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::PatchCommand(CloudClient.Templating.TemplateArgument/ConnectedObserver)
+  IL_06AE: br.s IL_0674: ldarg.0
+  IL_06B0: ldloc.s V_7
+  IL_06B2: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::GetEnumerator : ?
+  IL_06B7: stloc.s V_10
+  IL_06B9: br IL_0298: ldc.i4 1888946851
+  IL_06BE: pop 
+  IL_06BF: ldsfld CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::<>9 : CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa
+  IL_06C4: ldftn System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::vcQwAk1jyY(CloudClient.Templating.TemplateArgument/DistributorProfile,CloudClient.Templating.TemplateArgument/DistributorProfile)
+  IL_06CA: newobj System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::.ctor : ?
+  IL_06CF: dup 
+  IL_06D0: stsfld CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::<>9__12_0 : System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile>
+  IL_06D5: callvirt System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfile>::Sort : ?
+  IL_06DA: ldc.i4 0
+  IL_06DF: stloc V_3
+  IL_06E3: ldc.i4 1654727531
+  IL_06E8: stloc V_6
+  IL_06EC: br.s IL_0697: ldnull
+  IL_06EE: leave.s IL_0741: ret
+  IL_06F0: ret 
+  IL_06F1: ldarg.0 
+  IL_06F2: ldloc.s V_2
+  IL_06F4: stfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_06F9: ldc.i4 7
+  IL_06FE: stloc V_3
+  IL_0702: ldc.i4 1998442919
+  IL_0707: stloc V_6
+  IL_070B: br IL_00F4: ldarg.0
+  IL_0710: ldarg.0 
+  IL_0711: ldarg.0 
+  IL_0712: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplateVol : System.Int32
+  IL_0717: ldarg.0 
+  IL_0718: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx : System.Int32
+  IL_071D: call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::InstantiateEfficientError(System.Int32,System.Int32)
+  IL_0722: br.s IL_06F1: ldarg.0
+  IL_0724: ldarg.0 
+  IL_0725: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::identifiableGatewayProxy : CloudClient.Templating.TemplateArgument/WrapperEnumerator
+  IL_072A: callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::EncapsulateStatelessOrder()
+  IL_072F: br.s IL_0741: ret
+  IL_0731: ldarg.0 
+  IL_0732: ldfld CloudClient.Templating.TemplateArgument/TemplateThread::m_IsSystemQueue : System.Boolean
+  IL_0737: brfalse IL_00E6: ldarg.0
+  IL_073C: br IL_009F: ldarg.0
+  IL_0741: ret 

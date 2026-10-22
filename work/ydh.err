@@ -1,0 +1,15 @@
+You must install or update .NET to run this application.
+
+App: /home/z/.dotnet/tools/ilspycmd
+Architecture: x64
+Framework: 'Microsoft.NETCore.App', version '6.0.0' (x64)
+.NET location: /home/z/.dotnet
+
+The following frameworks were found:
+  8.0.32 at [/home/z/.dotnet/shared/Microsoft.NETCore.App]
+
+Learn more:
+https://aka.ms/dotnet/app-launch-failed
+
+To install missing framework, download:
+https://aka.ms/dotnet-core-applaunch?framework=Microsoft.NETCore.App&framework_version=6.0.0&arch=x64&rid=linux-x64&os=debian.13

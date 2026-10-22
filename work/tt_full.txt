@@ -1,0 +1,188 @@
+== 类 CloudClient.Templating.TemplateArgument/TemplateThread  字段数=35
+  字段 _TemplateConfig : CloudClient.Templating.TemplateArgument/DetachedCalculator
+  字段 activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  字段 dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+  字段 identifiableGatewayProxy : CloudClient.Templating.TemplateArgument/WrapperEnumerator
+  字段 templateEditor : CloudClient.Templating.TemplateArgument/ConnectedObserver
+  字段 templateRunner : System.Exception
+  字段 integratedResolvers : System.Collections.Generic.List`1<System.IntPtr>
+  字段 _ContainerTemplateIdx : System.Int32
+  字段 _OrderedSharerTemplateVol : System.Int32
+  字段 templateTransmitterIndex : System.Int32
+  字段 _SequentialFormatterTemplateObj : System.Object
+  字段 isIntegratedProcessor : System.Boolean
+  字段 m_IsSystemQueue : System.Boolean
+  字段 _IsVisualPublisherTemplate : System.Boolean
+  字段 m_IsInitializerAllocator : System.Boolean
+  字段 m_SimpleRecordTemplateDic : System.Collections.Generic.Dictionary`2<System.Type,System.Int32> [static]
+  字段 _TemplateExtractorObj : System.Object [static]
+  字段 tracerVerifierDic : System.Collections.Generic.Dictionary`2<System.Object,CloudClient.Templating.TemplateArgument/ConnectedObserver> [static]
+  字段 m_SequentialAttributeObj : System.Object [static]
+  字段 calcCacheDic : System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/FinderEngine> [static]
+  字段 _CentralFactoryDic : System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/FinderEngine> [static]
+  字段 m_TransformableCompilerTemplateObj : System.Object [static]
+  字段 m_TemplateTrackerMap : System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine> [static]
+  字段 _TemplateEncryptorMap : System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine> [static]
+  字段 _IdentifiableDecoratorTemplateObj : System.Object [static]
+  字段 adjustableEvaluatorTemplateDic : System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine> [static]
+  字段 selectorControllerObj : System.Object [static]
+  字段 m_AdvancedSummarizerTemplateObj : System.Object [static]
+  字段 _VirtualEmitterDic : System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer> [static]
+  字段 concreteIteratorTemplateDic : System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer> [static]
+  字段 _CommonNodeTemplateDic : System.Collections.Generic.Dictionary`2<System.Type,CloudClient.Templating.TemplateArgument/AdapterModule> [static]
+  字段 m_ExplorerUserObj : System.Object [static]
+  字段 m_InterruptibleLoggerTemplate : CloudClient.Templating.TemplateArgument/SymbolicInitializer [static]
+  字段 m_ScheduledHandlerTemplate : CloudClient.Templating.TemplateArgument/ContextAdapter [static]
+  字段 StoreLogger : CloudClient.Templating.TemplateArgument/TemplateThread [static]
+  -- .ctor (17 指令)
+     ldarg.0 
+     ldc.i4.0 
+     newarr CloudClient.Templating.TemplateArgument/ConnectedObserver
+     stfld CloudClient.Templating.TemplateArgument/TemplateThread::activeFinderTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+     ldarg.0 
+     ldc.i4.0 
+     newarr CloudClient.Templating.TemplateArgument/ConnectedObserver
+     stfld CloudClient.Templating.TemplateArgument/TemplateThread::dynamicTransactionTemplateArray : CloudClient.Templating.TemplateArgument/ConnectedObserver[]
+     ldarg.0 
+     newobj System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::.ctor()
+     stfld CloudClient.Templating.TemplateArgument/TemplateThread::identifiableGatewayProxy : CloudClient.Templating.TemplateArgument/WrapperEnumerator
+     ldarg.0 
+     ldc.i4.m1 
+     stfld CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIndex : System.Int32
+     ldarg.0 
+     call System.Object::.ctor : ?
+     ret 
+  -- .cctor (109 指令)
+     call System.Void CloudClient.Templating.DispatcherInitializer::DefineEfficientProfiler()
+     ldc.i4 1713473577
+     stloc V_1
+     ldc.i4 2
+     stloc V_0
+     ldloc V_0
+     switch dnlib.DotNet.Emit.Instruction[]
+     nop 
+     call System.Void CloudClient.Templating.DispatcherInitializer::InstantiateGlobalCalculator()
+     call System.Void CloudClient.Templating.DispatcherInitializer::DefineActiveEvent()
+     call System.Void AirExplorer.Search.FinderMap::DirectDefinition()
+     newobj System.Object::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::_TemplateExtractorObj : System.Object
+     ldc.i4 7
+     stloc V_0
+     ldc.i4 178056449
+     stloc V_1
+     br IL_0017: ldloc V_0
+     newobj System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine>::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::m_TemplateTrackerMap : System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine>
+     ldloc V_1
+     ldc.i4 -573982786
+     add 
+     stloc V_0
+     ldloc V_1
+     ldc.i4 -101640644
+     add 
+     stloc V_1
+     br IL_0017: ldloc V_0
+     newobj System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine>::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::_TemplateEncryptorMap : System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine>
+     ldloc V_1
+     ldc.i4 -472342146
+     add 
+     stloc V_0
+     ldloc V_1
+     ldc.i4 373107568
+     add 
+     stloc V_1
+     br IL_0017: ldloc V_0
+     newobj System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/FinderEngine>::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::calcCacheDic : System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/FinderEngine>
+     ldc.i4 6
+     stloc V_0
+     ldc.i4 436826969
+     stloc V_1
+     br IL_0017: ldloc V_0
+     newobj System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/FinderEngine>::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::_CentralFactoryDic : System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/FinderEngine>
+     ldloc V_1
+     ldc.i4 -436826969
+     add 
+     stloc V_0
+     ldloc V_1
+     ldc.i4 729888099
+     add 
+     stloc V_1
+     br IL_0017: ldloc V_0
+     newobj System.Collections.Generic.Dictionary`2<System.Object,CloudClient.Templating.TemplateArgument/ConnectedObserver>::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::tracerVerifierDic : System.Collections.Generic.Dictionary`2<System.Object,CloudClient.Templating.TemplateArgument/ConnectedObserver>
+     ldloc V_1
+     ldc.i4 -178056444
+     add 
+     stloc V_0
+     ldloc V_1
+     ldc.i4 1710524198
+     add 
+     stloc V_1
+     br IL_0017: ldloc V_0
+     newobj System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine>::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::adjustableEvaluatorTemplateDic : System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine>
+     ldc.i4 1
+     stloc V_0
+     ldc.i4 390771241
+     stloc V_1
+     br IL_0017: ldloc V_0
+     newobj System.Object::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::m_SequentialAttributeObj : System.Object
+     br IL_00CB: newobj System.Void System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/FinderEngine>::.ctor()
+     newobj System.Object::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::m_ExplorerUserObj : System.Object
+     br IL_01F7: ret
+     newobj System.Object::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::m_AdvancedSummarizerTemplateObj : System.Object
+     br IL_01CA: newobj System.Void System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer>::.ctor()
+     newobj System.Object::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::_IdentifiableDecoratorTemplateObj : System.Object
+     br IL_0142: newobj System.Void System.Collections.Generic.Dictionary`2<CloudClient.Templating.TemplateArgument/ExternalFunction,CloudClient.Templating.TemplateArgument/FinderEngine>::.ctor()
+     newobj System.Object::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::m_TransformableCompilerTemplateObj : System.Object
+     ldloc V_1
+     ldc.i4 -1166715065
+     add 
+     stloc V_0
+     ldloc V_1
+     ldc.i4 -592732274
+     add 
+     stloc V_1
+     br IL_0017: ldloc V_0
+     newobj System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer>::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::_VirtualEmitterDic : System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer>
+     br IL_01D9: newobj System.Void System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer>::.ctor()
+     newobj System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer>::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::concreteIteratorTemplateDic : System.Collections.Generic.Dictionary`2<System.Reflection.MethodBase,CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer>
+     br IL_0172: newobj System.Void System.Object::.ctor()
+     newobj System.Object::.ctor : ?
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread::selectorControllerObj : System.Object
+     br IL_0181: newobj System.Void System.Object::.ctor()
+     ret 
+== 类 CloudClient.Templating.TemplateArgument/TemplateThread/FunctionSynchronizer  字段数=0
+  -- .ctor (无体 指令)
+  -- .cctor (3 指令)
+     call System.Void CloudClient.Templating.DispatcherInitializer::DefineEfficientProfiler()
+     call System.Void CloudClient.Templating.DispatcherInitializer::InstantiateGlobalCalculator()
+     ret 
+== 类 CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa  字段数=3
+  字段 <>9 : CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa [static]
+  字段 <>9__12_0 : System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile> [static]
+  字段 SetupPredicate : CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa [static]
+  -- .cctor (8 指令)
+     call System.Void CloudClient.Templating.DispatcherInitializer::DefineEfficientProfiler()
+     call System.Void CloudClient.Templating.DispatcherInitializer::InstantiateGlobalCalculator()
+     call System.Void CloudClient.Templating.DispatcherInitializer::DefineActiveEvent()
+     call System.Void AirExplorer.Search.FinderMap::DirectDefinition()
+     newobj System.Void CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::.ctor()
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::<>9 : CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa
+     br IL_0023: ret
+     ret 
+  -- .ctor (4 指令)
+     nop 
+     nop 
+     nop 
+     ret 

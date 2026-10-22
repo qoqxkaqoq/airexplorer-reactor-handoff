@@ -1,0 +1,1789 @@
+
+记一次商业级 .NET 保护壳完整脱壳实战 - MadLongTom - 博客园
+会员
+周边
+新闻
+博问
+闪存
+赞助商
+Chat2DB
+所有博客
+当前博客
+我的博客
+我的园子
+账号设置
+会员中心
+    简洁模式 
+...
+退出登录
+注册
+登录
+MadTom
+Dev, Sec, Ops, AI
+首页
+新随笔
+联系
+订阅
+管理
+随笔 - 34&nbsp;
+文章 - 0&nbsp;
+评论 - 64&nbsp;
+阅读 - 
+31214
+记一次商业级 .NET 保护壳完整脱壳实战
+        一篇从零开始的 .NET 逆向工程实战分享，涵盖虚拟机、JIT Hook、Native花指令、控制流混淆的原理分析与脱壳脚本编写，最终实现全自动脱壳。
+合集 - .NET(14)
+1.
+[.NET] 使用客户端缓存提高API性能
+2025-01-10
+2.
+[.NET] Aspire Dashboard: 云原生可观测性
+2025-08-21
+3.
+.NET ThreadPool
+2025-08-28
+4.
+一个 Blazor/WinForm 开发者的 WPF 学习记：通往 Avalonia 的那条路
+2025-09-19
+5.
+[.NET] 🚀Aspire 9 新特性及优化
+2025-01-04
+6.
+[.NET] 单位转换实践：深入解析 Units.NET
+2025-01-05
+7.
+.NET CLR 内存结构与垃圾回收机制
+2025-08-18
+8.
+Garnet 架构设计
+2025-08-18
+9.
+Garnet集群模式多节点分片、动态键迁移和负载重平衡实现
+2025-08-18
+10.
+[.NET] API网关选择：YARP还是Ocelot？
+2025-01-06
+11.
+.NET Lock
+2025-08-18
+12.
+.NET ConcurrentDictionary
+2025-08-18
+13.
+.NET 数据结构
+2025-08-18
+14.
+记一次商业级 .NET 保护壳完整脱壳实战
+03-12
+收起
+记一次商业级 .NET 保护壳完整脱壳实战
+一篇从零开始的 .NET 逆向工程实战分享，涵盖虚拟机、JIT Hook、Native花指令、控制流混淆的原理分析与脱壳脚本编写，最终实现全自动脱壳。
+目录
+一、背景与目标
+二、初步侦察
+三、Layer 1：PE 段加密
+3.1 现象发现
+3.2 GStruct8 参数定位
+3.3 解密流程与脚本实现
+四、Layer 2：嵌入式原生 DLL
+4.1 GStruct1 / GStruct0 结构发现
+4.2 KDAR 紧凑 PE 格式还原
+4.3 jithook.dll 提取与去混淆
+五、Layer 3：JIT Hook 方法体加密（核心保护）
+5.1 JIT Hook 工作原理
+5.2 FOAP / NSWF 数据结构
+5.3 IL 方法体解密与 RVA 修补
+六、Layer 4：字符串混淆
+6.1 混淆方式与加密算法还原
+6.2 基于 dnlib 的自动化解密
+七、de4dot 符号标准化
+八、隐藏程序集提取：Lain.dll
+8.1 SummerDay 动态代理发现
+8.2 TestBB.qk 脚本解密与分析
+8.3 Bit-Flip 密码与 KDAR 变体
+九、总结与思考
+一、背景与目标
+在一次逆向工程任务中，我们遇到了一个被「乾坤引擎 (Qiankun Engine)」保护的程序集套件。该套件包含一个主程序 
+Main.exe
+ 和多个 DLL 模块，使用了多层保护策略，使得传统的 dnSpy / ILSpy 无法直接反编译。
+我们的目标是：
+理解
+ 乾坤引擎的每一层保护机制
+开发
+ 通用脱壳工具，一键还原所有受保护的程序集
+提取
+ 被隐藏加密的动态加载程序集
+最终我们成功处理了主WPF+DLL共10程序集，全部还原为可正常反编译的状态
+二、初步侦察
+拿到 
+Main.exe
+ (493,056 字节) 后，首先用 dnSpy 打开，发现：
+大部分方法体无法反编译
+ — dnSpy 显示方法体为抛出运行时异常
+字符串全部乱码
+ — 所有用户可见的字符串以及标签都被加密替换
+PE 段结构异常
+ — 使用 PE 工具检查，发现 
+.text
+ 段的 
+SizeOfRawData = 0
+（虚拟段），说明原始代码被移到了别处
+这些特征暗示至少存在三层保护。让我们逐层突破。
+PE 段异常特征
+Section
+      VA          VS        RO        RS        特征
+.text
+0x2000
+0x48200
+0x0
+0x0
+       [VIRTUAL] ← 异常！
+.text
+0x4C000
+0x400
+0x0
+0x0
+       [VIRTUAL] ← 异常！
+.rsrc
+0x4E000
+0x29254
+0x200
+0x29400
+   正常
+注意两个 
+.text
+ 段都是虚拟的（
+RS = 0
+），但有非零的 
+VirtualSize
+。这意味着 PE 加载器会为它们分配内存，但文件中没有数据 —— 数据必定在运行时被动态填充。
+三、Layer 1：PE 段加密
+3.1 现象发现
+在 PE 文件中搜索数据段，发现 
+.rsrc
+ 段之后还有额外的数据区域。通过交叉引用 .NET 模块初始化代码（
+ns2/GClass107.erhe34n3
+），我们发现了第一层保护的实现：
+原理
+：将 .NET 程序集的关键 PE 段（
+.text
+）内容用 RC4 加密 + GZip 压缩后存放到一个独立的数据段中，原始段变为虚拟段（
+RawSize = 0
+）。程序启动时由模块初始化代码解密还原到内存中。
+3.2 GStruct8 参数定位
+加密参数存储在一个名为 GStruct8 的结构中：
+┌─────────────────────────────────┐
+│ GStruct8                        │
+├─────────────────────────────────┤
+│ 
+byte
+[
+16
+]  key         RC4 密钥   │
+│ 
+uint32
+    count       加密段数    │
+│ GStruct7[count] entries 段描述表  │
+└─────────────────────────────────┘
+┌─────────────────────────────────┐
+│ GStruct7 (每条 
+16
+ 字节)           │
+├─────────────────────────────────┤
+│ 
+uint32
+  dest_rva    目标段 RVA    │
+│ 
+uint32
+  dest_size   解压后大小    │
+│ 
+uint32
+  src_rva     加密数据 RVA  │
+│ 
+uint32
+  enc_size    加密后大小    │
+└─────────────────────────────────┘
+定位策略
+：扫描有数据的段，寻找满足以下条件的偏移：
+偏移处有 16 字节非全零数据（RC4 密钥）
+紧跟的 uint32 值等于虚拟段数量
+后续的 GStruct7 表中 
+dest_rva
+ 恰好匹配虚拟段的 VirtualAddress
+本样本的参数：
+RC4 密钥: a2d40244a915d403c06ebe4793e74809
+段数量: 
+2
+段 
+1
+: 加密数据 RVA 
+0xA2000
+ (
+165
+,
+414
+ 字节)
+      → 目标 RVA 
+0x2000
+  (解压后 
+295
+,
+424
+ 字节 = .NET 核心代码段)
+段 
+2
+: 加密数据 RVA 
+0xCA228
+ (
+647
+ 字节)
+      → 目标 RVA 
+0x4C000
+ (解压后 
+1
+,
+024
+ 字节 = 辅助代码段)
+3.3 解密流程与脚本实现
+关键发现
+：RC4 状态在多个段之间是
+连续
+的 —— 第一个段解密后，RC4 密钥流不重置，第二个段接着使用当前状态继续解密。这一点很重要，如果错误地为每个段重新初始化 RC4，第二个段将无法正确解密。
+def
+decrypt_outer_sections
+(
+pe, gstruct8
+):
+"""Layer 1 解密 — 注意 RC4 共享状态"""
+    result = {}
+    key = gstruct8[
+'key'
+]
+    rc4 = RC4(key)  
+# ★ 单实例，共享密钥流
+for
+ entry 
+in
+ gstruct8[
+'entries'
+]:
+# 1. 从 src_rva 读取加密数据
+        src_off = pe.rva_to_offset(entry[
+'src_rva'
+])
+        encrypted = pe.data[src_off:src_off + entry[
+'enc_size'
+]]
+# 2. RC4 解密（连续密钥流）
+        decrypted = rc4.crypt(encrypted)
+# 3. GZip 解压
+        decompressed = gzip.decompress(decrypted)
+        result[entry[
+'dest_rva'
+]] = decompressed
+return
+ result
+解密后需要重建 PE 文件，将解密的段数据填入正确的文件偏移，并更新段表中的 
+SizeOfRawData
+ 和 
+PointerToRawData
+：
+def
+build_decrypted_pe
+(
+pe, decrypted_sections
+):
+"""重建 PE 文件 — 将虚拟段转为有数据的实段"""
+    FILE_ALIGN = pe.file_alignment
+    cur_offset = align_up(pe.size_of_headers, FILE_ALIGN)
+# 为每个段计算新的文件偏移
+    new_pe = 
+bytearray
+(...)
+for
+ sec 
+in
+ pe.sections:
+if
+ sec.virtual_address 
+in
+ decrypted_sections:
+            data = decrypted_sections[sec.virtual_address]
+# 更新段头: SizeOfRawData, PointerToRawData
+# 写入解密数据
+return
+ new_pe
+Layer 1 完成后，
+Main.exe
+ 从 493,056 字节展开为 789,504 字节的完整 PE 文件。
+四、Layer 2：嵌入式原生 DLL
+4.1 GStruct1 / GStruct0 结构发现
+第一层解密后，PE 内部暴露出更多数据。通过分析 
+ns0/GClass21
+ 和 
+ns0/GClass22
+，我们发现 .NET 程序集内嵌入了原生 DLL（用于 JIT Hook 注入）。
+GStruct1（主控结构，48 字节）
+：
+偏移  大小  内容
+0x00
+4
+int32
+ = 
+48
+（结构大小标识）
+0x04
+12
+    保留字段
+0x0C
+4
+uint32
+ dll_table_rva — GStruct0 表的 RVA
+0x10
+16
+    保留字段
+0x20
+16
+byte
+[
+16
+] key — 全局 RC4 主密钥
+GStruct0（DLL 描述表，56 字节）
+：
+偏移  大小  内容
+0x00
+12
+byte
+[
+12
+] name — 混淆的 DLL 名称
+0x0C
+4
+uint32
+ bitness — 
+32
+ 或 
+64
+0x10
+16
+byte
+[
+16
+] key — 该 DLL 专属的 RC4 密钥
+0x20
+8
+uint64
+ data_rva — 加密数据的 RVA
+0x28
+8
+uint64
+ config_rva — 配置数据 RVA（
+0
+ = 无）
+0x30
+8
+     保留
+DLL 名称的解混淆算法：
+def
+decode_dll_name
+(
+gs0
+):
+"""name[i] = ((name[i] - 1) &amp; 0xFF) ^ key[i]"""
+    decoded = []
+for
+ i 
+in
+range
+(
+12
+):
+        b = ((gs0[
+'name'
+][i] - 
+1
+) &amp; 
+0xFF
+) ^ gs0[
+'key'
+][i]
+if
+ b == 
+0
+: 
+break
+        decoded.append(b)
+return
+bytes
+(decoded).decode(
+'ascii'
+)
+定位到的嵌入 DLL：
+名称:
+jithook
+位数:
+32
+Per-DLL Key:
+2c9cf37e45dc022494ca4e41cebb4948
+数据
+RVA:
+0x2E200
+配置
+RVA:
+0x0
+（表示方法体映射嵌入在主
+PE
+中）
+4.2 KDAR 紧凑 PE 格式还原
+在 
+data_rva
+ 处读取的加密载荷结构：
+偏移  大小   内容
+0
+x00  
+4
+      enc_size — 加密数据总长度
+0
+x04  
+4
+padding
+0
+x08  
+16
+     block_key — 块级 RC4 密钥
+0
+x18  N      encrypted_payload — RC4 加密的紧凑 PE 数据
+解密后得到的不是标准 PE 文件，而是乾坤引擎自定义的 
+KDAR 紧凑格式
+：
+┌───────────────────────────────────────────┐
+│ 
+KDAR
+Compact
+PE
+Format
+                     │
+├───────────────────────────────────────────┤
+│ 
+[0:4]
+format_indicator
+ (&gt; 
+8
+, 标识紧凑模式) │
+│ 
+[4:6]
+Machine
+                            │
+│ 
+[6:8]
+NumberOfSections
+                   │
+│ 
+[8:10]
+SizeOfOptionalHeader
+               │
+│ 
+[10:12]
+Characteristics
+                    │
+│ 
+[12:14]
+Magic
+ (
+0
+x10B=PE32, 
+0
+x20B=PE32+)    │
+│ 
+[14:18]
+AddressOfEntryPoint
+                │
+│ 
+[18:22]
+ImageBase
+                          │
+│ 
+[34:38]
+SizeOfImage
+                        │
+│ 
+[42:44]
+DllCharacteristics
+                 │
+│ 
+[46:70]
+DataDirectories
+ (Export,Import,Reloc)│
+│ 
+[94:94+36*N]
+Section
+Headers
+ (
+36
+字节/个):   │
+│   
+[+0:+4]
+VirtualAddress
+                 │
+│   
+[+4:+8]
+VirtualSize
+                    │
+│   
+[+8:+12]
+RawSize
+ (加密)                  │
+│   
+[+12:+16]
+RawPointer
+ (紧凑数据内偏移)     │
+│   
+[+20:+36]
+RC4
+Key
+ (
+16
+字节, 每段独立)      │
+└───────────────────────────────────────────┘
+每个段的数据都使用独立的 RC4 密钥单独加密
+，需要逐段解密后拼装成标准 PE 文件。还原流程：
+解析紧凑头 → 获取段数量、机器类型等
+依次解析 36 字节的段头 → 获取每段的 VA/VS/RS 和 16 字节 RC4 密钥
+对每个段：从紧凑数据的 
+RawPointer
+ 处读取 
+RawSize
+ 字节 → RC4 解密
+构建标准 DOS Header + PE Header + Optional Header + Section Headers
+按 0x200 文件对齐写入各段数据
+最终提取出 
+jithook.dll
+（115,200 字节）。
+4.3 jithook.dll 提取与去混淆
+提取出的 
+jithook.dll
+ 本身也被混淆了。混淆方式是将函数逻辑拆分到 
+.text
+ 和 
+.rsrc
+ 两个段之间：
+执行流: .
+text
+ → 
+CALL
+ → .rsrc (Level 
+1
+ 跳板)
+                         ↓
+                    .rsrc (Level 
+2
+ 代码块: 真实逻辑 + 垃圾指令)
+                         ↓
+                    JCC/JMP → .
+text
+ (返回)
+Level 1 跳板
+：
+lea esp,[esp+4]; call $+5; add [esp],delta; ret
+ — 纯粹的地址跳转，无实际功能
+Level 2 代码块
+：包含真实的 CMP/JCC/MOV 等指令，但夹杂大量垃圾寄存器操作（PUSH+POP、XCHG、无效 MOV 等）
+我们编写了 
+deobfuscate_jithook.py
+ 去混淆脚本：
+扫描 
+.text
+ 段中所有 
+CALL → .rsrc
+ 的指令
+解析 Level 1 跳板的 
+call $+5 + add [esp], delta
+ 模式确定跳转目标
+将 
+.text
+ 段中 CALL 之间的垃圾字节替换为 NOP
+将 
+.rsrc
+ 段标记为可执行（添加 
+IMAGE_SCN_MEM_EXECUTE
+）
+生成 IDA Python 辅助脚本，自动标记 
+.rsrc
+ 中的代码区域
+去混淆后在 IDA Pro 中成功还原出关键函数 
+sub_100013B0
+（JIT Hook 主处理函数，0x93A 字节），这是理解 Layer 3 的关键。
+五、Layer 3：JIT Hook 方法体加密（核心保护）
+这是乾坤引擎最核心的保护层，也是最难逆向的部分。
+5.1 JIT Hook 工作原理
+.NET 运行时通过 JIT (Just-In-Time) 编译器将 IL 代码编译为本机代码。乾坤引擎通过以下方式劫持此过程：
+正常 JIT 流程:
+  CLR 调用 compileMethod(
+info
+)
+    → 
+info
+-&gt;ILCode 指向原始 IL
+    → JIT 编译为机器码
+被 Hook 的 JIT 流程:
+  CLR 调用 compileMethod(
+info
+)
+    → jithook.dll 拦截
+    → 发现 
+info
+-&gt;ILCode 指向通用存根
+    → 在 NSWF 表中查找方法 Token
+    → RC4 解密真实 IL → 验证 VBPD 标签
+    → 回写 
+info
+-&gt;ILCode / ILCodeSize / EHcount
+    → 调用原始 compileMethod 编译还原后的 IL
+存根方法体
+：所有受保护方法的 MethodDef 表 RVA 被修改为指向同一个 Tiny 方法体存根：
+RVA 0x636A4:
+2E
+72
+AE
+2E
+00
+70
+73
+30
+02
+00
+0A
+7A
+这是一个 11 字节的 Tiny Header 方法体，功能为加载一个字符串 "Runtime Exception" 并抛出异常。如果没有 JIT Hook 介入，调用受保护方法会直接以异常方式崩溃。
+5.2 FOAP / NSWF 数据结构
+通过逆向 jithook.dll 的主处理函数 
+sub_100013B0
+，我们还原了两个关键数据结构：
+FOAP 块
+（紧接在存根方法体之后）：
+偏移  大小  描述
+0x00
+4
+     magic = 
+0x50414F46
+ (
+"FOAP"
+)
+0x04
+4
+     relative_offset
+0x08
+4
+NSWF
+ 的绝对 RVA
+NSWF 方法查找表
+：
+偏移  大小  描述
+0x00
+4
+     magic = 
+0x4E535746
+ (
+"NSWF"
+)
+0x04
+4
+count
+ — 受保护方法数量
+0x08
+  ...   entries[
+count
+]，每条 
+24
+ 字节
+NSWF 条目格式（24 字节）
+：
+偏移  大小  类型      描述
+0x00
+4
+uint32
+    method_token     MethodDef 令牌 (
+0x06
+XXXXXX)
+0x04
+4
+int32
+     relative_offset  相对偏移（运行时导航用）
+0x08
+4
+uint32
+    original_rva     加密 IL 体在 PE 中的原始 RVA
+0x0C
+4
+uint32
+    encrypted_size   加密数据长度（含 
+4
+ 字节 VBPD）
+0x10
+4
+uint32
+    extra_data       异常处理元数据
+0x14
+4
+uint32
+    reserved         保留（始终为 
+0
+）
+5.3 IL 方法体解密与 RVA 修补
+关键发现
+：加密后的 IL 方法体存放在 PE 中的
+原始位置
+（即原方法体所在的 RVA 处），只是就地加密了。加壳流程为：
+加壳:
+  1.
+ 记录原始方法体的 RVA 和大小
+  2.
+ 在方法体末尾追加 4 字节 VBPD 验证标签
+  3.
+ 使用 RC4 整体加密 [方法体 + VBPD]
+  4.
+ 将加密结果写回原位
+  5.
+ 将 MethodDef RVA 改为通用存根 RVA
+RC4 密钥
+（从 jithook.dll 
+sub_100013B0 + 0x222
+ 处提取）：
+5
+F
+21
+ B1 
+1
+A EA DB 
+17
+23
+ B5 
+87
+9
+F
+1
+C 
+2
+D 
+77
+ FC 
+9
+B
+对应的 x86 汇编：
+mov
+ [
+esp
++
+0x4c
+], 
+0x1AB1215F
+; 5F 21 B1 1A
+mov
+ [
+esp
++
+0x58
+], 
+0x2317DBEA
+; EA DB 17 23
+mov
+ [
+esp
++
+0x5c
+], 
+0x1C9F87B5
+; B5 87 9F 1C
+mov
+ [
+esp
++
+0x60
+], 
+0x9BFC772D
+; 2D 77 FC 9B
+解密流程：
+JITHOOK_RC4_KEY = 
+bytes
+.fromhex(
+'5F21B11AEADB1723B5879F1C2D77FC9B'
+)
+VBPD_TAG = 
+b'\x56\x42\x50\x44'
+# "VBPD"
+def
+restore_method_bodies
+(
+pe_data, pe
+):
+# 1. 定位 FOAP → NSWF
+    loc = find_nswf_foap(pe_data, pe)
+    entries = parse_nswf_entries(pe_data, loc[
+'nswf_off'
+])
+# 2. 逐条解密 IL 方法体
+for
+ entry 
+in
+ entries:
+        file_off = pe.rva_to_offset(entry[
+'orig_rva'
+])
+        encrypted = pe_data[file_off:file_off + entry[
+'enc_size'
+]]
+# ★ 每个方法体独立初始化 RC4（与 Layer 1 不同！）
+        decrypted = RC4(JITHOOK_RC4_KEY).crypt(encrypted)
+# 3. 验证 VBPD 标签
+assert
+ decrypted[-
+4
+:] == VBPD_TAG, 
+"VBPD 验证失败！"
+# 4. 写回解密的方法体（去除 VBPD 标签）
+        pe_data[file_off:file_off + 
+len
+(decrypted) - 
+4
+] = decrypted[:-
+4
+]
+# 5. 修补 MethodDef 表 RVA
+#    找到存根 RVA（出现次数最多的 RVA），然后根据 NSWF 条目将每个
+#    指向存根的 MethodDef RVA 修改回 original_rva
+    patch_methoddef_rvas(pe_data, pe, entries)
+RVA 修补的核心思路
+：
+解析 .NET 元数据的 
+#~
+ 流，定位 MethodDef 表（Table 6），遍历所有方法行。找到出现次数最多的 RVA（即通用存根 RVA，本样本中为 0x636A4，被 457 个方法引用），然后根据 NSWF token→original_rva 映射，将 MethodDef 行中的 RVA 恢复为原始位置。
+计算 MethodDef 表的偏移需要正确跳过 Table 0-5：
+Table
+名称
+行大小计算
+0
+Module
+2 + str_idx + guid_idx × 3
+1
+TypeRef
+ResolutionScope + str_idx × 2
+2
+TypeDef
+4 + str_idx × 2 + TypeDefOrRef + field_idx + method_idx
+3
+FieldPtr
+field_idx
+4
+Field
+2 + str_idx + blob_idx
+5
+MethodPtr
+method_idx
+6
+MethodDef
+4 + 2 + 2 + str_idx + blob_idx + param_idx
+其中索引大小取决于 
+HeapSizes
+ 标志和各表的行数（超过 0xFFFF 则使用 4 字节索引）。
+Layer 3 验证结果
+：
+指标
+值
+总 MethodDef
+1206
+抽象/接口方法 (RVA=0)
+142
+受保护方法 (NSWF)
+456
+VBPD 验证通过
+456 (100%)
+RVA 修补成功
+456
+最终可反编译方法
+1063 / 1063 (100%)
+六、Layer 4：字符串混淆
+6.1 混淆方式与加密算法还原
+经过 Layer 1-3 的脱壳，dnSpy 已经可以看到方法体，但所有字符串仍然是乱码。分析发现：
+每个加密字符串的使用模式为：
+// 混淆前
+string
+ text = 
+"正常文本"
+;
+// 混淆后
+string
+ text = Class0.smethod_14(
+"\u5a3c\u2b18\u093f..."
+);
+即 
+ldstr &lt;encrypted_token&gt;
+ 后紧跟 
+call smethod_14
+ 的模式。
+smethod_14
+ 内部是一个 
+DynamicMethod
+ 代理，运行时 RC4 解密一段 IL 字节码，构建动态方法，然后调用它来解密字符串。
+我们通过动态调试或静态分析还原了核心解密算法：
+def
+decrypt_string
+(
+s
+):
+"""基于长度的 XOR 解密"""
+    key = (
+len
+(s) ^ 
+88
+) &amp; 
+0xFF
+return
+''
+.join(
+chr
+(((
+ord
+(s[i]) + 
+10
+ + i) ^ key) &amp; 
+0xFFFF
+)
+for
+ i 
+in
+range
+(
+len
+(s))
+    )
+算法很简单：
+Key 取自字符串长度异或 88 的低 8 位
+每个字符：
+decrypted[i] = (encrypted[i] + 10 + i) ^ key
+6.2 基于 dnlib 的自动化解密
+使用 dnlib 可以非常优雅地完成字符串去混淆。思路是：
+找到解密方法
+：遍历所有方法体，统计 
+ldstr + call
+ 模式中被调用最多的方法（出现 ≥ 3 次即认定为解密函数）
+解密并替换
+：对每个 
+ldstr + call decrypt
+ 的位置，解密字符串后直接修改 
+ldstr
+ 的操作数，然后将 
+call
+ 指令改为 
+nop
+保存
+：使用 
+MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack
+ 写入，确保不改变元数据布局
+static
+void
+Layer4_DeobfuscateStrings
+(
+string
+ inputPath, ...
+)
+{
+using
+var
+ mod = ModuleDefMD.Load(inputPath);
+// 1. 自动检测解密方法
+var
+ callCounts = 
+new
+ Dictionary&lt;
+uint
+, 
+int
+&gt;();
+foreach
+ (
+var
+ type 
+in
+ mod.GetTypes())
+foreach
+ (
+var
+ method 
+in
+ type.Methods)
+        {
+if
+ (!method.HasBody) 
+continue
+;
+var
+ instrs = method.Body.Instructions;
+for
+ (
+int
+ i = 
+0
+; i &lt; instrs.Count - 
+1
+; i++)
+if
+ (instrs[i].OpCode == OpCodes.Ldstr &amp;&amp;
+                    instrs[i + 
+1
+].OpCode == OpCodes.Call &amp;&amp;
+                    instrs[i + 
+1
+].Operand 
+is
+ MethodDef calledMethod)
+                    callCounts[calledMethod.MDToken.Raw]++;
+        }
+uint
+ decryptToken = callCounts.MaxBy(kv =&gt; kv.Value).Key;
+// 2. 解密并替换
+foreach
+ (
+var
+ type 
+in
+ mod.GetTypes())
+foreach
+ (
+var
+ method 
+in
+ type.Methods)
+        {
+if
+ (!method.HasBody) 
+continue
+;
+var
+ instrs = method.Body.Instructions;
+for
+ (
+int
+ i = 
+0
+; i &lt; instrs.Count - 
+1
+; i++)
+            {
+if
+ (instrs[i].OpCode != OpCodes.Ldstr) 
+continue
+;
+if
+ (instrs[i + 
+1
+].Operand 
+is
+not
+ MethodDef cm ||
+                    cm.MDToken.Raw != decryptToken) 
+continue
+;
+string
+ enc = (
+string
+)instrs[i].Operand;
+                instrs[i].Operand = DecryptString(enc);  
+// 直接替换
+                instrs[i + 
+1
+].OpCode = OpCodes.Nop;      
+// NOP 掉 call
+                instrs[i + 
+1
+].Operand = 
+null
+;
+            }
+        }
+// 3. 保存
+var
+ opts = 
+new
+ ModuleWriterOptions(mod)
+    {
+        MetadataOptions = {
+            Flags = MetadataFlags.PreserveAll
+                  | MetadataFlags.KeepOldMaxStack  
+// ★ 关键！
+        }
+    };
+    mod.Write(outputPath, opts);
+}
+踩坑记录
+：如果不加 
+MetadataFlags.KeepOldMaxStack
+，dnlib 会在写入时重新计算 MaxStack，对于某些特殊的 
+&lt;Module&gt;::.cctor()
+ 方法会因为无法正确推断栈深度而抛出异常。加上 
+KeepOldMaxStack
+ 可以保留原始的 MaxStack 值，安全绕过此问题。
+七、de4dot 符号标准化
+经过四层脱壳后，程序集已经可以正常反编译，但类名和方法名仍然是混淆后的名称（如 
+GClass107
+、
+smethod_14
+ 等）。使用 de4dot 进行符号标准化，使代码更易读：
+$de4dot
+ = 
+"..\de4dot.exe"
+# 对所有解密后的程序集执行 de4dot
+$assemblies
+ = 
+@
+(
+"Main_unpacked\Main_restored_deobf.exe"
+,
+"SummerDay_unpacked\SummerDay_restored_deobf.dll"
+,
+# ... 其他 7 个程序集
+)
+foreach
+ (
+$asm
+in
+$assemblies
+) {
+    &amp; 
+$de4dot
+$asm
+--dont-rename
+}
+注意使用 
+--dont-rename
+ 参数可以在不重命名符号的情况下进行其他清理，或者不加此参数让 de4dot 自动重命名混淆符号为更友好的名称。
+清理后的程序集收集到 
+cleaned_assemblies
+ 文件夹中，使用原始文件名：
+cleaned_assemblies/
+├── Main.exe                              (304 KB)
+├── SummerDay.dll                         (176 KB)
+├── 
+&lt;
+REDACTED
+&gt;
+.Lain.dll                   (2,437 KB)
+├── 
+&lt;
+REDACTED
+&gt;
+.Common.dll                 (148 KB)
+├── 
+&lt;
+REDACTED
+&gt;
+.CommonView.dll             (460 KB)
+├── 
+&lt;
+REDACTED
+&gt;
+.DDFXY.dll                  (142 KB)
+├── 
+&lt;
+REDACTED
+&gt;
+.DDFXYRJ.dll                (586 KB)
+├── 
+&lt;
+REDACTED
+&gt;
+.JXB.dll                    (1,438 KB)
+├── 
+&lt;
+REDACTED
+&gt;
+.SSKZY.dll                  (3,856 KB)
+└── 
+&lt;
+REDACTED
+&gt;
+.SSZKS.dll                  (11,675 KB)
+八、隐藏程序集提取：
+.Lain.dll
+在完成常规脱壳后，我们发现了一个有意思的隐藏机制 —— 
+SummerDay.dll
+ 并不是一个普通的功能模块，它是一个
+动态代理
+，在运行时会加载并解密一个伪装成 PNG 的 .NET 程序集。
+8.1 SummerDay 动态代理发现
+在 dnSpy 中分析 SummerDay.dll 的入口点 
+BegionWork
+ 方法（注意拼写，是作者的笔误），发现它引用了一个文件 
+&lt;REDACTED&gt;.Lain.png
+。顺藤摸瓜，发现 SummerDay 实际上是一个完整的
+脚本引擎
+：
+Engine
+ 类：脚本解释器核心
+Runtime
+ 类：脚本运行时环境
+FileLib
+：文件操作库（
+readb
+ = 读取二进制文件）
+StandardLib
+：标准库（
+log
+ 等）
+SummerDay
+ 库：加密/解密函数（
+getbytesc
+、
+getcond
+、
+upc
+、
+loadass
+）
+脚本引擎读取 
+TestBB.qk
+ 文件，解密后执行其中的脚本逻辑来完成 Lain 程序集的解密和加载。
+8.2 TestBB.qk 脚本解密与分析
+TestBB.qk
+ 文件（222 字节）也是被加密的，使用的正是同一个 KDAR 格式，但属于 
+EngineQt 模式
+（CodeMod=0，10 字节头）。
+解密后得到脚本内容：
+var
+ heard = 
+0
+x4B444152
+var
+ CodeMod = 
+0
+x01
+var
+ orifile = 
+file
+.readb(OriPth)
+var
+ cc = getbytesc(orifile)
+var
+ oric = getcond(cc)
+set
+ orifile = upc(orifile,oric,heard)
+set
+ OutPth = loadass(orifile)
+log(OutPth)
+脚本解读：
+heard = 0x4B444152
+ → KDAR 标识
+CodeMod = 0x01
+ → 使用 SummerDay 模式（与 EngineQt 不同）
+file.readb(OriPth)
+ → 读取 
+&lt;REDACTED&gt;.Lain.png
+ 的原始字节
+getbytesc(orifile)
+ → 从文件中提取 3 个编码字节（偏移 6、9、10）
+getcond(cc)
+ → 根据 3 字节生成编码表（Coding Table）
+upc(orifile, oric, heard)
+ → 使用编码表解密文件
+loadass(orifile)
+ → 将解密结果作为 .NET 程序集加载
+8.3 Bit-Flip 密码与 KDAR 变体
+深入分析 SummerDay 库中的 
+upc
+ 函数（对应 
+SummerDayLib.Libs.SummerDay.GoStart
+ 方法），发现它使用了一种
+比特翻转密码 (Bit-Flip Cipher)
+：
+将输入数据的每个字节展开为二进制字符串
+使用编码表（8 组 3 位二进制码，一一映射到 
+000
+-
+111
+）进行替换
+将替换后的二进制字符串重新组装为字节
+这里有一个非常重要的差异：
+特性
+EngineQt (CodeMod=0)
+SummerDay (CodeMod=1)
+头部大小
+10 字节
+11 字节
+GoStart 方向
+正向（Max=false, i++ 递增）
+反向（Max=true, i-- 递减）
+编码表来源
+硬编码 
+["111","110","010","100","000","001","101","011"]
+从文件数据动态生成
+动态编码表生成
+：
+def
+getcond
+(
+cc
+):
+"""从 3 个字节生成 8 组 3 位编码表"""
+# cc = [byte_at_6, byte_at_9, byte_at_10]
+# 将 3 字节转为 24 位二进制串
+    bits = 
+''
+.join(
+format
+(b, 
+'08b'
+) 
+for
+ b 
+in
+ cc)
+# 分为 8 组，每组 3 位
+return
+ [bits[i*
+3
+:(i+
+1
+)*
+3
+] 
+for
+ i 
+in
+range
+(
+8
+)]
+GoStart 反向遍历
+（SummerDay 模式）：
+在 EngineQt 模式中，
+GoStart
+ 从替换后的第一个字符开始正向扫描二进制字符串；而在 SummerDay 模式中，
+从最后一个字符开始反向扫描
+，每次从尾部截取对应长度的子串进行解码。这是两种模式最关键的区别。
+8.4 解密脚本与结果验证
+将以上分析汇总为 Python 解密脚本：
+def
+decrypt_lain
+(
+input_path, output_path
+):
+    data = 
+open
+(input_path, 
+'rb'
+).read()
+    n = 
+len
+(data)
+# 1. 读取头部（SummerDay 模式：11 字节头）
+    header = data[:
+11
+]
+# 2. 提取编码条件字节
+    cc = [data[
+6
+], data[
+9
+], data[
+10
+]]
+# 3. 生成编码表
+    bits_24 = 
+''
+.join(
+format
+(b, 
+'08b'
+) 
+for
+ b 
+in
+ cc)
+    coding = [bits_24[i*
+3
+:(i+
+1
+)*
+3
+] 
+for
+ i 
+in
+range
+(
+8
+)]
+# Coding 表建立: value → encoded_bits 的映射
+    coding_map = {}
+for
+ i, code 
+in
+enumerate
+(coding):
+        coding_map[code] = 
+format
+(i, 
+'03b'
+)  
+# i → binary(i)
+# 4. 将载荷（去掉头部）转为二进制字符串
+    payload = data[
+11
+:]
+    bin_str = 
+''
+.join(
+format
+(b, 
+'08b'
+) 
+for
+ b 
+in
+ payload)
+# 5. 反向解码（SummerDay 模式的 GoStart）
+    decoded_bits = []
+while
+len
+(bin_str) &gt;= 
+3
+:
+# 从尾部截取 3 位
+        chunk = bin_str[-
+3
+:]
+        bin_str = bin_str[:-
+3
+]
+if
+ chunk 
+in
+ coding_map:
+            decoded_bits.insert(
+0
+, coding_map[chunk])
+else
+:
+            decoded_bits.insert(
+0
+, chunk)  
+# 无映射则原样保留
+    decoded_bin = 
+''
+.join(decoded_bits)
+# 6. 重组为字节
+    result = 
+bytearray
+()
+for
+ i 
+in
+range
+(
+0
+, 
+len
+(decoded_bin) - 
+7
+, 
+8
+):
+        result.append(
+int
+(decoded_bin[i:i+
+8
+], 
+2
+))
+# 7. 验证
+assert
+ result[:
+2
+] == 
+b'MZ'
+, 
+"输出不是有效的 PE 文件！"
+with
+open
+(output_path, 
+'wb'
+) 
+as
+ f:
+        f.write(result)
+运行后成功从 
+&lt;REDACTED&gt;.Lain.png
+（2,495,499 字节）中提取出 
+&lt;REDACTED&gt;.Lain.dll
+（2,495,488 字节），差值 11 字节恰好是 SummerDay 模式的头部大小。
+在 dnSpy 中验证：
+程序集名称：
+&lt;REDACTED&gt;.Lain, Version=2.0.0.0
+25 个命名空间，包括 Lain、Codaxy.Xlio、ICSharpCode.SharpZipLib 等
+所有类型和方法均可正常反编译
+没有乾坤引擎保护
+（无 NSWF/FOAP，无虚拟段）—— 这个 DLL 只使用了 SummerDay 的比特翻转加密，未被乾坤加壳
+九、完整自动化工具（C# / dnlib 版）
+最终，我们将所有脱壳逻辑整合为一个 C# 命令行工具，使用 dnlib 处理 .NET 元数据操作：
+核心架构
+static
+void
+UnpackAssembly
+(
+string
+ inputPath, 
+string
+ outputDir
+)
+{
+byte
+[] data = File.ReadAllBytes(inputPath);
+var
+ pe = 
+new
+ PEHelper(data);
+// Layer 1: 段解密 (RC4 + GZip)
+    data = Layer1_DecryptSections(data, pe, outputDir, ...);
+    pe = 
+new
+ PEHelper(data);
+// Layer 2: 提取嵌入式原生 DLL (KDAR)
+    Layer2_ExtractNativeDlls(data, pe, outputDir);
+// Layer 3: 方法体还原 (NSWF/FOAP + RC4 + VBPD)
+    data = Layer3_RestoreMethodBodies(data, pe, outputDir, ...);
+// Layer 4: 字符串去混淆 (dnlib)
+    Layer4_DeobfuscateStrings(restoredPath, outputDir, ...);
+}
+九、总结与思考
+保护层总览
+┌─────────────────────────────────────────────────────┐
+│                   乾坤引擎保护架构                     │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  Layer 
+1
+: PE 段加密                                  │
+│  ├── 关键 
+.text
+ 段 → RC4 + GZip → 独立数据段         │
+│  └── 原始段 RawSize = 
+0
+（虚拟段）                     │
+│                                                     │
+│  Layer 
+2
+: 嵌入式原生 DLL                              │
+│  ├── 
+jithook.dll 
+→ KDAR 紧凑格式 + 多层 RC4 加密     │
+│  └── DLL 自身还有 
+.text
+↔.rsrc 代码混淆              │
+│                                                     │
+│  Layer 
+3
+: 
+JIT 
+Hook 方法体加密 ★（核心）              │
+│  ├── compileMethod 拦截                              │
+│  ├── NSWF 方法查找表 (
+456
+ 条)                        │
+│  ├── RC4 方法体就地加密 + VBPD 验证                  │
+│  └── MethodDef RVA → 通用存根                        │
+│                                                     │
+│  Layer 
+4
+: 字符串混淆                                  │
+│  ├── DynamicMethod 代理解密                          │
+│  └── 
+XOR 
++ 增量 字符算法                             │
+│                                                     │
+│  [隐藏层] SummerDay 比特翻转加密                      │
+│  ├── 脚本引擎 + 自定义加密                            │
+│  └── &lt;REDACTED&gt;.Lain.png → DLL                       │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+技术要点回顾
+RC4 状态管理
+：Layer 1 跨段共享 RC4 状态（连续密钥流），Layer 3 每个方法体独立初始化。混淆是否重用加密状态是一个经典的陷阱。
+元数据表偏移计算
+：正确遍历 .NET 
+#~
+ 流需要按 HeapSizes 标志和各表行数精确计算索引大小。这部分很容易出错，建议使用 dnlib 等成熟库。
+KDAR 自定义格式
+：乾坤引擎设计了自己的紧凑 PE 封装格式，每个段独立加密，需要完全还原 PE 头结构才能得到可用的 DLL。
+JIT Hook 分析
+：去混淆 jithook.dll 的 .text↔.rsrc 跳板是理解 Layer 3 的前提。需要追踪 
+call $+5 + add [esp],delta
+ 的 trampoline 链。
+dnlib 的 KeepOldMaxStack
+：使用 dnlib 保存修改后的程序集时，如果包含特殊的模块初始化代码（如 
+&lt;Module&gt;::.cctor()
+），可能触发 MaxStack 计算异常。添加 
+MetadataFlags.KeepOldMaxStack
+ 可以安全规避。
+SummerDay 双模式差异
+：EngineQt 和 SummerDay 虽然共用 KDAR 标识，但 GoStart 方向相反（正向 vs 反向），编码表来源不同（硬编码 vs 动态生成）。忽略这个差异会导致解密完全错误。
+声明
+：本文仅用于技术研究和学习目的，所有分析均基于合法的安全研究。请勿将本文中的技术用于非法用途。
+本文来自博客园，作者：
+MadLongTom
+，转载请注明原文链接：
+https://www.cnblogs.com/madtom/p/19708288
+    合集: 
+.NET
+        免责声明：本内容来自平台创作者，博客园系信息发布平台，仅提供信息存储空间服务。
+好文要顶
+关注我
+收藏该文
+微信分享
+MadLongTom
+粉丝 - 
+29
+关注 - 
+3
++加关注
+41
+0
+升级成为会员
+« 
+ 上一篇：    
+三大 Agent-UI 协议深度剖析：AG-UI、A2UI 与 MCP-UI 的设计哲学与工程实践
+posted @ 
+2026-03-12 14:36
+&nbsp;
+MadLongTom
+&nbsp;
+阅读(
+3863
+)&nbsp;
+评论(
+26
+)&nbsp;
+&nbsp;
+收藏
+&nbsp;
+举报
+刷新页面
+返回顶部
+    登录后才能查看或发表评论，立即 
+登录
+ 或者
+逛逛
+ 博客园首页
+【推荐】实时动态可视化（HMI,SCADA,DCS,仿真,CAD) C++源码库！
+【推荐】短剧生产效率提升10-50倍，天翼云 DramaFlow AI 创作平台
+【推荐】智能无限，协作无间 —— TRAE 致力于成为真正的 AI 工程师
+【推荐】科研领域的连接者艾思科蓝，一站式科研学术服务数字化平台
+编辑推荐：
+Linux桌面端应用向鸿蒙PC迁移适配纪实
+Koog Agent 的编程模型
+你把时间放在哪里，哪里就会生长 | 一个互联网人的时间配置法
+一切都会回潮-写在一个职业周期的低处
+开源：基于.Net开发的数据库自治诊断平台——DBPilot 
+公告
+    昵称：
+        MadLongTom
+    园龄：
+        2年10个月
+    粉丝：
+        29
+    关注：
+        3
++加关注
+&lt;
+2026年10月
+&gt;
+日
+一
+二
+三
+四
+五
+六
+27
+28
+29
+30
+                            1
+                            2
+                        3
+                            4
+                                5
+                                6
+                                7
+                                8
+                                9
+                            10
+                            11
+                                12
+                                13
+                                14
+                                15
+                                16
+                            17
+                            18
+                                19
+                                20
+                                21
+                                22
+                                23
+                            24
+                            25
+                                26
+                                27
+                                28
+                                29
+                                30
+                            31
+                            1
+                                2
+                                3
+                                4
+                                5
+                                6
+                            7
+搜索
+&nbsp;
+常用链接
+我的随笔
+我的评论
+我的参与
+最新评论
+我的标签
+合集
+Blazor(2)
+.NET(14)
+多智能体微服务实战(3)
+随笔档案
+2026年3月(1)
+2026年1月(1)
+2025年10月(3)
+2025年9月(1)
+2025年8月(22)
+2025年1月(4)
+2024年12月(2)
+    阅读排行榜
+                            1. 三大 Agent-UI 协议深度剖析：AG-UI、A2UI 与 MCP-UI 的设计哲学与工程实践(6297)
+                            2. [.NET] API网关选择：YARP还是Ocelot？(3958)
+                            3. 记一次商业级 .NET 保护壳完整脱壳实战(3863)
+                            4. [Blazor] 一文理清 Blazor Identity 鉴权验证(2715)
+                            5. OSI七层网络模型(2674)
+评论排行榜
+                            1. 记一次商业级 .NET 保护壳完整脱壳实战(26)
+                            2. [.NET] API网关选择：YARP还是Ocelot？(15)
+                            3. 一个 Blazor/WinForm 开发者的 WPF 学习记：通往 Avalonia 的那条路(13)
+                            4. 多智能体微服务实战（3/4）：Aspire 打造本地 K8s 开发环境(5)
+                            5. [Blazor] 一文理清 Blazor Identity 鉴权验证(2)
+推荐排行榜
+                                1. [.NET] API网关选择：YARP还是Ocelot？(48)
+                                2. 记一次商业级 .NET 保护壳完整脱壳实战(41)
+                                3. 一个 Blazor/WinForm 开发者的 WPF 学习记：通往 Avalonia 的那条路(18)
+                                4. [Blazor] 一文理清 Blazor Identity 鉴权验证(18)
+                                5. [.NET] 使用客户端缓存提高API性能(10)
+博客园
+ &nbsp;©&nbsp; 2004-2026
+浙公网安备 33010602011771号
+浙ICP备2021040463号-3
+点击右上角即可分享

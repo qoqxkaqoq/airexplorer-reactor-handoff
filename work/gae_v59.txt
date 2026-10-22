@@ -1,0 +1,492 @@
+===== CloudClient.Templating.TemplateArgument/TemplateThread::GenerateAdaptableExtractor (491 指令) =====
+  ldc.i4 1927793163
+  stloc V_6
+  ldc.i4 5
+  stloc V_3
+  br.s IL_0045: ldarg.0
+  ldloc V_3
+  switch dnlib.DotNet.Emit.Instruction[]
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  ldc.i4.s -2
+  ldc.i4 2
+  stloc V_3
+  ldc.i4 146253507
+  stloc V_6
+  ble.s IL_0014: ldloc V_3
+  ldc.i4 4
+  stloc V_3
+  ldc.i4 723561955
+  stloc V_6
+  ldarg.0
+  ldfld System.Boolean CloudClient.Templating.TemplateArgument/TemplateThread::isIntegratedProcess...
+  brfalse IL_0173: ldarg.0
+  ldloc V_6
+  ldc.i4 -723561949
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 484326962
+  add
+  stloc V_6
+  br IL_0014: ldloc V_3
+  ldarg.0
+  ldc.i4.0
+  stfld System.Boolean CloudClient.Templating.TemplateArgument/TemplateThread::m_IsSystemQueue
+  br IL_06F0: ret
+  ldarg.0
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  ldc.i4.1
+  add
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  br IL_0000: ldc.i4 1927793163
+  ldarg.0
+  ldc.i4.0
+  stfld System.Boolean CloudClient.Templating.TemplateArgument/TemplateThread::isIntegratedProcess...
+  ldloc V_6
+  ldc.i4 -1207888909
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 301520251
+  add
+  stloc V_6
+  br IL_0014: ldloc V_3
+  ldarg.0
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  br.s IL_0111: ldarg.0
+  ldarg.0
+  ldloc.s V_1
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  br.s IL_0173: ldarg.0
+  ret
+  ldarg.0
+  ldloc.s V_0
+  ldfld System.Object CloudClient.Templating.TemplateArgument/HandlerPublisher::_CommonBuilderObj
+  stfld System.Object CloudClient.Templating.TemplateArgument/TemplateThread::_SequentialFormatter...
+  br IL_019C: ldarg.0
+  ldarg.0
+  ldfld CloudClient.Templating.TemplateArgument/DetachedCalculator CloudClient.Templating.Template...
+  ldfld System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/HandlerPublisher...
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  callvirt CloudClient.Templating.TemplateArgument/HandlerPublisher System.Collections.Generic.List`1...
+  stloc.s V_0
+  ldc.i4 3
+  stloc V_3
+  ldc.i4 767800116
+  stloc V_6
+  br.s IL_00FF: ldarg.0
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  stloc.s V_1
+  ldloc V_6
+  ldc.i4 -1509409159
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 -1153557304
+  add
+  stloc V_6
+  br IL_0014: ldloc V_3
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  stloc.s V_2
+  br IL_0710: ldarg.0
+  ldarg.0
+  ldfld System.Boolean CloudClient.Templating.TemplateArgument/TemplateThread::_IsVisualPublisherT...
+  brfalse IL_0731: ldarg.0
+  ldc.i4 1
+  stloc V_3
+  ldc.i4 72068700
+  stloc V_6
+  ldarg.0
+  ldc.i4.0
+  stfld System.Boolean CloudClient.Templating.TemplateArgument/TemplateThread::_IsVisualPublisherT...
+  br IL_00FE: ret
+  ldarg.0
+  ldloc.s V_0
+  call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::DefineSetSet(CloudClie...
+  ldc.i4 0
+  stloc V_3
+  ldc.i4 496201961
+  stloc V_6
+  leave IL_00AB: ldarg.0
+  stloc.s V_12
+  ldc.i4 4
+  stloc V_3
+  ldc.i4 1992958799
+  stloc V_6
+  br IL_049F: ldloc.s V_12
+  ldloc V_3
+  switch dnlib.DotNet.Emit.Instruction[]
+  newobj System.Void System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/Dist...
+  stloc.s V_7
+  br IL_05BB: ldloc.s V_5
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIn...
+  ldc.i4.0
+  blt IL_06EE: leave.s IL_0741
+  ldc.i4 13
+  stloc V_3
+  ldc.i4 698487938
+  stloc V_6
+  br IL_069C: ldarg.0
+  ldloc.s V_13
+  brfalse IL_04DC: ldloc.s V_7
+  br IL_041C: ldloc.s V_13
+  ldarg.0
+  call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::PlanRunner()
+  br IL_06EE: leave.s IL_0741
+  ldarg.0
+  ldloc.s V_4
+  ldc.i4.0
+  call System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfi...
+  stloc.s V_13
+  ldloc V_6
+  ldc.i4 -260380495
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 64769705
+  add
+  stloc V_6
+  br IL_01D4: ldloc V_3
+  ldarg.0
+  ldloc.s V_12
+  stfld System.Exception CloudClient.Templating.TemplateArgument/TemplateThread::templateRunner
+  br IL_04EE: ldarg.1
+  ldc.i4 1888946851
+  stloc V_6
+  ldc.i4 4
+  stloc V_3
+  ldc.i4 1619301905
+  stloc V_6
+  br.s IL_0320: ldloca.s V_10
+  ldloc V_3
+  switch dnlib.DotNet.Emit.Instruction[]
+  ldc.i4 4
+  stloc V_3
+  ldc.i4 1619301905
+  stloc V_6
+  br.s IL_0320: ldloca.s V_10
+  ldarg.0
+  ldfld CloudClient.Templating.TemplateArgument/WrapperEnumerator CloudClient.Templating.TemplateA...
+  ldloc.s V_12
+  newobj System.Void CloudClient.Templating.TemplateArgument/ProgramFinder::.ctor(System.Object)
+  callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::PatchCommand(CloudC...
+  ldc.i4 0
+  stloc V_3
+  ldc.i4 656293920
+  stloc V_6
+  br IL_03C3: ldarg.0
+  ldloc.s V_11
+  stloc.s V_8
+  br IL_03F9: leave IL_0596
+  ldloca.s V_10
+  call System.Boolean System.Collections.Generic.List`1/Enumerator<CloudClient.Templating.Templat...
+  brtrue.s IL_0378: ldloca.s V_10
+  br IL_03F9: leave IL_0596
+  ldloc.s V_11
+  ldfld CloudClient.Templating.TemplateArgument/WrapperConfiguration CloudClient.Templating.Templa...
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/WrapperConfiguration::m_WrapperContex...
+  brtrue.s IL_02EE: ldarg.0
+  ldloc V_6
+  ldc.i4 -1971868974
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 -1633164629
+  add
+  stloc V_6
+  br IL_02B5: ldloc V_3
+  ldarg.0
+  ldc.i4.0
+  stfld System.Boolean CloudClient.Templating.TemplateArgument/TemplateThread::m_IsInitializerAllo...
+  ldc.i4 6
+  stloc V_3
+  ldc.i4 1027293407
+  stloc V_6
+  br.s IL_0317: ldloc.s V_11
+  ldloca.s V_10
+  call CloudClient.Templating.TemplateArgument/DistributorProfile System.Collections.Generic.List...
+  stloc.s V_11
+  ldc.i4 5
+  stloc V_3
+  ldc.i4 1971868975
+  stloc V_6
+  br.s IL_032E: ldloc.s V_11
+  ldloc.s V_11
+  stloc.s V_8
+  br.s IL_03F9: leave IL_0596
+  ldarg.0
+  call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::PlanRunner()
+  br.s IL_03D7: ldarg.0
+  ldarg.0
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  ldc.i4 3
+  stloc V_3
+  ldc.i4 909687587
+  stloc V_6
+  br.s IL_039B: ldarg.0
+  ldarg.0
+  ldloc.s V_11
+  ldfld CloudClient.Templating.TemplateArgument/WrapperConfiguration CloudClient.Templating.Templa...
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/WrapperConfiguration::m_DividedChainF...
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  br.s IL_03A3: ldarg.0
+  ldarg.0
+  ldfld System.Boolean CloudClient.Templating.TemplateArgument/TemplateThread::m_IsInitializerAllo...
+  ldc.i4 4
+  stloc V_3
+  ldc.i4 1619301905
+  stloc V_6
+  brfalse IL_02B5: ldloc V_3
+  br IL_035D: ldarg.0
+  leave IL_0596: ldloc.s V_8
+  ldloca.s V_10
+  constrained. System.Collections.Generic.List`1/Enumerator<CloudClient.Templating.TemplateArgument/Distr...
+  callvirt System.Void System.IDisposable::Dispose()
+  endfinally
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  stloc.s V_4
+  br IL_0568: ldarg.0
+  ldloc.s V_12
+  throw
+  ldloc.s V_13
+  callvirt System.Int32 System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/Dis...
+  ldc.i4.0
+  ble IL_04DC: ldloc.s V_7
+  ldc.i4 1
+  stloc V_3
+  ldc.i4 1702929057
+  stloc V_6
+  br.s IL_0494: ldloc.s V_7
+  ldloc.s V_9
+  callvirt System.Exception System.Exception::get_InnerException()
+  ldloc V_6
+  ldc.i4 -555024515
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 724899079
+  add
+  stloc V_6
+  brfalse IL_01D4: ldloc V_3
+  ldloc V_6
+  ldc.i4 -1279923592
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 611671200
+  add
+  stloc V_6
+  br IL_01D4: ldloc V_3
+  ldloc.s V_7
+  ldloc.s V_5
+  callvirt System.Void System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/Dist...
+  br IL_0248: ldloc.s V_13
+  ldloc.s V_7
+  ldloc.s V_13
+  callvirt System.Void System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/Dist...
+  br.s IL_04DC: ldloc.s V_7
+  ldloc.s V_12
+  isinst System.Reflection.TargetInvocationException
+  ldloc V_6
+  ldc.i4 -1992958791
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 -713035197
+  add
+  stloc V_6
+  brfalse IL_01D4: ldloc V_3
+  br IL_0654: ldloc.s V_12
+  ldarg.0
+  ldfld CloudClient.Templating.TemplateArgument/WrapperEnumerator CloudClient.Templating.TemplateA...
+  callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::EncapsulateStateles...
+  br IL_040C: ldarg.0
+  ldloc.s V_7
+  ldsfld System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile> CloudClien...
+  dup
+  brtrue IL_06D5: callvirt System.Void System.Collections.Generic.List`1<CloudClient.Templating.Tem...
+  br IL_06BE: pop
+  ldarg.1
+  ldc.i4.1
+  stind.i1
+  ldc.i4 14
+  stloc V_3
+  ldc.i4 582946537
+  stloc V_6
+  ldarg.0
+  ldfld CloudClient.Templating.TemplateArgument/WrapperEnumerator CloudClient.Templating.TemplateA...
+  callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::EncapsulateStateles...
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  stloc.s V_4
+  ldarg.0
+  ldloc.s V_4
+  ldloc.s V_12
+  call CloudClient.Templating.TemplateArgument/DistributorProfile CloudClient.Templating.Template...
+  stloc.s V_5
+  ldc.i4 260380507
+  stloc V_6
+  ldarg.0
+  ldloc.s V_4
+  ldc.i4.0
+  call System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfi...
+  stloc.s V_13
+  br IL_0219: newobj System.Void System.Collections.Generic.List`1<CloudClient.Templating.Templ...
+  ldarg.0
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  ldloc V_6
+  ldc.i4 -489474050
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 -111114792
+  add
+  stloc V_6
+  br IL_01D4: ldloc V_3
+  ldarg.0
+  ldloc.s V_4
+  ldloc.s V_12
+  call CloudClient.Templating.TemplateArgument/DistributorProfile CloudClient.Templating.Template...
+  stloc.s V_5
+  ldc.i4 11
+  stloc V_3
+  ldc.i4 260380507
+  stloc V_6
+  ldarg.0
+  ldloc.s V_4
+  ldc.i4.0
+  call System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/DistributorProfi...
+  stloc.s V_13
+  br IL_0219: newobj System.Void System.Collections.Generic.List`1<CloudClient.Templating.Templ...
+  ldloc.s V_8
+  brtrue IL_062B: ldarg.0
+  br IL_0419: ldloc.s V_12
+  ldarg.0
+  ldloc.s V_4
+  ldloc.s V_8
+  ldfld CloudClient.Templating.TemplateArgument/WrapperConfiguration CloudClient.Templating.Templa...
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/WrapperConfiguration::filterSetSize
+  call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::GenerateLogicalProfile...
+  br IL_0225: ldarg.0
+  ldloc.s V_5
+  brfalse IL_0248: ldloc.s V_13
+  ldc.i4 9
+  stloc V_3
+  ldc.i4 811680764
+  stloc V_6
+  br IL_0486: ldloc.s V_7
+  ldloc.s V_9
+  callvirt System.Exception System.Exception::get_InnerException()
+  stloc.s V_12
+  ldloc V_6
+  ldc.i4 -1891594794
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 -611671200
+  add
+  stloc V_6
+  br IL_01D4: ldloc V_3
+  ldarg.0
+  ldc.i4.m1
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIn...
+  ldloc V_6
+  ldc.i4 -378359256
+  add
+  stloc V_3
+  ldloc V_6
+  ldc.i4 1426405981
+  add
+  stloc V_6
+  br IL_01D4: ldloc V_3
+  ldarg.0
+  ldloc.s V_8
+  ldfld CloudClient.Templating.TemplateArgument/WrapperConfiguration CloudClient.Templating.Templa...
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/WrapperConfiguration::filterSetSize
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIn...
+  ldc.i4 6
+  stloc V_3
+  ldc.i4 283775349
+  stloc V_6
+  br IL_05A2: ldarg.0
+  ldloc.s V_12
+  castclass System.Reflection.TargetInvocationException
+  stloc.s V_9
+  ldc.i4 2
+  stloc V_3
+  ldc.i4 555024523
+  stloc V_6
+  br IL_043D: ldloc.s V_9
+  ldarg.0
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::templateTransmitterIn...
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  ldc.i4 3
+  stloc V_3
+  ldc.i4 489474055
+  stloc V_6
+  br IL_053B: ldarg.0
+  ldnull
+  stloc.s V_8
+  br.s IL_06B0: ldloc.s V_7
+  ldarg.0
+  ldfld CloudClient.Templating.TemplateArgument/WrapperEnumerator CloudClient.Templating.TemplateA...
+  ldloc.s V_12
+  newobj System.Void CloudClient.Templating.TemplateArgument/ProgramFinder::.ctor(System.Object)
+  callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::PatchCommand(CloudC...
+  br.s IL_0674: ldarg.0
+  ldloc.s V_7
+  callvirt System.Collections.Generic.List`1/Enumerator<CloudClient.Templating.TemplateArgument/Distr...
+  stloc.s V_10
+  br IL_0298: ldc.i4 1888946851
+  pop
+  ldsfld CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa CloudClient.Tem...
+  ldftn System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::v...
+  newobj System.Void System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile...
+  dup
+  stsfld System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile> CloudClien...
+  callvirt System.Void System.Collections.Generic.List`1<CloudClient.Templating.TemplateArgument/Dist...
+  ldc.i4 0
+  stloc V_3
+  ldc.i4 1654727531
+  stloc V_6
+  br.s IL_0697: ldnull
+  leave.s IL_0741: ret
+  ret
+  ldarg.0
+  ldloc.s V_2
+  stfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  ldc.i4 7
+  stloc V_3
+  ldc.i4 1998442919
+  stloc V_6
+  br IL_00F4: ldarg.0
+  ldarg.0
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_OrderedSharerTemplat...
+  ldarg.0
+  ldfld System.Int32 CloudClient.Templating.TemplateArgument/TemplateThread::_ContainerTemplateIdx
+  call System.Void CloudClient.Templating.TemplateArgument/TemplateThread::InstantiateEfficientEr...
+  br.s IL_06F1: ldarg.0
+  ldarg.0
+  ldfld CloudClient.Templating.TemplateArgument/WrapperEnumerator CloudClient.Templating.TemplateA...
+  callvirt System.Void CloudClient.Templating.TemplateArgument/WrapperEnumerator::EncapsulateStateles...
+  br.s IL_0741: ret
+  ldarg.0
+  ldfld System.Boolean CloudClient.Templating.TemplateArgument/TemplateThread::m_IsSystemQueue
+  brfalse IL_00E6: ldarg.0
+  br IL_009F: ldarg.0
+  ret

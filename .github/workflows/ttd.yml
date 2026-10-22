@@ -1,0 +1,70 @@
+name: ttd-jitscan
+on:
+  workflow_dispatch:
+    inputs:
+      exe:
+        required: false
+        default: 'e8runnable'
+
+jobs:
+  ttd:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载并解包 WinDbg (绕开 winget 与 WindowsApps ACL)
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          # microsoft/WinDbg releases 提供 msixbundle(zip 容器), 7z 直接解包
+          $rel = Invoke-RestMethod "https://api.github.com/repos/microsoft/WinDbg/releases/latest" -Headers @{ "User-Agent" = "ci" }
+          $asset = $rel.assets | Where-Object { $_.name -match "msixbundle$" } | Select-Object -First 1
+          if (-not $asset) { Write-Host "no msixbundle asset"; $rel.assets | ForEach-Object { Write-Host $_.name }; exit 1 }
+          Write-Host "asset = $($asset.name)  $($asset.size) bytes"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile D:\windbg.msixbundle
+          New-Item -ItemType Directory -Force -Path D:\wd | Out-Null
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\windbg.msixbundle | Out-Null
+          # msixbundle 解出的是 msix 包(x64), 再解一层
+          $pkg = Get-ChildItem D:\wd -Filter "*.msix" | Select-Object -First 1
+          if ($pkg) { & "C:\Program Files\7-Zip\7z.exe" x -y "-oD:\wd\x" $pkg.FullName | Out-Null }
+          $ttd = @("D:\wd\x\amd64\ttd\TTD.exe", "D:\wd\amd64\ttd\TTD.exe", "D:\wd\ttd\TTD.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          Write-Host "TTD = $ttd"
+          Write-Host "cdb = $cdb"
+          if (-not $ttd) { Get-ChildItem -Recurse D:\wd -Filter "TTD.exe" | Select-Object -First 3 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
+          "TTDEXE=$ttd" | Out-File $env:GITHUB_ENV -Append utf8
+          "CDbEXE=$cdb" | Out-File $env:GITHUB_ENV -Append utf8
+
+      - name: TTD 录制 (help 模式自然退出)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\ttd, C:\out | Out-Null
+          $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
+          & $env:TDDEXE -out C:\ttd\trace.run $exe help 2>&1 | Tee-Object -FilePath C:\out\ttd-record.log | Select-Object -Last 12
+          if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; Get-Content C:\out\ttd-record.log -Tail 30; exit 1 }
+          Write-Host ("trace 大小: " + (Get-Item C:\ttd\trace.run).Length)
+
+      - name: cdb 无头时间旅行扫描 (JitScan.js)
+        shell: pwsh
+        run: |
+          $js = (Resolve-Path "ci\ttd\JitScan.js").Path -replace '\\','/'
+          & $env:CDbEXE -z C:\ttd\trace.run `
+            -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
+            -c ".scriptload $js; q" 2>&1 | Tee-Object -FilePath C:\out\cdb.log | Select-Object -Last 25
+          if (Test-Path C:\out\jitscan.json) {
+            $sz = (Get-Item C:\out\jitscan.json).Length
+            Write-Host "jitscan.json = $sz 字节"
+            $j = Get-Content C:\out\jitscan.json -Raw | ConvertFrom-Json
+            Write-Host ("arch=" + $j.arch + " methods=" + $j.methods.Count)
+            $withTok = ($j.methods | Where-Object { $_.localsTok -ne "0x0" }).Count
+            $withSig = ($j.methods | Where-Object { $_.localsSig }).Count
+            Write-Host ("localsTok 非零 = " + $withTok + "  带官方签名blob = " + $withSig)
+          } else { Write-Host "JS 未产出结果"; Get-Content C:\out\cdb.log -Tail 40 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ttd-out
+          path: |
+            C:\out\

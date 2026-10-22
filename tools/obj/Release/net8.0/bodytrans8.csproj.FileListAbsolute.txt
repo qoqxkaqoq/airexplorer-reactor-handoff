@@ -1,0 +1,16 @@
+/tmp/bin/bodytrans8
+/tmp/bin/bodytrans8.deps.json
+/tmp/bin/bodytrans8.runtimeconfig.json
+/tmp/bin/bodytrans8.dll
+/tmp/bin/bodytrans8.pdb
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.csproj.AssemblyReference.cache
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.GeneratedMSBuildEditorConfig.editorconfig
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.AssemblyInfoInputs.cache
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.AssemblyInfo.cs
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.csproj.CoreCompileInputs.cache
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.csproj.Up2Date
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.dll
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/refint/bodytrans8.dll
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.pdb
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/bodytrans8.genruntimeconfig.cache
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/ref/bodytrans8.dll
