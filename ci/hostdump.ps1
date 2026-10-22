@@ -265,6 +265,37 @@ try {
   } else { W "H|trackcompiler|<missing>" }
 } catch { W "H|mapdump|fatal $($_.Exception.GetType().Name)" }
 
+# 6) 探针: 直接调 ModelTracer.JoinExecutor(new[]{"help"}), 把返回值(通常是
+#    ModelAccountLicenseSource)的字段 dump 出来 —— 这是 InstantiateStatelessUser
+#    那条解释器链在官方运行时真正算出来的结果, 可以离线硬编码。
+try {
+  $mt = $asm.GetType("CloudClient.Models.ModelTracer")
+  if ($mt) {
+    $je = $mt.GetMethod("JoinExecutor", [Reflection.BindingFlags]"Static,Public,NonPublic")
+    if ($je) {
+      $t0 = Get-Date
+      try {
+        $r = $je.Invoke($null, [object[]]@(,([string[]]@("help"))))
+        W ("H|joinexecutor|ok " + [int]((Get-Date) - $t0).TotalMilliseconds + "ms  ret=" + $(if ($null -eq $r) { "<null>" } else { $r.GetType().FullName }))
+        if ($null -ne $r) {
+          foreach ($f in $r.GetType().GetFields([Reflection.BindingFlags]"Public,NonPublic,Instance,Static")) {
+            $fv = $null
+            try { $fv = $f.GetValue($r) } catch { W "J|$($f.Name)|<throw>"; continue }
+            if ($null -eq $fv) { W "J|$($f.Name)|$($f.FieldType.Name)|<null>" }
+            elseif ($fv -is [string] -or $fv.GetType().IsPrimitive) { W "J|$($f.Name)|$($f.FieldType.Name)|$(Esc $fv)" }
+            else { W "J|$($f.Name)|$($f.FieldType.Name)|<obj $($fv.GetType().FullName)>" }
+          }
+        }
+      } catch {
+        $ie = $_.Exception.InnerException
+        if ($null -eq $ie) { $ie = $_.Exception }
+        W ("H|joinexecutor|throw: " + $ie.GetType().Name + ": " + $ie.Message)
+        if ($ie.StackTrace) { foreach ($ln in ($ie.StackTrace -split "`n" | Select-Object -First 8)) { W ("H|je-stack|" + $ln.Trim()) } }
+      }
+    } else { W "H|joinexecutor|<method missing>" }
+  } else { W "H|joinexecutor|<type missing>" }
+} catch { W "H|joinexecutor|fatal $($_.Exception.GetType().Name)" }
+
 W "H|end|$(Get-Date -Format o)  total=$($script:lines.Count)"
 $dir = Split-Path -Parent $Out
 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
