@@ -196,8 +196,12 @@ class FixGen {
                 if (!ReferenceEquals(x, g)) changed = true;
                 args.Add(x);
             }
+            // GenericType 本身也可能是假名（X`1<T> 里的 X`1），必须一起修
+            ClassOrValueTypeSig newGt = gi.GenericType;
+            var fg = FixSig(gi.GenericType, map) as ClassOrValueTypeSig;
+            if (fg != null && !ReferenceEquals(fg, gi.GenericType)) { newGt = fg; changed = true; }
             if (!changed) return sig;
-            return new GenericInstSig(gi.GenericType, args);
+            return new GenericInstSig(newGt, args);
         }
         return sig;
     }
