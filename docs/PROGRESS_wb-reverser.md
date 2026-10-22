@@ -733,3 +733,99 @@ TemplateThread.InstantiateSymbolicTransmitter(Boolean)
 
 下一轮：在 `InstantiateSymbolicTransmitter` 里找 `ldfld` 的 null 目标（1060 条指令，
 但控制流平坦化后真正的直线逻辑不多），或者继续按"缺方法体"补。
+
+---
+
+## 12. 两个"数据层面"的致命损坏（v46 → v49）
+
+这一轮不再逐个补方法，而是去检查**元数据里成批的数据结构**，发现两个影响面极大的 bug。
+
+### 12.1 重载配对：138 组重载，每组只填了第一个
+
+`stubscan` 早就按完整 `MethodSig` 建索引（正确），但 `bodytrans fromlist` 读清单时
+只拿到 `type|name`，用 `FindMethod` **按名字取第一个**匹配。
+
+`TemplateListener` 有 3 个 `.ctor`：
+
+```
+cilantro:  0x2711C  0x2717C  0x271B8      ← 三份不同的真体
+v45:       0x97528  0x64E1B  0x64E1B      ← 只有一个被填, 另两个还是同一个桩
+```
+
+修法：清单加**签名指纹**（`2:IntPtr,Int32` = 参数个数:各参数简单类型名），
+`bodytrans` 按 `(type, name, sigkey)` 三元组找目标。
+
+```diff
+-T|Type|.ctor|dst=4|src=17
++T|Type|.ctor|2:SecureString,SecureString|dst=4|src=17
++T|Type|.ctor|2:IntPtr,Int32|dst=4|src=29
+```
+
+顺带修了授权桩判据：原来"目标 ≤4 条且含 `ldc.i4.1` 就跳过"，
+把 76 个**被 Reactor 破坏成 `return true` 的真方法**（如 `RegSolver::Equals`，
+源 53 条指令）也一起跳过了。改成"目标与源都是桩"才跳过。
+
+### 12.2 EH 的 CatchType 有 1515 / 1721 是错的
+
+这是本轮最重要的发现。跑 `ehstat`（新工具）统计 catch 子句的 CatchType 分布：
+
+| 文件 | catch 总数 | 可疑 |
+|---|---|---|
+| 官方 `e8runnable`（只有 23 个未加密方法有体） | 23 | 0 |
+| `cilantro` | 1748 | 4 |
+| **我们的 v47** | 1721 | **1515** |
+
+前两名：
+
+```
+783  CloudClient.Proxies.ExtendedProxy/<>c              <-- 不是异常类型
+586  CloudClient.Networking.ClientClient/LogicalFieldClient  <-- 不是异常类型
+```
+
+`<>c` 是编译器生成的缓存类。`catch (ExtendedProxy.<>c)` **永远匹配不到任何异常**，
+于是所有 `try { ... } catch { ... }` 全部失效，异常直接冒泡。
+
+这解释了为什么前 20 轮一直"往上一层推一层"：每一层的 try/catch 都是废的。
+
+根因在 `nbrestore.AttachEh`：它按 **28 字节** 读 clause、用 `mod.ResolveToken(cls)` 取
+CatchType。JIT 的 `CORINFO_EH_CLAUSE` 是 **24 字节**，28 字节的步长让第 2 个以后的
+子句全部错位；即使是第 1 个子句，`cls` 也不总是合法 token。
+
+修法（`tools2/fixeh.cs`）：不修 dump，直接把 CatchType 从 cilantro 的同名方法按序号搬过来。
+
+```
+[fixeh] bySrc=1459 toException=56 alreadyOk=206
+catch 子句总数=1721  可疑=0
+```
+
+### 12.3 locals 数量本身就是错的（2658 个方法）
+
+`fixlocals` 原来只修"**全部** locals 都是 `System.Object`"的方法（4965 个）。
+但还有一批是"真类型 + 一堆 Object 混合"：
+
+```
+GenerateAdaptableExtractor   我们的: 255 locals (240 个 Object)
+                             cilantro:  14 locals
+```
+
+**locals 数量都对不上**，说明这两份 IL 不是同一份 —— nbjit dump 的体是
+Reactor 平坦化后的版本（每个基本块一个临时变量），cilantro 是另一条路径还原的。
+
+这种情况按 index 换类型是无效的，只能**整份移植**。给 `bodytrans` 加了 `localsdiff` 模式：
+
+```
+[localsdiff] ok=2658  srcMissing=159  sameCount=112
+```
+
+### 12.4 版本推进
+
+| 版本 | 改动 | 结果 |
+|---|---|---|
+| v46 | 签名配对重跑全链（漏了 `DefineSetSet` 手工移植） | AV @ `DefineSetSet`（退步） |
+| v47 | 补回 `DefineSetSet@generatedMethod_0288` | `FileNotFoundException: bandwidth.xml`（**业务错误**） |
+| v48 | `fixeh` 修 1515 个 catch 类型 | `InvalidCastException: VirtualInitializer → ProgramFinder`，`exit_code=4` |
+| v49 | `localsdiff` 换 2658 个方法的体 | 待验证 |
+
+v48 的 `exit_code = 4` 值得单独说：这是**程序自己返回的退出码**，不是 `-1073741819`（AV）
+也不是 `-532462766`（未处理异常）。也就是说程序已经能正常启动、解析命令行、走完初始化、
+输出错误信息、然后正常退出。剩下的是**逻辑不对**，不是**跑不起来**。
