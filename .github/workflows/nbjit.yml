@@ -33,6 +33,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: 取本仓库(patched forcedump)
+        uses: actions/checkout@v4
+        with:
+          path: self
+
       - name: 拉取 AutoReaktor
         shell: pwsh
         run: git clone --depth 1 https://github.com/0301091405/autoreaktor.git ar
@@ -49,6 +54,13 @@ jobs:
             & "C:\Program Files\7-Zip\7z.exe" x -y -oinput ae_installer.exe | Out-Null
           }
           Write-Host ("input md5 = " + (Get-FileHash 'input\AirExplorer.exe' -Algorithm MD5).Hash)
+
+      - name: 覆盖 forcedump 为支持泛型实例化的补丁版
+        shell: pwsh
+        run: |
+          Copy-Item self\ci\jitdump\forcedump\Program.cs ar\v3\forcedump\Program.cs -Force
+          Copy-Item self\ci\jitdump\forcedump\forcedump.csproj ar\v3\forcedump\forcedump.csproj -Force
+          Select-String -Path ar\v3\forcedump\Program.cs -Pattern "genericPrepared" | Select-Object -First 3
 
       - name: 构建 hook DLL (clrjit VMT hook, MSVC)
         shell: pwsh
@@ -106,6 +118,8 @@ jobs:
         run: |
           if (Test-Path "jitout\jitdump.log") { Get-Content "jitout\jitdump.log" -Tail 30 }
           if (Test-Path "jitout\marker.txt") { Write-Host "--- marker ---"; Get-Content "jitout\marker.txt" }
+          $lg = Get-ChildItem -Recurse -Filter "*.log" -ErrorAction SilentlyContinue | Select-Object -First 5
+          foreach ($f in $lg) { Write-Host ("--- " + $f.Name + " ---"); Get-Content $f.FullName -Tail 12 }
 
       - name: 上传
         if: always()
