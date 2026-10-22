@@ -112,6 +112,20 @@ cilantro（nb_slayer 产物）把编译器生成的类型改成了 `GeneratedTyp
 （含 2.3MB 的 `ValidatorGenerator.DefinitionError`）。所以那个 null 流是**运行期用名字去取、名字算错了**，
 或者它根本是从**自身文件**按偏移读的（Reactor 的 NecroBit 数据在 PE 尾部）。
 
+进一步读 `InstantiateGlobalCalculator` 的正文，null 流的来源已经定位到具体三条指令（`work/igc_nb.il` 第 0BE0 行起）：
+
+```
+0BE0  ldsfld   Assembly DispatcherInitializer::automatedError
+0BE5  ldstr    "ing>>-GetEnumerator>d__52"            <-- 明显是个被截断/损坏的字符串
+0BEA  call     CheckRemoteProfiler(Assembly, string)  <-- 拿它去 GetManifestResourceStream
+0BEF  newobj   RandomDecryptor(Stream)                <-- 于是收到 null
+```
+
+也就是说：**它按名字取资源，而那个名字是一段残缺的字符串**（`ing>>-GetEnumerator>d__52` 看起来是某个
+`...>d__52` 类型名的尾巴）。这不是"资源被写丢"，而是**字符串常量本身不对**——
+很可能是 Reactor 的字符串保护在 JIT 之后仍会改写 `#US` 堆引用，或者这条 ldstr 本应由运行时补全。
+下一步应当先确认官方原件里同一位置的 ldstr 是什么（用 JIT dump 的原始字节比对）。
+
 `InstantiateGlobalCalculator` 有 **2521 条指令**，这正是 v84b 作者当年被迫"重写成最小字段初始化"的那个方法
 —— 两条独立路线在同一个方法上撞墙，这个结论现在有第三次印证。
 
