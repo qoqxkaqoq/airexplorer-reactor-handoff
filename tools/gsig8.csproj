@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AssemblyName>gsig8</AssemblyName>
+    <RootNamespace>GSig</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="dnlib" Version="3.3.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="**/*.cs" />
+    <Compile Include="gsig.cs" />
+  </ItemGroup>
+</Project>

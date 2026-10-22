@@ -1,0 +1,276 @@
+# .github/ar_krypton.yml — v26 新线: Krypton 续作 fork (.NET Reactor devirtualizer)
+# 目标: 版本匹配的整机重建 — VM 反虚拟化 + NecroBit 方法体沙箱还原 + 隐藏调用恢复 + 字符串/资源解密
+# 产物: AirExplorer-Devirtualized.exe + standalone-check 回归报告 + 启动探针 (12/40s 双采样)
+# 依据: https://github.com/dawwinci/krypton-devirtualizer (v1.0.0, 2026-08-27)
+name: Krypton Devirt Tier
+
+on:
+  workflow_dispatch:
+
+jobs:
+  krypton:
+    name: Krypton 反虚拟化 + 启动验证
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract app and prepare
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $work = "$env:RUNNER_TEMP\work"
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          $src = Join-Path $env:GITHUB_WORKSPACE "1.zip"
+          Expand-Archive -Path $src -DestinationPath $work -Force
+          $target = Get-ChildItem $work -Recurse -File -Filter "AirExplorer.exe" | Select-Object -First 1
+          if (-not $target) { Write-Error "未找到原版"; exit 1 }
+          "APP_DIR=$(Split-Path $target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "ORIG_EXE=$($target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          $out = "$env:RUNNER_TEMP\patchout"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          "PATCH_OUT=$out" | Out-File -Append $env:GITHUB_ENV
+          $md5 = (Get-FileHash $target.FullName -Algorithm MD5).Hash
+          Write-Host "原版: $($target.FullName) md5=$md5"
+
+      - name: Setup tools (Krypton + stackdump)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:PATCH_OUT
+          $tools = "$env:RUNNER_TEMP\krypton"
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          Expand-Archive -Path "$env:GITHUB_WORKSPACE\bin\tools\Krypton-v1.0.0-win-x64.zip" -DestinationPath $tools -Force
+          Write-Host "Krypton 文件:"; Get-ChildItem $tools | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length)B)" }
+          Write-Host ".NET runtimes:"; dotnet --list-runtimes 2>&1 | Select-Object -First 8 | ForEach-Object { Write-Host $_ }
+          # v28: 双位编译 stackdump (目标 AnyCPU->x64 进程, 纯 x86 版会 Dac mismatch)
+          $csc86 = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+          $csc64 = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          try {
+            $clrmdDll = "$env:GITHUB_WORKSPACE\bin\tools\Microsoft.Diagnostics.Runtime.dll"
+            Copy-Item "$env:GITHUB_WORKSPACE\bin\tools\stackdump_v26.cs" "$out\stackdump.cs" -Force
+            if (Test-Path $csc64) { & $csc64 /nologo /t:exe /platform:x64 /out:"$out\stackdump64.exe" /r:"$clrmdDll" "$out\stackdump.cs" 2>&1 | ForEach-Object { Write-Host $_ } }
+            if (Test-Path $csc86) { & $csc86 /nologo /t:exe /platform:x86 /out:"$out\stackdump.exe" /r:"$clrmdDll" "$out\stackdump.cs" 2>&1 | ForEach-Object { Write-Host $_ } }
+            Copy-Item $clrmdDll "$out\Microsoft.Diagnostics.Runtime.dll" -Force
+          } catch { Write-Host "stackdump 编译失败(继续): $_" }
+          Write-Host "stackdump64 可用: $(Test-Path "$out\stackdump64.exe") / x86 可用: $(Test-Path "$out\stackdump.exe")"
+
+
+      - name: Run Krypton devirtualizer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:PATCH_OUT
+          $tools = "$env:RUNNER_TEMP\krypton"
+          $env:KRYPTON_ENABLE_NECROBIT_BODY_RESTORE = '1'
+          $env:KRYPTON_STRING_DECRYPT = '1'
+          $env:KRYPTON_RESOURCE_DECRYPT = '1'
+          $env:KRYPTON_GLOBAL_STACK_SOLVER = '1'
+          $env:KRYPTON_TYPE_CONSTRAINTS = '1'
+          $env:KRYPTON_ALLOW_PARTIAL_OUTPUT = '1'
+          $env:KRYPTON_LOG_EXCEPTIONS = '1'
+          $env:KRYPTON_LOG_VM_MAP = '1'
+          $env:KRYPTON_NO_PAUSE = '1'
+          Write-Host "=== Krypton 运行 (最长 25 分钟, 看门狗) ==="
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = "$tools\Krypton.exe"
+          $psi.Arguments = '"' + $env:ORIG_EXE + '" --no-pause'
+          $psi.WorkingDirectory = $out
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $psi.UseShellExecute = $false
+          $proc = [System.Diagnostics.Process]::Start($psi)
+          $outTask = $proc.StandardOutput.ReadToEndAsync()
+          $errTask = $proc.StandardError.ReadToEndAsync()
+          if ($proc.WaitForExit(1500000)) {
+            Write-Host "Krypton 退出 code=$($proc.ExitCode)"
+          } else {
+            Write-Host "Krypton 超时(25min), 终止"
+            try { $proc.Kill($true) } catch { try { $proc.Kill() } catch {} }
+          }
+          try { $stdout = $outTask.Result; $stderr = $errTask.Result } catch { $stdout = ''; $stderr = '' }
+          [IO.File]::WriteAllText("$out\krypton_stdout.txt", $stdout)
+          [IO.File]::WriteAllText("$out\krypton_stderr.txt", $stderr)
+          Write-Host "=== STDOUT 尾 200 行 ==="
+          ($stdout -split "\r?\n") | Select-Object -Last 200 | ForEach-Object { Write-Host $_ }
+          if ($stderr) { Write-Host "=== STDERR 前 80 行 ==="; ($stderr -split "\r?\n") | Select-Object -First 80 | ForEach-Object { Write-Host $_ } }
+          Write-Host "=== 查找 Devirtualized 产物 ==="
+          $dev = Get-ChildItem $env:RUNNER_TEMP -Recurse -File -Filter "*Devirtualized*.exe" -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Runner' }
+          if ($dev) {
+            foreach ($d in $dev) {
+              $h = (Get-FileHash $d.FullName -Algorithm MD5).Hash
+              Write-Host "产物: $($d.FullName) $($d.Length)B md5=$h"
+            }
+            $main = $dev | Select-Object -First 1
+            "DEVIRT_EXE=$($main.FullName)" | Out-File -Append $env:GITHUB_ENV
+            Copy-Item $main.FullName "$out\AirExplorer-Devirtualized.exe" -Force
+            $rep = Get-ChildItem $env:RUNNER_TEMP -Recurse -File -Filter "*report*.txt" -ErrorAction SilentlyContinue | Select-Object -First 3
+            foreach ($r in $rep) { Copy-Item $r.FullName "$out\$($r.Name)" -Force }
+          } else { Write-Host "未找到 Devirtualized 产物 (查看 stdout 诊断)" }
+          exit 0
+
+      - name: Standalone check (JIT 全量回归)
+        if: env.DEVIRT_EXE != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:PATCH_OUT
+          $tools = "$env:RUNNER_TEMP\krypton"
+          Write-Host "=== standalone-check (最长 8 分钟) ==="
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = "$tools\Krypton.exe"
+          $psi.Arguments = '--standalone-check "' + $env:DEVIRT_EXE + '"'
+          $psi.WorkingDirectory = $out
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $psi.UseShellExecute = $false
+          $proc = [System.Diagnostics.Process]::Start($psi)
+          $outTask = $proc.StandardOutput.ReadToEndAsync()
+          $errTask = $proc.StandardError.ReadToEndAsync()
+          if (-not $proc.WaitForExit(480000)) { Write-Host "standalone-check 超时, 终止"; try { $proc.Kill($true) } catch {} }
+          try { $stdout = $outTask.Result; $stderr = $errTask.Result } catch { $stdout = ''; $stderr = '' }
+          [IO.File]::WriteAllText("$out\standalone_check.txt", $stdout + "`n--- STDERR ---`n" + $stderr)
+          ($stdout -split "\r?\n") | Select-Object -Last 120 | ForEach-Object { Write-Host $_ }
+          if ($stderr) { Write-Host "STDERR 前 40 行:"; ($stderr -split "\r?\n") | Select-Object -First 40 | ForEach-Object { Write-Host $_ } }
+          exit 0
+
+      - name: Launch probe v26 (devirt 启动验证)
+        if: env.DEVIRT_EXE != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = $env:PATCH_OUT
+          $sd = "$out\stackdump64.exe"
+          if (-not (Test-Path $sd)) { $sd = "$out\stackdump.exe" }
+          $exe = $env:DEVIRT_EXE
+          Write-Host "探针目标: $exe"
+          try {
+            $sig = '[DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lp); [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid); public delegate bool EnumWindowsProc(IntPtr h, IntPtr lp);'
+            if (-not ('W.U32' -as [type])) { Add-Type -MemberDefinition $sig -Name U32 -Namespace W }
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            Get-Process -Name "AirExplorer*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            try {
+              $md5 = (Get-FileHash $exe -Algorithm MD5).Hash
+              Write-Host "目标 md5: $md5 (原始 a12b5c573e1b54e98cccc29351eaa066)"
+              if ($md5 -eq 'a12b5c573e1b54e98cccc29351eaa066') { Write-Host "!!! 目标=原始壳, 不可作为交付 !!!" }
+            } catch {}
+            $p = Start-Process $exe -WorkingDirectory (Split-Path $exe) -PassThru -RedirectStandardOutput "$out\console.txt" -RedirectStandardError "$out\console_err.txt"
+            Start-Sleep -Seconds 12
+            # ---- [12s] 采样 ----
+            try {
+              $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+              $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+              $g = [System.Drawing.Graphics]::FromImage($bmp)
+              $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+              $bmp.Save("$out\launch12.png", [System.Drawing.Imaging.ImageFormat]::Png)
+              $g.Dispose(); $bmp.Dispose()
+            } catch { Write-Host "截图12失败: $_" }
+            try {
+              $target = $p.Id; $found = @()
+              $cb = { param($h, $lp) $procId = 0; [W.U32]::GetWindowThreadProcessId($h, [ref]$procId) | Out-Null; if ($procId -eq $target -and [W.U32]::IsWindowVisible($h)) { $sb = New-Object System.Text.StringBuilder 256; [W.U32]::GetWindowText($h, $sb, 256) | Out-Null; if ($sb.Length -gt 0) { $script:found += $sb.ToString() } }; return $true }
+              [W.U32]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+              Write-Host "=== [12s] 进程窗口列表 ($($found.Count)) ==="
+              $found | ForEach-Object { Write-Host "  窗口: '$_'" }
+            } catch { Write-Host "窗口枚举12失败: $_" }
+            try {
+              $p.Refresh()
+              Write-Host "[12s] 存活=$(-not $p.HasExited) 标题='$($p.MainWindowTitle)' 句柄=$($p.MainWindowHandle)"
+              $lines = @("[12s] CPU=$([Math]::Round($p.TotalProcessorTime.TotalSeconds,1))s 线程数=$($p.Threads.Count)")
+              foreach ($t in $p.Threads) {
+                $cpu = 'n/a'; try { $cpu = [Math]::Round($t.TotalProcessorTime.TotalSeconds,1) } catch {}
+                $lines += ("  tid={0} state={1} wait={2} cpu={3}s start=0x{4:x}" -f $t.Id, $t.ThreadState, $t.WaitReason, $cpu, $t.StartAddress.ToInt64())
+              }
+              $lines | Tee-Object -FilePath "$out\threads12.txt" | ForEach-Object { Write-Host $_ }
+            } catch { Write-Host "线程表12失败: $_" }
+            if (Test-Path $sd) {
+              try {
+                Write-Host "--- [12s] 挂栈 (ClrMD) ---"
+                & $sd $p.Id 2>&1 | Tee-Object -FilePath "$out\hangstack12.txt" | Select-Object -First 80 | ForEach-Object { Write-Host $_ }
+              } catch { Write-Host "挂栈12失败: $_" }
+            } else { Write-Host "[12s] stackdump 缺失, 跳过挂栈" }
+            Start-Sleep -Seconds 28
+            # ---- [40s] 采样 ----
+            try {
+              $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+              $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+              $g = [System.Drawing.Graphics]::FromImage($bmp)
+              $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+              $bmp.Save("$out\launch40.png", [System.Drawing.Imaging.ImageFormat]::Png)
+              $g.Dispose(); $bmp.Dispose()
+            } catch { Write-Host "截图40失败: $_" }
+            try {
+              $target = $p.Id; $found = @()
+              $cb = { param($h, $lp) $procId = 0; [W.U32]::GetWindowThreadProcessId($h, [ref]$procId) | Out-Null; if ($procId -eq $target -and [W.U32]::IsWindowVisible($h)) { $sb = New-Object System.Text.StringBuilder 256; [W.U32]::GetWindowText($h, $sb, 256) | Out-Null; if ($sb.Length -gt 0) { $script:found += $sb.ToString() } }; return $true }
+              [W.U32]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+              Write-Host "=== [40s] 进程窗口列表 ($($found.Count)) ==="
+              $found | ForEach-Object { Write-Host "  窗口: '$_'" }
+            } catch { Write-Host "窗口枚举40失败: $_" }
+            try {
+              $p.Refresh()
+              Write-Host "[40s] 存活=$(-not $p.HasExited) 标题='$($p.MainWindowTitle)' 句柄=$($p.MainWindowHandle)"
+              $lines = @("[40s] CPU=$([Math]::Round($p.TotalProcessorTime.TotalSeconds,1))s 线程数=$($p.Threads.Count)")
+              foreach ($t in $p.Threads) {
+                $cpu = 'n/a'; try { $cpu = [Math]::Round($t.TotalProcessorTime.TotalSeconds,1) } catch {}
+                $lines += ("  tid={0} state={1} wait={2} cpu={3}s start=0x{4:x}" -f $t.Id, $t.ThreadState, $t.WaitReason, $cpu, $t.StartAddress.ToInt64())
+              }
+              $lines | Tee-Object -FilePath "$out\threads40.txt" | ForEach-Object { Write-Host $_ }
+            } catch { Write-Host "线程表40失败: $_" }
+            if (Test-Path $sd) {
+              try {
+                Write-Host "--- [40s] 挂栈 (ClrMD) ---"
+                & $sd $p.Id 2>&1 | Tee-Object -FilePath "$out\hangstack40.txt" | Select-Object -First 80 | ForEach-Object { Write-Host $_ }
+              } catch { Write-Host "挂栈40失败: $_" }
+            } else { Write-Host "[40s] stackdump 缺失, 跳过挂栈" }
+            if ($p.WaitForExit(5000)) {
+              Write-Host "结果: 进程退出 code=$($p.ExitCode)"
+              if (Test-Path "$out\console_err.txt") { $err = Get-Content "$out\console_err.txt" -Raw; if ($err) { Write-Host "STDERR: $($err.Substring(0, [Math]::Min(900, $err.Length)))" } }
+            } else {
+              Write-Host "结果: 进程存活 45 秒"
+              try { $p2 = Get-Process -Id $p.Id; Write-Host "CPU 累计: $([Math]::Round($p2.TotalProcessorTime.TotalSeconds,1))s 线程数: $($p2.Threads.Count)" } catch {}
+              $needDump = $true
+              if (Test-Path "$out\hangstack40.txt") {
+                $c = Get-Content "$out\hangstack40.txt" -Raw -ErrorAction SilentlyContinue
+                if ($c -and $c.Contains("== 线")) { $needDump = $false }
+              }
+              if ($needDump -and (Test-Path $sd)) {
+                try {
+                  Write-Host "--- minidump 兜底 ---"
+                  & $sd --minidump $p.Id "$out\hang.dmp" 2>&1 | ForEach-Object { Write-Host $_ }
+                  if (Test-Path "$out\hang.dmp") {
+                    Write-Host "--- 从 dump 解析挂栈 ---"
+                    & $sd "$out\hang.dmp" 2>&1 | Tee-Object -FilePath "$out\hangstack_dump.txt" | Select-Object -First 60 | ForEach-Object { Write-Host $_ }
+                  }
+                } catch { Write-Host "minidump 兜底失败: $_" }
+              }
+              & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+            }
+            if (Test-Path "$out\console.txt") { $c = Get-Content "$out\console.txt" -Raw; if ($c) { Write-Host "STDOUT: $($c.Substring(0, [Math]::Min(400, $c.Length)))" } }
+          } catch { Write-Host "探测异常: $_" }
+          exit 0
+
+      - name: Upload krypton result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: krypton-result
+          path: |
+            D:/a/_temp/patchout/krypton_stdout.txt
+            D:/a/_temp/patchout/krypton_stderr.txt
+            D:/a/_temp/patchout/AirExplorer-Devirtualized.exe
+            D:/a/_temp/patchout/*report*.txt
+            D:/a/_temp/patchout/standalone_check.txt
+            D:/a/_temp/patchout/launch12.png
+            D:/a/_temp/patchout/launch40.png
+            D:/a/_temp/patchout/console.txt
+            D:/a/_temp/patchout/console_err.txt
+            D:/a/_temp/patchout/threads12.txt
+            D:/a/_temp/patchout/threads40.txt
+            D:/a/_temp/patchout/hangstack12.txt
+            D:/a/_temp/patchout/hangstack40.txt
+            D:/a/_temp/patchout/hangstack_dump.txt
+            D:/a/_temp/patchout/stackdump.cs
+            D:/a/_temp/patchout/hang.dmp
+          retention-days: 30
+          if-no-files-found: warn

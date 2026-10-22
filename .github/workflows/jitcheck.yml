@@ -1,0 +1,54 @@
+name: jitcheck
+
+# 逐方法 JIT 校验: 加载候选 exe, 对每个 MethodBase 调 RuntimeHelpers.PrepareMethod,
+# 把抛异常的方法按 类型::方法 + 异常类型 列出来。
+# 不运行业务逻辑(不触发 cctor), 只看 IL 是否合法 —— 比猜 "Bad IL range 是谁" 精确得多。
+on:
+  workflow_dispatch:
+    inputs:
+      exes:
+        description: 'candidate list (JSON array; "official" = shipped exe)'
+        required: false
+        default: '["official"]'
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        exe: ${{ fromJSON(inputs.exes) }}
+    steps:
+      - name: 准备
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $base = "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main"
+          New-Item -ItemType Directory -Force -Path app, out | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if ("${{ matrix.exe }}" -ne "official") {
+            Invoke-WebRequest -Uri "$base/exes/AirExplorer_${{ matrix.exe }}.exe" -OutFile "app\AirExplorer.exe"
+          }
+          Invoke-WebRequest -Uri "$base/ci/jitcheck.cs" -OutFile jitcheck.cs
+          Write-Host ("md5 = " + (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)
+
+      - name: 编译并运行
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /nologo /target:exe /out:jitcheck.exe /r:System.dll /r:System.Core.dll jitcheck.cs 2>&1 | Out-String | Write-Host
+          $out = & .\jitcheck.exe (Resolve-Path "app\AirExplorer.exe").Path 2>&1 | Out-String
+          $out | Tee-Object -FilePath "out\jitcheck.${{ matrix.exe }}.log"
+          Write-Host $out
+
+      - name: 上传
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jitcheck-${{ matrix.exe }}
+          path: out/
+          if-no-files-found: warn

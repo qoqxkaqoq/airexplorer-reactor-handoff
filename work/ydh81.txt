@@ -1,0 +1,18 @@
+== 类 CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa  字段数=3
+  字段 <>9 : CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa [static]
+  字段 <>9__12_0 : System.Comparison`1<CloudClient.Templating.TemplateArgument/DistributorProfile> [static]
+  字段 SetupPredicate : CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa [static]
+  -- .cctor (8 指令)
+     call System.Void CloudClient.Templating.DispatcherInitializer::DefineEfficientProfiler()
+     call System.Void CloudClient.Templating.DispatcherInitializer::InstantiateGlobalCalculator()
+     call System.Void CloudClient.Templating.DispatcherInitializer::DefineActiveEvent()
+     call System.Void AirExplorer.Search.FinderMap::DirectDefinition()
+     newobj System.Void CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::.ctor()
+     stsfld CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa::<>9 : CloudClient.Templating.TemplateArgument/TemplateThread/Ydh81W3oqC8p0tN46wa
+     br IL_0023: ret
+     ret 
+  -- .ctor (4 指令)
+     nop 
+     nop 
+     nop 
+     ret 

@@ -1,0 +1,65 @@
+name: hostdump
+
+# 在官方 exe 的宿主进程里导出 <Module>{...} 持有者的运行时状态。
+# 目的: InstantiateStatelessUser 是"元数据脚本解释器", 跨模块移植必然 AV;
+#       但它执行后的最终结果(holder 的 124 个 int 字段)是纯数据, 可以直接硬编码。
+# 关键: 必须用 Windows PowerShell 5.1 (.NET Framework 4.8) 跑,
+#       pwsh 7 是 .NET 8, LoadFrom 加载 .NET Framework 程序集会失败。
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ci/hostdump.ps1'
+      - '.github/workflows/hostdump.yml'
+
+jobs:
+  dump:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备官方程序目录
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path app, out | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { throw "installer extract failed" }
+          Write-Host ("md5 = " + (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)
+          Get-ChildItem app | Select-Object Name,Length | Format-Table -AutoSize | Out-String | Write-Host
+
+      - name: 运行 hostdump（PowerShell 5.1 子进程，带超时）
+        shell: pwsh
+        run: |
+          $inner = Start-Process -FilePath "powershell.exe" `
+            -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File","ci\hostdump.ps1","-Exe","app\AirExplorer.exe","-Out","out\holder.tsv") `
+            -WorkingDirectory (Get-Location).Path -NoNewWindow -PassThru `
+            -RedirectStandardOutput "out\inner.out.txt" -RedirectStandardError "out\inner.err.txt"
+          $ok = $inner.WaitForExit(600000)
+          if (-not $ok) { try { $inner.Kill() } catch {}; Write-Host "TIMEOUT" }
+          Write-Host ("inner exit = " + $(if ($ok) { $inner.ExitCode } else { -999 }))
+          if (Test-Path "out\inner.out.txt") { Get-Content "out\inner.out.txt" -Tail 40 | Write-Host }
+          if (Test-Path "out\inner.err.txt") { Get-Content "out\inner.err.txt" -Tail 40 | Write-Host }
+
+      - name: 概要
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "out\holder.tsv") {
+            $l = Get-Content "out\holder.tsv"
+            Write-Host ("lines = " + $l.Count)
+            Write-Host "--- H lines ---"
+            $l | Where-Object { $_ -like "H|*" } | Select-Object -First 40 | ForEach-Object { Write-Host $_ }
+            Write-Host "--- sample S/I ---"
+            $l | Where-Object { $_ -like "S|*" -or $_ -like "I|*" } | Select-Object -First 40 | ForEach-Object { Write-Host $_ }
+          } else { Write-Host "no holder.tsv" }
+
+      - name: 上传
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hostdump
+          path: out/
+          if-no-files-found: warn

@@ -1,0 +1,138 @@
+name: autoreaktor-v3
+
+# AutoReaktor v3 的 NecroBit 路线: harvest(反射收割) -> rebuild(dnlib 回填) -> 跑起来
+# https://github.com/0301091405/autoreaktor
+#
+# 为什么走这条: Krypton/de4dot/NETReactorSlayer 都明确不处理 NecroBit 方法体
+# ("Krypton devirtualizes the VM but does nothing about NecroBit bodies"),
+# 而本样本 22926 个方法正是 NecroBit 桩。v3 的 nbdump.py 通过反射把真实体收割出来,
+# nbrebuild 再回填, 作者在 Reactor 7.3 参考样本上验证过"rebuilt binary opens the identical GUI"。
+#
+# 注意: 输入必须是**原版**(桩态) —— 反射收割靠的就是桩被运行时替换这一特性。
+on:
+  workflow_dispatch:
+    inputs:
+      input:
+        description: 'official=从官方安装包解压原版(推荐) / e8runnable=仓库里的原版副本'
+        required: false
+        default: 'official'
+
+jobs:
+  harvest:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 拉取 AutoReaktor
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/0301091405/autoreaktor.git ar
+          Get-ChildItem ar | Select-Object Name
+
+      - name: 准备原版输入
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path input, nbout | Out-Null
+          if ("${{ github.event.inputs.input }}" -eq "e8runnable") {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/exes/AirExplorer_e8runnable.exe" -OutFile "input\AirExplorer.exe"
+          } else {
+            Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+            & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+            Copy-Item app\AirExplorer.exe input\AirExplorer.exe -Force
+          }
+          Write-Host ("input md5 = " + (Get-FileHash 'input\AirExplorer.exe' -Algorithm MD5).Hash)
+
+      - name: 构建 nbwalk 与 Krypton.Runner（nbdump.py 两个依赖）
+        shell: pwsh
+        run: |
+          cd ar\v3\nbwalk
+          dotnet build -c Release 2>&1 | Tee-Object -FilePath ..\..\..\build_nbwalk.log
+          if (Test-Path "bin\Release\net48\nbwalk.exe") { Write-Host "nbwalk ok" }
+          # nbdump.py 通过 _find_runner() 在 tools/krypton 下找 Krypton.Runner.exe
+          cd ..\..\..
+          if (-not (Test-Path "tools\krypton")) {
+            git clone --depth 1 https://github.com/dawwinci/krypton-devirtualizer.git tools\krypton
+          }
+          dotnet build tools\krypton\Krypton.Runner\Krypton.Runner.csproj -c Release 2>&1 | Tee-Object -FilePath build_runner.log
+          Get-ChildItem -Recurse -Filter "Krypton.Runner.exe" -Path tools\krypton | Select-Object FullName
+
+      - name: 反射收割 NecroBit 真体
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          python --version
+          cd ar
+          python v3/nbdump.py ..\input\AirExplorer.exe ..\nbout 2>&1 | Tee-Object -FilePath ..\nbdump.log
+          # 注意: nbdump.py 末尾是 `return 0 if matched == len(dic_map) else 1`,
+          # 覆盖率不到 100% 就返回 1, 但 inventory 已经正常写出了 —— 不能当失败处理。
+          $rc = $LASTEXITCODE
+          Write-Host "=== nbdump rc=$rc (1 仅表示覆盖率<100%) ==="
+          if (-not (Test-Path "..\nbout\nb-inventory.json")) { throw "inventory 未生成, 真失败" }
+          Write-Host "inventory ok"
+          Get-ChildItem ..\nbout -Recurse | Select-Object FullName,Length | Format-Table | Out-String | Write-Host
+          # pwsh 步骤的退出码取 $LASTEXITCODE(=python 的 1), 必须显式归零,
+          # 否则后面"构建 nbrebuild / 回填"会被 skip
+          exit 0
+
+      - name: 构建 nbrebuild
+        shell: pwsh
+        run: |
+          cd ar\v3\nbrebuild
+          dotnet build -c Release 2>&1 | Tee-Object -FilePath ..\..\..\build_nb.log
+          Get-ChildItem bin\Release -Recurse -Filter "*.dll" | Select-Object FullName
+
+      - name: 回填并产出
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $rebuilt = Get-ChildItem -Recurse -Filter "nbrebuild.exe" -Path ar\v3\nbrebuild\bin | Select-Object -First 1
+          if (-not $rebuilt) { Write-Host "!! nbrebuild 没编译出来"; exit 0 }
+          # 必须精确指到 nb-inventory.json: nbout 下还有 dyn.json, 按 *.json 取第一个会拿到 dyn.json
+          # (它没有 "inventory" 键 -> nbrebuild 抛 KeyNotFoundException)
+          $inv = Get-Item "nbout\nb-inventory.json"
+          if (-not $inv) { Write-Host "!! 没收到 inventory json"; exit 0 }
+          Write-Host ("inventory = " + $inv.FullName + "  size=" + $inv.Length)
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          & $rebuilt.FullName "input\AirExplorer.exe" $inv.FullName "out\AirExplorer_nbrebuild.exe" 2>&1 | Tee-Object -FilePath nbrebuild.log
+          Write-Host "=== exit=$LASTEXITCODE ==="
+          if (Test-Path "out\AirExplorer_nbrebuild.exe") {
+            Write-Host ("output md5 = " + (Get-FileHash 'out\AirExplorer_nbrebuild.exe' -Algorithm MD5).Hash)
+            Write-Host ("output size = " + (Get-Item 'out\AirExplorer_nbrebuild.exe').Length)
+          }
+
+      - name: 跑 UI 探针
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "out\AirExplorer_nbrebuild.exe")) { Write-Host "无产物, 跳过探针"; exit 0 }
+          New-Item -ItemType Directory -Force -Path run | Out-Null
+          if (Test-Path app) { Copy-Item app\* run\ -Recurse -Force } else {
+            Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae2.exe
+            & "C:\Program Files\7-Zip\7z.exe" x -y -orun ae2.exe | Out-Null
+          }
+          Copy-Item out\AirExplorer_nbrebuild.exe run\AirExplorer.exe -Force
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/ci/probe.ps1" -OutFile ci_probe.ps1
+          ./ci_probe.ps1 -ExePath "run\AirExplorer.exe" -WaitSec 90 -OutDir probe_nbrebuild
+
+      - name: 上传
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autoreaktor-v3
+          path: |
+            out/
+            nbdump.log
+            nbrebuild.log
+            build_nb.log
+            probe_nbrebuild/
+            nbout/
+            build_nbwalk.log
+            build_runner.log
+          if-no-files-found: warn

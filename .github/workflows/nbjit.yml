@@ -1,0 +1,140 @@
+name: nbjit
+
+# NecroBit 的 JIT 入口收割 (AutoReaktor v3 stage 4)。
+#
+# 原理: 在进程挂起状态下用 APC 注入 clrjit_dump{32,64}.dll, 在 clrjit.dll 加载时装 VMT hook,
+# 拦 ICorJitCompiler::compileMethod —— 运行时交给 JIT 的那份 CIL 就是 NecroBit 解密后的真身,
+# 直接落盘为 m_<token>.bin(20B 头: token/ilSize/maxStack/ehCount/options + raw CIL)。
+# --force 会用 forcedump companion: 先进模块初始化器(让 anti-tamper 干净跑完),
+# 再 PrepareMethod 遍历**每一个**可解析 MethodDef, 不依赖程序实际执行到哪些方法。
+#
+# 这条路不猜密钥、不对抗反篡改, 是绕开"dump 到陷阱体"的正解。
+on:
+  workflow_dispatch:
+    inputs:
+      input:
+        description: 'official=官方安装包解压原版(推荐) / e8runnable=仓库内原版副本'
+        required: false
+        default: 'official'
+      wait:
+        description: '注入后等待秒数'
+        required: false
+        default: '60'
+
+jobs:
+  dump:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 取本仓库(patched forcedump)
+        uses: actions/checkout@v4
+        with:
+          path: self
+
+      - name: 拉取 AutoReaktor
+        shell: pwsh
+        run: git clone --depth 1 https://github.com/0301091405/autoreaktor.git ar
+
+      - name: 准备原版输入 + 依赖邻居
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path input | Out-Null
+          if ("${{ github.event.inputs.input }}" -eq "e8runnable") {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/exes/AirExplorer_e8runnable.exe" -OutFile "input\AirExplorer.exe"
+          } else {
+            Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+            & "C:\Program Files\7-Zip\7z.exe" x -y -oinput ae_installer.exe | Out-Null
+          }
+          Write-Host ("input md5 = " + (Get-FileHash 'input\AirExplorer.exe' -Algorithm MD5).Hash)
+
+      - name: 覆盖 forcedump 为支持泛型实例化的补丁版
+        shell: pwsh
+        run: |
+          Copy-Item self\ci\jitdump\forcedump\Program.cs ar\v3\forcedump\Program.cs -Force
+          Copy-Item self\ci\jitdump\forcedump\forcedump.csproj ar\v3\forcedump\forcedump.csproj -Force
+          Select-String -Path ar\v3\forcedump\Program.cs -Pattern "genericPrepared" | Select-Object -First 3
+          # 方案A: 覆盖 hook 为 v4 -- dump 头 6 字段(含 localsTok + 官方EH段快照 preExtra)
+          Copy-Item self\ci\jitdump\clrjit_hook.cpp ar\v3\jitdump\clrjit_hook.cpp -Force
+          Select-String -Path ar\v3\jitdump\clrjit_hook.cpp -Pattern "preLocalsTok" | Select-Object -First 2
+
+      - name: 构建 hook DLL (clrjit VMT hook, MSVC)
+        shell: pwsh
+        run: |
+          cd ar\v3\jitdump
+          python build_hook.py 2>&1 | Tee-Object -FilePath ..\..\..\build_hook.log
+          Get-ChildItem -Recurse -Filter "clrjit_dump*.dll" | Select-Object FullName,Length | Format-Table | Out-String | Write-Host
+
+      - name: JIT 入口收割 (--force 遍历所有 MethodDef)
+        shell: pwsh
+        run: |
+          cd ar
+          python v3/jitdump/nbjitdump.py "..\input\AirExplorer.exe" --out "..\jitout" --wait ${{ github.event.inputs.wait }} --force 2>&1 | Tee-Object -FilePath ..\jitdump.log
+          $rc = $LASTEXITCODE
+          Write-Host "=== nbjitdump rc=$rc ==="
+          if (Test-Path "..\jitout") {
+            $bins = Get-ChildItem "..\jitout" -Filter "m_*.bin"
+            Write-Host ("dumped bodies = " + $bins.Count)
+            $ehs = Get-ChildItem "..\jitout" -Filter "m_*.eh"
+            Write-Host ("eh tables = " + $ehs.Count)
+            ($bins | Measure-Object -Property Length -Sum).Sum
+          }
+          exit 0
+
+      - name: 写回方法体 (nbilmerge)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          cd ar\v3\jitdump
+          dotnet build nbilmerge.csproj -c Release 2>&1 | Tee-Object -FilePath ..\..\..\build_merge.log
+          New-Item -ItemType Directory -Force -Path ..\..\..\out | Out-Null
+          & bin\Release\nbilmerge.exe "..\..\..\input\AirExplorer.exe" "..\..\..\jitout" "..\..\..\out\AirExplorer_nb.exe" 2>&1 | Tee-Object -FilePath ..\..\..\nbilmerge.log
+          $rc = $LASTEXITCODE
+          Write-Host "=== nbilmerge rc=$rc ==="
+          if (Test-Path "..\..\..\out\AirExplorer_nb.exe") {
+            Write-Host ("out md5 = " + (Get-FileHash '..\..\..\out\AirExplorer_nb.exe' -Algorithm MD5).Hash)
+            Write-Host ("out size = " + (Get-Item '..\..\..\out\AirExplorer_nb.exe').Length)
+          }
+          exit 0
+
+      - name: 跑 UI 探针
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "out\AirExplorer_nb.exe")) { Write-Host "无产物, 跳过"; exit 0 }
+          New-Item -ItemType Directory -Force -Path run | Out-Null
+          Copy-Item input\* run\ -Recurse -Force
+          Copy-Item out\AirExplorer_nb.exe run\AirExplorer.exe -Force
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/ci/probe.ps1" -OutFile ci_probe.ps1
+          ./ci_probe.ps1 -ExePath "run\AirExplorer.exe" -WaitSec 90 -OutDir probe_nb
+
+      - name: 汇总
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "jitout\jitdump.log") { Get-Content "jitout\jitdump.log" -Tail 30 }
+          if (Test-Path "jitout\marker.txt") { Write-Host "--- marker ---"; Get-Content "jitout\marker.txt" }
+          $lg = Get-ChildItem -Recurse -Filter "*.log" -ErrorAction SilentlyContinue | Select-Object -First 5
+          foreach ($f in $lg) { Write-Host ("--- " + $f.Name + " ---"); Get-Content $f.FullName -Tail 12 }
+
+      - name: 上传
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nbjit-dump
+          path: |
+            jitout/
+            jitdump.log
+            build_hook.log
+            build_merge.log
+            nbilmerge.log
+            out/
+            probe_nb/
+          if-no-files-found: warn

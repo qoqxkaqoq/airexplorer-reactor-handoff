@@ -1,0 +1,198 @@
+# .github/workflows/autoreaktor.yml
+# AutoReaktor JIT 入口重建链 (独立触发版)
+# 链条: hunt → de4dotEx → NETReactorSlayer → Krypton(VM 去虚拟化) → NecroBit JIT 方法体转储回写
+# 与 unpack.yml 中的同名作业保持同步 (此文件用于单独重触发该路径)
+
+name: AutoReaktor JIT Rebuild
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_exe:
+        description: '要重建的 EXE 文件名'
+        required: true
+        default: 'AirExplorer.exe'
+      source_zip:
+        description: '源压缩包文件名（repo 根目录）'
+        required: true
+        default: '1.zip'
+
+jobs:
+  # ============ 多路重建之一: AutoReaktor JIT 入口链 ============
+  # 链条: hunt → de4dotEx → NETReactorSlayer → Krypton(VM 去虚拟化) → NecroBit JIT 方法体转储回写
+  # 依据: autoreaktor (github.com/0301091405/autoreaktor) 在 .NET Reactor 7.5.0.0 上验证可产
+  # 出可运行重建程序集; JIT 入口取体结构上对 Reactor 版本升级免疫。
+  # 必须 --keep-work, 否则恢复的二进制位于 _ar_out/work/ 下会被清理删除。
+  autoreaktor:
+    name: AutoReaktor JIT 重建链
+    runs-on: windows-latest
+    timeout-minutes: 110
+    env:
+      AR_REPO: D:\a\ar\repo
+      WORK_DIR: D:\a\ar\work
+      AR_OUT: D:\a\ar\out
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Clone AutoReaktor and fetch tools
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          git clone --depth 1 https://github.com/0301091405/autoreaktor.git "$env:AR_REPO"
+          if ($LASTEXITCODE -ne 0) { Write-Error '克隆 autoreaktor 失败'; exit 1 }
+          # git-bash 可能没有 unzip (setup.sh 依赖) — 提供 bsdtar 兜底 shim (LF 行尾, bash 可执行)
+          $shimDir = "$env:RUNNER_TEMP\shim"
+          New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+          $shimBody = @'
+          #!/usr/bin/env bash
+          # unzip shim: 覆盖 setup.sh 用到的子集 (unzip -o file.zip -d dir)
+          # 注意: git-bash 自带的 tar 是 GNU tar (不支持 zip), 必须用 System32 的 bsdtar
+          set -e
+          dir="."; z=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              -o) shift ;;
+              -d) dir="$2"; shift 2 ;;
+              -*) shift ;;
+              *) if [ -z "$z" ]; then z="$1"; fi; shift ;;
+            esac
+          done
+          [ -n "$z" ] || { echo "unzip-shim: no archive given" >&2; exit 1; }
+          mkdir -p "$dir"
+          BT="/c/Windows/System32/tar.exe"
+          if [ -x "$BT" ]; then
+            exec "$BT" -xf "$z" -C "$dir"
+          fi
+          exec powershell.exe -NoProfile -Command "Expand-Archive -LiteralPath '$z' -DestinationPath '$dir' -Force"
+          '@
+          # 统一 LF 行尾 (CRLF 会导致 bash 报错)
+          $shimBody = $shimBody -replace "`r`n", "`n"
+          [IO.File]::WriteAllText("$shimDir\unzip", $shimBody)
+          Write-Host "unzip shim 就绪: $shimDir"
+          # bash 侧路径转换 (C:\x\y -> /c/x/y)
+          $shimPosix = ('/' + $shimDir.Substring(0,1).ToLower() + $shimDir.Substring(2)).Replace('\','/')
+          Write-Host "shim posix path: $shimPosix"
+          $bashCmd = "chmod +x `"$shimPosix/unzip`" 2>/dev/null; export PATH=`"$shimPosix`":`$PATH; export DE4DOT_URL=`"https://github.com/GDATAAdvancedAnalytics/de4dotEx/releases/download/3.11.0/de4dotEx-3.11.0-net48.zip`"; if command -v unzip >/dev/null 2>&1; then echo `"unzip: native-or-shim present at `$(command -v unzip)`"; else echo `"unzip: MISSING`"; fi; cd `"$env:AR_REPO`" && bash tools/setup.sh"
+          bash -c $bashCmd
+          if ($LASTEXITCODE -ne 0) { Write-Error 'setup.sh 失败'; exit 1 }
+          Write-Host 'AutoReaktor 工具链就绪'
+
+      - name: Extract app from source zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:WORK_DIR","$env:AR_OUT" | Out-Null
+          $src = Join-Path $env:GITHUB_WORKSPACE "${{ github.event.inputs.source_zip }}"
+          if (-not (Test-Path $src)) { Write-Error "源压缩包不存在"; exit 1 }
+          Expand-Archive -Path $src -DestinationPath "$env:WORK_DIR" -Force
+          $target = Get-ChildItem $env:WORK_DIR -Recurse -File -Filter "${{ github.event.inputs.target_exe }}" | Select-Object -First 1
+          if (-not $target) { Write-Error "未找到目标"; exit 1 }
+          "TARGET_PATH=$($target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "TARGET_NAME=$($target.Name)" | Out-File -Append $env:GITHUB_ENV
+          "APP_DIR=$(Split-Path $target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "目标: $($target.FullName)"
+
+      - name: Run AutoReaktor chain (Slayer → Krypton → NecroBit JIT)
+        shell: pwsh
+        timeout-minutes: 85
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Set-Location "$env:AR_REPO"
+          python -u autoreaktor.py "$env:WORK_DIR" --deep --keep-work 2>&1 | Tee-Object -FilePath "$env:AR_OUT\autoreaktor_stdout.txt"
+          Write-Host "退出码: $LASTEXITCODE"
+          $rp = "$env:WORK_DIR\_ar_out\report.json"
+          if (Test-Path $rp) {
+            Copy-Item $rp "$env:AR_OUT\report.json" -Force
+            try {
+              $rep = Get-Content $rp -Raw | ConvertFrom-Json
+              Write-Host '===== AutoReaktor 结果汇总 ====='
+              foreach ($e in $rep.files) {
+                Write-Host ("{0}  ->  {1}" -f $e.input, $e.result)
+                if ($e.runnable_output) { Write-Host ("    runnable: {0}" -f $e.runnable_output) }
+              }
+            } catch { Write-Host "report 解析失败: $_" }
+          } else {
+            Write-Host '未生成 report.json (链条中断或超时)'
+          }
+
+      - name: Package AutoReaktor output
+        if: always()
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $arout = "$env:WORK_DIR\_ar_out"
+          if (-not (Test-Path $arout)) { Write-Host '无 _ar_out'; exit 0 }
+          $zip = "$env:AR_OUT\autoreaktor_result.zip"
+          $sz7 = 'C:\Program Files\7-Zip\7z.exe'
+          if (Test-Path $sz7) {
+            & $sz7 a -tzip $zip "$arout\*" | Out-Null
+          } else {
+            tar -a -cf $zip -C $arout .
+          }
+          if (Test-Path $zip) { Write-Host ("打包: {0} ({1:N0} bytes)" -f $zip, (Get-Item $zip).Length) } else { Write-Host '打包失败' }
+
+      - name: Upload AutoReaktor result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autoreaktor-rebuild-result
+          path: |
+            D:/a/ar/out/autoreaktor_result.zip
+            D:/a/ar/out/report.json
+            D:/a/ar/out/autoreaktor_stdout.txt
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Smoke test rebuilt exe (15s)
+        if: always()
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $rp = "$env:AR_OUT\report.json"
+          if (-not (Test-Path $rp)) { $rp = "$env:WORK_DIR\_ar_out\report.json" }
+          if (-not (Test-Path $rp)) { Write-Host '无 report.json, 跳过冒烟'; exit 0 }
+          $rep = Get-Content $rp -Raw | ConvertFrom-Json
+          $cands = @($rep.files | Where-Object { $_.runnable_output -and (Test-Path $_.runnable_output) })
+          if ($cands.Count -eq 0) { Write-Host '无 runnable 产物, 跳过冒烟'; 'NO-RUNNABLE' | Out-File "$env:AR_OUT\smoke_result.txt" -Encoding utf8; exit 0 }
+          $pri = @{ 'run-recovered' = 0; 'necrobit-recovered' = 1; 'krypton-devirt' = 2; 'slayer-clean' = 3; 'necrobit-partial' = 4 }
+          $best = $cands | Sort-Object { if ($pri.ContainsKey($_.result)) { $pri[$_.result] } else { 99 } } | Select-Object -First 1
+          Write-Host "冒烟对象: $($best.input) -> $($best.result): $($best.runnable_output)"
+          $test = "$env:RUNNER_TEMP\arsmoke"
+          if (Test-Path $test) { Remove-Item $test -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $test | Out-Null
+          Copy-Item -Path "$env:APP_DIR\*" -Destination $test -Recurse -Force
+          foreach ($e in @($rep.files)) {
+            if ($e.runnable_output -and (Test-Path $e.runnable_output)) {
+              $name = Split-Path $e.input -Leaf
+              Copy-Item $e.runnable_output (Join-Path $test $name) -Force
+              Write-Host "替换: $name <- $($e.runnable_output)"
+            }
+          }
+          $exe = Join-Path $test $env:TARGET_NAME
+          Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          $p = Start-Process $exe -WorkingDirectory $test -PassThru
+          if ($p.WaitForExit(15000)) {
+            Write-Host "SMOKE RESULT: FAIL (启动后退出, code=$($p.ExitCode))"
+            "FAIL code=$($p.ExitCode) ($($best.result))" | Out-File "$env:AR_OUT\smoke_result.txt" -Encoding utf8
+          } else {
+            Write-Host 'SMOKE RESULT: PASS (进程持续存活15秒)'
+            "PASS ($($best.result))" | Out-File "$env:AR_OUT\smoke_result.txt" -Encoding utf8
+          }
+          & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+          Start-Sleep -Seconds 1
+          Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)) -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process -Name 'msedgewebview2' -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$($env:RUNNER_TEMP)*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Upload smoke result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autoreaktor-smoke-result
+          path: D:/a/ar/out/smoke_result.txt
+          retention-days: 90
+          if-no-files-found: warn

@@ -1,0 +1,290 @@
+# .github/workflows/ar_run.yml
+# AutoReaktor 运行级冲关 v4
+# 事实基础 (v3 实测): Air Explorer 的 NecroBit 是 JIT 入口变体, 无 policyCreatorDic,
+#   v3 手工收割/重建路线 (nbdump/nbrebuild) 结构性不适用 —— 已由 nbwalk walk.txt 证实。
+# v4 策略: 直接测"从未被启动过"的产物组合 (nbfixctor2 输出 / 链条 nb_original / 杂交修复)。
+# 判据 (用户指定): CLI 看命令行输出 (RedirectStandardOutput 捕获), GUI 看启动截图。
+#   两者都做: 每次启动 6 秒截图 + 控制台输出捕获 + 15 秒存活判定。
+# 组合:
+#   baseline: 原版启动 (参照基准)
+#   F1: nbfixctor2(NB_V50=1)@原版 → 直启
+#   F2: nbfixctor2(NB_V50+V51+V52)@原版 → 直启
+#   B1: 链条 nb_original (仓库 bin/, necrobit-recovered) → 直启
+#   B2: nbfixctor2(NB_V50=1)@nb_original (杂交: 恢复体+构造器修复) → 直启
+#   C1-C4: 仅当 policyCreatorDic 存在时启用收割重建路线 (通用性保留)
+# v4 同时修复: setup.sh 404 抖动 → 3 次重试。
+name: AutoReaktor Run Tier
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_file:
+        description: '目标 exe 文件名'
+        required: true
+        default: 'AirExplorer.exe'
+      source_zip:
+        description: '源压缩包文件名（repo 根目录）'
+        required: true
+        default: '1.zip'
+
+jobs:
+  ar-run:
+    name: 运行级 - ${{ github.event.inputs.target_file }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      AR_REPO: D:\a\ar\repo
+      WORK_DIR: D:\a\ar\work
+      AR_OUT: D:\a\ar\out
+      V3OUT: D:\a\ar\work\v3out
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Clone AutoReaktor and fetch tools
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          git clone --depth 1 https://github.com/0301091405/autoreaktor.git "$env:AR_REPO"
+          if ($LASTEXITCODE -ne 0) { Write-Error '克隆 autoreaktor 失败'; exit 1 }
+          # git-bash 可能没有 unzip (setup.sh 依赖) — 免疫化 shim (无花括号/无 >&2/全 CR 剥除/bash -n 自检)
+          $shimDir = "$env:RUNNER_TEMP\shim"
+          New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+          $shimBody = @'
+          #!/usr/bin/env bash
+          # unzip shim subset for setup.sh (unzip -o file.zip -d dir)
+          set -e
+          z=""
+          d="."
+          while [ "$#" -gt 0 ]; do
+            if [ "$1" = "-d" ]; then
+              d="$2"
+              shift 2
+            else
+              if [ "$1" = "-o" ] || [ "${1:0:1}" = "-" ]; then
+                shift
+              else
+                if [ -z "$z" ]; then
+                  z="$1"
+                fi
+                shift
+              fi
+            fi
+          done
+          if [ -z "$z" ]; then
+            echo "unzip-shim: no archive given"
+            exit 1
+          fi
+          mkdir -p "$d"
+          if [ -x /c/Windows/System32/tar.exe ]; then
+            exec /c/Windows/System32/tar.exe -xf "$z" -C "$d"
+          fi
+          exec powershell.exe -NoProfile -Command "Expand-Archive -LiteralPath '$z' -DestinationPath '$d' -Force"
+          '@
+          $shimBody = ($shimBody -replace "`r","")
+          [IO.File]::WriteAllText("$shimDir\unzip", $shimBody + "`n")
+          $shimPosix = ($shimDir -replace '\\','/')
+          Write-Host "unzip shim 就绪: $shimDir"
+          # bash -n 自检, 失败则退化为 3 行极简 shim
+          bash -n "$shimDir/unzip" 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'shim 自检失败, 启用极简兜底'
+            $tiny = @'
+          #!/usr/bin/env bash
+          set -e
+          exec /c/Windows/System32/tar.exe -xf "$1" -C "$3"
+          '@
+            [IO.File]::WriteAllText("$shimDir\unzip", ($tiny -replace "`r","") + "`n")
+          }
+          # setup.sh 带 3 次重试 (实测 404 抖动)
+          $bashCmd = "chmod +x `"$shimPosix/unzip`" 2>/dev/null; export PATH=`"$shimPosix`":`$PATH; export DE4DOT_URL=`"https://github.com/GDATAAdvancedAnalytics/de4dotEx/releases/download/3.11.0/de4dotEx-3.11.0-net48.zip`"; if command -v unzip >/dev/null 2>&1; then echo `"unzip: native-or-shim present at `$(command -v unzip)`"; else echo `"unzip: MISSING`"; fi; cd `"$env:AR_REPO`" && bash tools/setup.sh"
+          $setupOk = $false
+          foreach ($i in 1..3) {
+            bash -c $bashCmd
+            if ($LASTEXITCODE -eq 0) { $setupOk = $true; Write-Host "setup.sh 第 $i 次尝试成功"; break }
+            Write-Host "setup.sh 第 $i 次失败 (rc=$LASTEXITCODE), 10 秒后重试"
+            Start-Sleep -Seconds 10
+          }
+          if (-not $setupOk) { Write-Error 'setup.sh 失败(3 次重试后)'; exit 1 }
+          New-Item -ItemType Directory -Force -Path "$env:WORK_DIR","$env:AR_OUT" | Out-Null
+          Write-Host 'AutoReaktor 工具链就绪'
+
+      - name: Extract app from source zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:WORK_DIR","$env:AR_OUT","$env:V3OUT" | Out-Null
+          $src = Join-Path $env:GITHUB_WORKSPACE "${{ github.event.inputs.source_zip }}"
+          if (-not (Test-Path $src)) { Write-Error "源压缩包不存在"; exit 1 }
+          Expand-Archive -Path $src -DestinationPath "$env:WORK_DIR" -Force
+          $target = Get-ChildItem $env:WORK_DIR -Recurse -File -Filter "${{ github.event.inputs.target_file }}" | Select-Object -First 1
+          if (-not $target) { Write-Error "未找到目标"; exit 1 }
+          "TARGET_PATH=$($target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "TARGET_NAME=$($target.Name)" | Out-File -Append $env:GITHUB_ENV
+          "APP_DIR=$(Split-Path $target.FullName)" | Out-File -Append $env:GITHUB_ENV
+          Write-Host "目标: $($target.FullName)"
+
+      - name: Build v3 tools (nbwalk + nbrebuild + nbfixctor2)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Set-Location "$env:AR_REPO"
+          dotnet build v3/nbwalk/nbwalk.csproj -c Release 2>&1 | Tee-Object -FilePath "$env:AR_OUT\build_nbwalk.txt" | Select-Object -Last 4
+          Set-Location "$env:AR_REPO\v3\nbrebuild"
+          dotnet build -c Release 2>&1 | Tee-Object -FilePath "$env:AR_OUT\build_nbrebuild.txt" | Select-Object -Last 5
+          Set-Location "$env:AR_REPO\v3\nagstrip"
+          dotnet build nbfixctor2.csproj -c Release 2>&1 | Tee-Object -FilePath "$env:AR_OUT\build_nbfixctor2.txt" | Select-Object -Last 5
+          $nwalk = Get-ChildItem "$env:AR_REPO\v3\nbwalk\bin" -Recurse -Filter "nbwalk.exe" | Select-Object -First 1
+          $rb = Get-ChildItem "$env:AR_REPO\v3\nbrebuild\bin" -Recurse -Include "nbrebuild.exe","nbrebuild.dll" | Select-Object -First 1
+          $fx = Get-ChildItem "$env:AR_REPO\v3\nagstrip\bin" -Recurse -Filter "nbfixctor2.exe" | Select-Object -First 1
+          if (-not $nwalk -or -not $rb -or -not $fx) { Write-Error "v3 工具构建失败"; exit 1 }
+          "NBWALK=$($nwalk.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "NBREBUILD=$($rb.FullName)" | Out-File -Append $env:GITHUB_ENV
+          "NBFIXCTOR2=$($fx.FullName)" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Run-tier launch matrix (CLI 输出 + GUI 截图双取证)
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $T = $env:TARGET_PATH
+          $base = [IO.Path]::GetFileNameWithoutExtension($env:TARGET_NAME)
+          $results = @()
+          function Add-Res($combo, $stage, $ok, $detail) {
+            $script:results += [pscustomobject]@{ combo=$combo; stage=$stage; ok=$ok; detail=$detail }
+            Write-Host "[$combo][$stage] ok=$ok $detail"
+          }
+          # ---- 截图函数 ----
+          function Shot([string]$tag) {
+            try {
+              Add-Type -AssemblyName System.Windows.Forms
+              Add-Type -AssemblyName System.Drawing
+              $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+              $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+              $g = [System.Drawing.Graphics]::FromImage($bmp)
+              $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+              $bmp.Save("$env:AR_OUT\shot_$tag.png", [System.Drawing.Imaging.ImageFormat]::Png)
+              $g.Dispose(); $bmp.Dispose()
+              Write-Host "截图: shot_$tag.png"
+            } catch { Write-Host "截图失败($tag): $_" }
+          }
+          function Kill-Target() {
+            Get-Process -Name $base -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-Process -Name 'msedgewebview2' -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$($env:RUNNER_TEMP)*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+          # ---- 启动+双取证: 控制台输出捕获 + 6 秒截图 + 15 秒存活 ----
+          function Launch-And-Probe([string]$tag, [string]$exe, [string]$wd) {
+            try {
+              Kill-Target
+              $so = "$env:AR_OUT\console_$tag.txt"
+              $se = "$env:AR_OUT\console_${tag}_err.txt"
+              $p = Start-Process $exe -WorkingDirectory $wd -PassThru -RedirectStandardOutput $so -RedirectStandardError $se
+              Start-Sleep -Seconds 6
+              Shot $tag
+              if ($p.WaitForExit(15000)) {
+                $txt = ''
+                if (Test-Path $so) { $raw = Get-Content $so -Raw -ErrorAction SilentlyContinue; if ($raw) { $txt = $raw.Substring(0, [Math]::Min(200, $raw.Length)) -replace "`r"," " -replace "`n", " | " } }
+                if ($p.ExitCode -eq 0) {
+                  Add-Res $tag 'launch' $true "控制台干净退出; 输出: $txt"
+                } else {
+                  Add-Res $tag 'launch' $false "退出 code=$($p.ExitCode); 输出: $txt"
+                }
+              } else {
+                Add-Res $tag 'launch' $true 'GUI 进程持续存活 15 秒'
+                & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+              }
+              Kill-Target
+              Start-Sleep -Seconds 1
+            } catch { Add-Res $tag 'launch' $false "异常: $_" }
+          }
+
+          # ---- baseline: 原版直启 ----
+          Launch-And-Probe 'original' $T $env:APP_DIR
+
+          # ---- 收割 (nbdump on original, 一次) ----
+          try {
+            Set-Location "$env:AR_REPO"
+            python -u v3/nbdump.py "$T" "$env:V3OUT\harvest_orig" 2>&1 | Tee-Object -FilePath "$env:AR_OUT\nbdump_orig.txt" | Select-Object -Last 4
+          } catch { Add-Res 'C' 'harvest' $false "$_" }
+          $invOrig = Get-ChildItem "$env:V3OUT\harvest_orig" -Recurse -Filter "nb-inventory.json" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($invOrig) { Add-Res 'C' 'harvest' $true 'nb-inventory.json 生成' }
+          else { Add-Res 'C' 'harvest' $false '无 policyCreatorDic (收割路线不适用)' }
+
+          # ---- K 矩阵: nbfixctor2 旋钮组合 → nbrebuild → 启动 ----
+          # 依据 v4 崩溃栈: ArgumentGateway..cctor NRE ← StatelessModel.SearchAdapter
+          # nbfixctor2 v39 把 StatelessModel cctor 改 ret、v43 切了 9931 处 external-type check
+          # —— NB_NOV39 / NB_NOV43 / V51 / V52 / NOSIL 旋钮空间未探索
+          $knobs = @(
+            @{ n='K1'; env=@{ 'NB_V50'='1'; 'NB_NOV39'='1' } },
+            @{ n='K2'; env=@{ 'NB_V50'='1'; 'NB_NOV43'='1' } },
+            @{ n='K3'; env=@{ 'NB_V50'='1'; 'NB_NOV39'='1'; 'NB_NOV43'='1' } },
+            @{ n='K4'; env=@{ 'NB_V50'='1'; 'NB_V51'='1' } },
+            @{ n='K5'; env=@{ 'NB_V50'='1'; 'NB_V52'='1' } },
+            @{ n='K6'; env=@{ 'NB_V50'='1'; 'NB_NOSIL'='1' } },
+            @{ n='K7'; env=@{} },
+            @{ n='K8'; env=@{ 'NB_V50'='1' } }
+          )
+          foreach ($k in $knobs) {
+            try {
+              foreach ($e in $k.env.Keys) { Set-Item "Env:$e" $k.env[$e] }
+              & $env:NBFIXCTOR2 "$T" "$env:V3OUT\fixed_$($k.n).exe" 2>&1 | Out-File "$env:AR_OUT\nbfix_$($k.n).txt"
+              foreach ($e in $k.env.Keys) { Remove-Item "Env:$e" -ErrorAction SilentlyContinue }
+              if (Test-Path "$env:V3OUT\fixed_$($k.n).exe") {
+                if ($invOrig) {
+                  if ([IO.Path]::GetExtension($env:NBREBUILD) -eq '.exe') {
+                    & $env:NBREBUILD "$env:V3OUT\fixed_$($k.n).exe" $invOrig.FullName "$env:V3OUT\rebuild_$($k.n).exe" 2>&1 | Out-File "$env:AR_OUT\rebuild_$($k.n).txt"
+                  } else {
+                    & dotnet "$env:NBREBUILD" "$env:V3OUT\fixed_$($k.n).exe" $invOrig.FullName "$env:V3OUT\rebuild_$($k.n).exe" 2>&1 | Out-File "$env:AR_OUT\rebuild_$($k.n).txt"
+                  }
+                  if (Test-Path "$env:V3OUT\rebuild_$($k.n).exe") {
+                    Launch-And-Probe $k.n "$env:V3OUT\rebuild_$($k.n).exe" $env:APP_DIR
+                  } else { Add-Res $k.n 'rebuild' $false '未产出' }
+                } else { Add-Res $k.n 'skip' $false '无 inventory' }
+              } else { Add-Res $k.n 'fix' $false 'fixed 未产出' }
+            } catch { Add-Res $k.n 'fix' $false "$_" }
+          }
+
+          # ---- D1: 二次修复 (对 K8 重建产物再过一遍 fixer) ----
+          if (Test-Path "$env:V3OUT\rebuild_K8.exe") {
+            try {
+              $env:NB_V50 = '1'
+              & $env:NBFIXCTOR2 "$env:V3OUT\rebuild_K8.exe" "$env:V3OUT\rebuild_D1.exe" 2>&1 | Out-File "$env:AR_OUT\nbfix_D1.txt"
+              Remove-Item Env:NB_V50 -ErrorAction SilentlyContinue
+              if (Test-Path "$env:V3OUT\rebuild_D1.exe") { Launch-And-Probe 'D1' "$env:V3OUT\rebuild_D1.exe" $env:APP_DIR }
+              else { Add-Res 'D1' 'fix' $false '未产出' }
+            } catch { Add-Res 'D1' 'fix' $false "$_" }
+          }
+
+          $results | ConvertTo-Json | Out-File "$env:AR_OUT\v3_results.json" -Encoding utf8
+          $pass = @($results | Where-Object { $_.stage -eq 'launch' -and $_.ok }).Count
+          Write-Host "===== 运行级矩阵: $pass 个组合启动成功 ====="
+          $results | Format-Table -AutoSize | Out-String | Write-Host
+
+      - name: Package v3 output
+        if: always()
+        shell: pwsh
+        run: |
+          $zip = "$env:AR_OUT\v3_run_result.zip"
+          if (Test-Path "$env:V3OUT") { Compress-Archive -Path "$env:V3OUT\*" -DestinationPath $zip -Force }
+          if (Test-Path $zip) { Write-Host "打包完成: $((Get-Item $zip).Length)B" } else { Write-Host 'v3out 为空, 跳过打包' }
+
+      - name: Upload v3 run result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ar-run-result
+          path: |
+            D:/a/ar/out/v3_run_result.zip
+            D:/a/ar/out/v3_results.json
+            D:/a/ar/out/shot_*.png
+            D:/a/ar/out/console_*.txt
+            D:/a/ar/out/build_*.txt
+            D:/a/ar/out/nbdump_orig.txt
+            D:/a/ar/out/nbfix_*.txt
+            D:/a/ar/out/rebuild_*.txt
+          retention-days: 90
+          if-no-files-found: warn

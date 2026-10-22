@@ -1,0 +1,16 @@
+/tmp/bin2/cmpasm8
+/tmp/bin2/cmpasm8.deps.json
+/tmp/bin2/cmpasm8.runtimeconfig.json
+/tmp/bin2/cmpasm8.dll
+/tmp/bin2/cmpasm8.pdb
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.csproj.AssemblyReference.cache
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.GeneratedMSBuildEditorConfig.editorconfig
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.AssemblyInfoInputs.cache
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.AssemblyInfo.cs
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.csproj.CoreCompileInputs.cache
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.csproj.Up2Date
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.dll
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/refint/cmpasm8.dll
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.pdb
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/cmpasm8.genruntimeconfig.cache
+/workspace/airexplorer-reactor-handoff/tools/obj/Release/net8.0/ref/cmpasm8.dll

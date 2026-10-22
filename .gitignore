@@ -1,0 +1,9 @@
+# 本文件存推送用的 GitHub token（纯文本一行），不要提交
+.gh_token
+# 工具中间产物
+bin/
+obj/
+# 崩溃转储
+core.*
+# OCR 中间产物
+ui-shots/big*.png

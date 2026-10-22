@@ -1,0 +1,86 @@
+name: krypton-fork
+on:
+  workflow_dispatch:
+    inputs:
+      exe:
+        required: false
+        default: 'e8runnable'
+
+jobs:
+  run:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 部署官方安装(依赖 DLL 齐全)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          Write-Host ("app 内容: " + (Get-ChildItem app | Measure-Object).Count + " 项")
+          Get-ChildItem app -Filter "*.dll" | Select-Object -First 8 | ForEach-Object { Write-Host $_.Name }
+
+      - name: 拉取 dawwinci Krypton fork
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/dawwinci/krypton-devirtualizer.git kf
+          if (-not (Test-Path "kf\build-all.ps1")) { Write-Host "clone 失败"; exit 1 }
+          Get-ChildItem kf | Select-Object -First 12 | ForEach-Object { Write-Host $_.Name }
+
+      - name: 构建
+        shell: pwsh
+        run: |
+          cd kf
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File build-all.ps1 -Configuration Release 2>&1 | Select-Object -Last 25
+
+      - name: standalone-check 全量体检 (官方基线 exe)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
+          # Runner(net48 沙箱主机) 可能不在 build-all 范围内, 单独构建
+          $rproj = Get-ChildItem -Recurse kf -Filter "*.csproj" | Where-Object { $_.Name -match "Runner" } | Select-Object -First 1
+          if ($rproj) {
+            Write-Host "构建 Runner: $($rproj.FullName)"
+            dotnet build $rproj.FullName -c Release -v q --nologo 2>&1 | Select-Object -Last 5
+          } else { Write-Host "无 Runner csproj" }
+          $runner = Get-ChildItem -Recurse kf -Filter "Krypton.Runner*.exe" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "bin" } | Select-Object -First 1
+          if (-not $runner) { Write-Host "Runner 未找到, 列出 exe"; Get-ChildItem -Recurse kf -Filter "*.exe" | Select-Object -First 15 | ForEach-Object { Write-Host $_.FullName }; exit 0 }
+          Write-Host "runner = $($runner.FullName)"
+          $env:KRYPTON_ALLOW_PARTIAL_OUTPUT = "1"
+          & $runner.FullName --standalone-check $exe 2>&1 | Tee-Object -FilePath out\standalone-check.txt | Select-Object -Last 40
+          Write-Host "=== necrobit-body-dump-all ==="
+          # true = 不 throw(报告落盘即可); body dump 输出 json
+          & $runner.FullName --necrobit-body-dump-all $exe out\necrobit-bodies.json 2>&1 | Tee-Object -FilePath out\bodydump.log | Select-Object -Last 25
+          if (Test-Path "out\necrobit-bodies.json") { Write-Host ("bodies.json = " + (Get-Item "out\necrobit-bodies.json").Length + " 字节") }
+
+      - name: 主流程 devirtualize
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
+          $krypton = Get-ChildItem -Recurse kf -Filter "Krypton.exe" | Where-Object { $_.FullName -match "Release" } | Select-Object -First 1
+          if (-not $krypton) { Write-Host "Krypton.exe 未找到"; exit 0 }
+          Write-Host "krypton = $($krypton.FullName)"
+          $env:KRYPTON_ENABLE_NECROBIT_BODY_RESTORE = "1"
+          $env:KRYPTON_ALLOW_PARTIAL_OUTPUT = "1"
+          $work = "kryptwork"
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          # 整个 app 目录复制(依赖齐全), 目标改名 input.exe 会导致依赖解析失败 -> 保留原名
+          Copy-Item app\* $work\ -Recurse -Force
+          # 30 分钟上限, 卡住就结束(报告仍会落盘)
+          $p = Start-Process -FilePath $krypton.FullName -ArgumentList @("$work\AirExplorer.exe", "--no-pause") -WorkingDirectory $work -PassThru -NoNewWindow -RedirectStandardOutput out\krypton-stdout.txt -RedirectStandardError out\krypton-stderr.txt
+          if (-not $p.WaitForExit(1800000)) { $p.Kill(); Write-Host "[timeout] 30min 超时, 保留部分产物" }
+          Get-ChildItem $work | ForEach-Object { Write-Host ("  " + $_.Name + "  " + $_.Length) }
+          Get-ChildItem $work -Filter "*.exe" | Where-Object { $_.Name -ne "AirExplorer.exe" } | ForEach-Object { Copy-Item $_.FullName "out\" -ErrorAction SilentlyContinue }
+          Get-ChildItem $work -Filter "*report*" | ForEach-Object { Copy-Item $_.FullName "out\" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: krypton-out
+          path: out/
