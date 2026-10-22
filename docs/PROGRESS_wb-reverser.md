@@ -342,3 +342,223 @@ stloc V_104 (fe 0e 68 00) 出现 0 次      ← 无陷阱特征
 - 仓库建了 `board/` 留言板（规则见 `board/README.md`），我在 `board/agents/wb-reverser.md`。
 - 已知另一位 agent 在做同源思路（`fixinit: 原版初始化体回植`），并已有官方安装包的取法
   和"受控宿主抓异常堆栈"的能力，两者思路撞车，建议直接在留言板对齐，避免重复。
+
+---
+
+## 9. 真突破：把"解释器执行结果"当作纯数据搬过来（v10 → v13）
+
+前面所有轮次都卡在同一件事上：`TemplateArgument::InstantiateStatelessUser<T>` 是**泛型方法**，
+JIT 收割拿不到；唯一的真体在 cilantro（nb_slayer 产物），跨模块移植必 AV。
+
+**换了个问法之后路就通了**：不移植解释器，而是把**解释器跑出来的结果**搬过来。
+这些结果全是纯数据——没有委托、没有反射句柄、没有模块绑定。
+
+### 9.1 `ci/hostdump.ps1`：在官方 exe 的宿主进程里导出运行时状态
+
+关键约束：**必须用 Windows PowerShell 5.1（.NET Framework 4.8）**，
+`pwsh 7` 是 .NET 8，`Assembly.LoadFrom` 加载 .NET Framework 程序集会失败。
+
+```
+LoadFrom(app\AirExplorer.exe)
+  -> RuntimeHelpers::RunModuleConstructor(module)   # 跑 <Module>::.cctor, 199ms
+  -> 枚举 <Module>{*} / DispatcherInitializer / TemplateArgument 的所有静态字段
+  -> SearchStrategy(资源流, 0)                       # 触发脚本 44, 把资源解进 _ExtractorVisitors
+  -> 导出 _ExtractorVisitors 原始字节 + 再 dump 一遍
+```
+
+产出（CI artifact `hostdump`，两次运行共 2 分钟）：
+
+| 目标 | 内容 | 大小 |
+|---|---|---|
+| `<Module>{a8c2e9b2…}` 的 `m_0d0b145b…` 单例 | **124 个 int 字段** | — |
+| `DispatcherInitializer::_ExtractorVisitors` | **398,794 字节** UTF-16 字符串表 | 389 KB |
+
+`_ExtractorVisitors` 的结构（从 `InstantiateTransferableProgram` 的 IL 读出来的）：
+
+```
+[4 字节 int32 length][length 字节 UTF-16LE 字符][4 字节 int32 length]...
+```
+
+而 `InstantiateTransferableProgram(offset)` 的参数就是**字节偏移**，
+调用点是 `ldc.i4 K xor holder.field` —— 两个操作数都是常量，可以离线算。
+
+**离线验证**（`ArgumentGateway..cctor`，不跑程序）：
+
+| 字段 | offset | 解出的字符串 |
+|---|---|---|
+| `m_df3c7fc7…` | 277204 | `https://www.airexplorer.net/checkversion/?ad=1&sv=1` |
+| `m_b24a88b7…` | 277518 | `https://www.airexplorer.net/bugReport/sendbug.php` |
+
+对齐完全正确 —— 这条路是通的。
+
+### 9.2 v10：硬编码 holder 单例（`tools2/initholder.cs`）
+
+把 `<Module>{a8c2e9b2}::r6cf451d…()`（原本调 `InstantiateAccessibleProcessor(45,…)` 的 26 条指令）
+整个替换成：
+
+```
+newobj holder::.ctor ; dup ; ldc.i4 <v> ; stfld m_xxx ; ... ×124 ; stsfld 单例 ; ret
+```
+
+**字节级**：只追加方法体 + 改 MethodDef.RVA 列，元数据表零改动（v9 的反篡改绕过依赖表行号）。
+结果：`ArgumentGateway..cctor` 的 NRE 消失，推进到
+`ArgumentOutOfRangeException @ BitConverter.ToInt32` —— 即 `_ExtractorVisitors` 还是空数组。
+
+### 9.3 v11 系列：三次失败与三个教训
+
+| 版本 | 做法 | 结果 | 教训 |
+|---|---|---|---|
+| v11 | 字节级追加 398KB + 改 SearchStrategy 为 `FileStream+Read` | `InvalidProgramException` | **栈下溢**：`stsfld` 之后栈上还剩 `FileStream`，只需 1 个 `pop`，我写了 2 个 |
+| v11a/v11b | 改 `.reloc` 的 section 标志（加 `CNT_CODE` / 去 `DISCARDABLE`） | 同样 InvalidProgram | **section 标志不是原因**，别往这边查 |
+| v11c | 修掉多余的 `pop` | `BadImageFormatException: Bad class token` | 复用的 `MemberRef`（`FileStream::.ctor` / `Stream::Read`）是**孤儿行**，签名里的 TypeRef 不可解析 |
+
+**另一条弯路**：我以为 `newarr` 的操作数要 `TypeDefOrRefEncoded` 压缩编码，改成 `8D ED 02` 后
+dnlib 直接解析不出操作数。**`newarr` 是 `InlineType`，4 字节 raw token**，不需要压缩。
+（`ldtoken` 同理。）
+
+### 9.4 v12：dnlib 重写 + FieldRVA（`tools2/rebuild2.cs`）
+
+既然孤儿 MemberRef 不可信，就让 dnlib **重新生成全套 token 和 PE 布局**：
+
+```csharp
+// <PrivateImplementationDetails> 里加一个 __StaticArrayInitTypeSize=398794 的字段
+fld.InitialValue = blob;          // dnlib 的 FieldRVA 属性名是 InitialValue
+// SearchStrategy 换成 7 条指令
+ldc.i4 398794 ; newarr byte ; dup ; ldtoken __strtab
+call RuntimeHelpers::InitializeArray ; stsfld _ExtractorVisitors ; ret
+```
+
+写盘 `PreserveAll | KeepOldMaxStack`。
+
+**对照组 v12n**（同样 dnlib 重写、但不做任何修改）跑出和 v10 完全一致的
+`ArgumentOutOfRangeException @ BitConverter.ToInt32` ⇒ **dnlib 重写本身是安全的**，
+可以放心用它做后续所有改动。
+
+v12 结果：
+
+```
+NullReferenceException
+   at AirExplorer.Values.ArgumentGateway.EvaluateVisibleAttribute()
+   at CloudClient.Models.StatelessModel.SearchAdapter(String[] info)
+```
+
+**`ArgumentGateway..cctor` 通过了**——字符串表这条链彻底打通。
+
+### 9.5 v13：`RequestWorker::.ctor` 是空桩
+
+新的 NRE 来自 `EvaluateVisibleAttribute` 第一段：
+
+```
+call RequestWorker::WriteRequest()      // 返回 m_RequestClient
+ldfld  RequestWorker::_RequestSorter    // ← null
+...
+callvirt TemplateInitializer::DefineTransferableRecord(string)
+```
+
+`RequestWorker::.ctor` 在 nbjit 的 16586 个 dump 里**没有**（`m_06002AF0.bin` 不存在），
+nb_original 里它是 `nop;nop;nop;ret`，而 **cilantro 里有完整的 74 条指令**。
+
+用 `bodytrans`（补上 `PreserveAll`）移植 —— 16 处引用重绑到目标模块。
+
+### 9.6 当前结论
+
+> **卡点从"解释器拿不到"变成"少数方法 nbjit 没 dump 到"**。
+> 后者是**可枚举、可批量修**的：遍历目标模块里所有 ≤4 条指令且只含 `nop/ldnull/ret` 的方法，
+> 从 cilantro 同名同签名移植即可。
+
+`bodytrans clonetree` 已经实现了"从入口方法 BFS 调用树、dst 缺失/桩就移植"的批量模式，
+下一轮可以直接用。
+
+---
+
+## 10. 从"单点修"到"批量补"（v14 → v25）
+
+第 9 节把字符串表这条链打通后，剩下的问题变成一句话：
+**nbjit 的 16586 个 dump 覆盖不到全部方法，缺的那些是桩。**
+
+`tools2/stubscan` 统计（v14 vs cilantro）：
+
+```
+total=30886  stub=2308  transplantable=1254  noSrcBody=1054
+```
+
+即 **2308 个桩**，其中 **1254 个**在 cilantro 里有真体。
+
+### 10.1 委托字段的目标方法可以离线查（`m_LogicalProcessorMap`）
+
+`TrackCompiler(RuntimeTypeHandle)` 是 Reactor 的"数据驱动字段初始化器"：
+它读资源 `CollectorTransaction.ValidatorProject`（26KB，加密），
+建一张 **`Dictionary<字段token, 方法token>`**，然后对每个静态字段
+`Delegate.CreateDelegate(field.FieldType, Module.ResolveMethod(...))` + `SetValue`。
+
+**这张表可以在官方宿主里反射拿到**（`ci/hostdump.ps1` 第 5 步），共 **3266 条**：
+
+```
+K|67119178|167776645|System.Collections.Hashtable::ContainsKey     <- CheckAlphabeticProject
+K|67119179|167774686|System.Collections.Hashtable::get_Item        <- VerifyAdjustableSelector
+```
+
+于是"这个委托字段到底调什么"从**猜测**变成**查表**。
+（顺带确认：这两个不是缺失方法，就是 Hashtable 的两个 BCL 方法。）
+
+### 10.2 `tokcmp`：先证明 dnlib 重写没打乱 token
+
+这是继续往下走的前提。拿 7 个关键 token 在官方 `e8runnable` 和我们的版本里逐一解析：
+
+```
+OK 0x060062C4 AlphabeticWrapperValidator::ExecuteExplorer ...
+OK 0x0400284A ValidatorParserCollection::CheckAlphabeticProject
+OK 0x06002B06 TemplateInitializer::InstantiateRandomIterator
+same=7 diff=0
+```
+
+`PreserveAll` 确实保住了表行号 —— 所以 `TrackCompiler` 里写死的 token 仍然有效，
+dnlib 重写这条路是安全的（v12n 对照组也印证过）。
+
+### 10.3 `bodytrans fromlist`：一次移植 1125 个
+
+给 `bodytrans` 加了 `fromlist` 模式：读 `stubscan` 的清单批量移植，
+跳过 `ldc.i4.1; ret` 的授权桩。
+
+```
+[fromlist] ok=1125 skip=129 fail=0
+```
+
+### 10.4 `fixgen`：假名类型的三层映射
+
+`bodytrans` 的 `RebindRefs` 只按"名字"重绑字段/方法，管不了"类型本身被改名"。
+`fixgen` 按优先级三层匹配：
+
+| 层 | 规则 | 命中 |
+|---|---|---|
+| mapN | 同父类型下按 `NestedTypes` 序号（+ 指纹校验） | 多数 |
+| mapP | 同父类型下按指纹唯一 | 少数 |
+| map | 全局指纹唯一 | 少量 |
+| mapM | 手工 `--map A=B` | 补漏 |
+
+413 个假名类型 → **385 个映射成功**，28 个无候选（多为 `<>c__DisplayClass` 的字段顺序差异）。
+
+### 10.5 三个真 bug（都出在 fixgen）
+
+| # | Bug | 症状 | 修法 |
+|---|---|---|---|
+| 1 | 只替换指令操作数，不管 `Body.Variables` | `TypeLoadException: GeneratedEnum_0425`（locals 签名里） | 加 `FixSig` 递归替换 TypeSig（数组/byref/泛型实参都覆盖），修了 35 处 |
+| 2 | `TypeSpec` 的 `FullName` 带泛型实参（`X\`1<Y>`），map 的 key 是 `X\`1` | 泛型 `<>c` 类的引用全部漏掉 | 加 `Norm()` 去掉 `<...>` |
+| 3 | **`MemberRef` 同时实现 `IField` 和 `IMethod`，代码先判 `IField`** | 所有 `ldftn`/`call` 到 TypeSpec 上的方法引用都被当字段查表 → 静默漏掉 | 先判 `IMethod` |
+
+第 3 条影响最大：修完后 `methods` 从 **0 变成 106**，`InstantiateStatelessUser` 里的
+`GeneratedType_0431<T>::generatedMethod_0290`（对应官方 `URqFYq3xtmntT2OcLub\`1::r3vw2AFBgZ`）
+才被正确重绑，假名引用计数从 4 → **0**。
+
+### 10.6 版本推进表
+
+| 版本 | 改动 | 结果 |
+|---|---|---|
+| v13/v14 | 移植 `RequestWorker::.ctor` + fixgen(`GeneratedType_0440`) | NRE 从 `..cctor` 移到 `DefineTransferableRecord` |
+| v16/v18 | 移植 `TemplateInitializer::.ctor` / `AttachDistributor` | 仍在 `DefineTransferableRecord`（Hashtable 空） |
+| v19/v20 | 批量 1125 + fixgen 全量 | 推进到 `ModelTracer.JoinExecutor`，但 `TypeLoadException: GeneratedEnum_0425` |
+| v21 | `InstantiateStatelessUser` 回桩（排除误移植） | 确认卡点就是它（NRE @ JoinExecutor） |
+| v22–v25 | fixgen 三个 bug 全修 | 假名引用清零 |
+
+**当前状态**：v25 已把 `InstantiateStatelessUser` 的真体（888 指令）连同它依赖的
+`GeneratedType_0431<T>` / `GeneratedEnum_0425` 一起重绑干净，等待 CI 验证。
