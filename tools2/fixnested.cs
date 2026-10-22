@@ -64,10 +64,14 @@ class FixNested {
             return sig;
         }
 
-        int nMr = 0, nTs = 0, nFieldSig = 0, nThis = 0;
+        int nMr = 0, nTs = 0, nFieldSig = 0, nThis = 0, nIns = 0;
         foreach (var mr in mod.GetMemberRefs().ToList()) {
             var cls = mr.Class;
-            if (cls is TypeSpec ts && ts.TypeSig is GenericInstSig gi) {
+            if (cls is TypeSpec ts0 && ts0.TypeSig is ClassSig cs0 && cs0.TypeDefOrRef is TypeRef tr0) {
+                // TypeSpec 里只有一个裸 ClassSig(泛型实例被简化成 TypeSpec+ClassSig)
+                var ft0 = FixTdor(tr0, "MR-tsig " + mr.Name);
+                if (!ReferenceEquals(ft0, tr0)) { ts0.TypeSig = new ClassSig((ITypeDefOrRef)ft0); nTs++; }
+            } else if (cls is TypeSpec ts && ts.TypeSig is GenericInstSig gi) {
                 var gt = gi.GenericType;
                 if (gt != null && gt.TypeDefOrRef is TypeRef tr2) {
                     var fixedT = FixTdor(tr2, "MR-spec " + mr.Name);
@@ -109,6 +113,17 @@ class FixNested {
                     var nv = FixSig2(v.Type);
                     if (nv != null && !ReferenceEquals(nv, v.Type)) { v.Type = nv; nFieldSig++; }
                 }
+                // 指令操作数里的 TypeRef: castclass/isinst/newobj/box/ldtoken 的 token
+                // 若是 TypeRef 且本模块有同名唯一 TypeDef, 必须换成 TypeDef ——
+                // 否则运行时可能解析成另一个 Type 实例, castclass 直接 InvalidCast
+                // (v55 的 VirtualInitializer::AddEfficientHandler 就是
+                //  castclass ProgramFinder [tok 0x0100090F], 而正确 token 是 0x0200065C)
+                foreach (var ins in m.Body.Instructions) {
+                    var tdr = ins.Operand as ITypeDefOrRef;
+                    if (!(tdr is TypeRef trIns)) continue;
+                    var fti = FixTdor(trIns, "INS " + t.Name + "::" + m.Name);
+                    if (!ReferenceEquals(fti, trIns)) { ins.Operand = fti; nIns++; }
+                }
                 if (m.MethodSig != null) {
                     for (int pi = 0; pi < m.MethodSig.Params.Count; pi++) {
                         var np = FixSig2(m.MethodSig.Params[pi]);
@@ -119,7 +134,7 @@ class FixNested {
                 }
             }
         }
-        Console.WriteLine("[fixnested] memberref=" + nMr + " typespec=" + nTs + " sigs=" + nFieldSig + " this=" + nThis);
+        Console.WriteLine("[fixnested] memberref=" + nMr + " typespec=" + nTs + " sigs=" + nFieldSig + " this=" + nThis + " insOperand=" + nIns);
         var wopt = new ModuleWriterOptions(mod);
         wopt.MetadataOptions.Flags |= MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack;
         mod.Write(a[1], wopt);
