@@ -28,8 +28,8 @@ jobs:
           # msixbundle 解出的是 msix 包(x64), 再解一层
           $pkg = Get-ChildItem D:\wd -Filter "*.msix" | Select-Object -First 1
           if ($pkg) { & "C:\Program Files\7-Zip\7z.exe" x -y "-oD:\wd\x" $pkg.FullName | Out-Null }
-          $ttd = @(D:\wd\x\amd64\ttd\TTD.exe, D:\wd\amd64\ttd\TTD.exe, D:\wd\ttd\TTD.exe) | Where-Object { Test-Path $_ } | Select-Object -First 1
-          $cdb = @(D:\wd\x\amd64\cdb.exe, D:\wd\amd64\cdb.exe, D:\wd\cdb.exe) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $ttd = @("D:\wd\x\amd64\ttd\TTD.exe", "D:\wd\amd64\ttd\TTD.exe", "D:\wd\ttd\TTD.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           Write-Host "TTD = $ttd"
           Write-Host "cdb = $cdb"
           if (-not $ttd) { Get-ChildItem -Recurse D:\wd -Filter "TTD.exe" | Select-Object -First 3 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
