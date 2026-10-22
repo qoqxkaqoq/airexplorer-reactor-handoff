@@ -11,17 +11,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            exes
-            ci
-          sparse-checkout-cone-mode: false
-          path: repo
       - name: run
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          $cand = "repo\exes\AirExplorer_${{ inputs.exe }}.exe"
+          $cand = "exes\AirExplorer_${{ inputs.exe }}.exe"
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File ci\typediag.ps1 -Exe $cand 2>&1 | Tee-Object -FilePath out\typediag.txt
       - uses: actions/upload-artifact@v4
         if: always()
