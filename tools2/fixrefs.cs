@@ -58,6 +58,16 @@ class FixRefs {
         foreach (var mr in mod.GetMemberRefs()) {
             if (mr.Name == "generatedMethod_0290") { mr.Name = "r3vw2AFBgZ"; nMember++; }
         }
+        // 兜底: 直接扫方法体里所有 IMethod 操作数(含 MethodSpec 内部), 不按声明类型过滤
+        foreach (var t in mod.GetTypes())
+            foreach (var m in t.Methods) {
+                if (!m.HasBody) continue;
+                foreach (var ins in m.Body.Instructions) {
+                    IMethod im = ins.Operand as IMethod;
+                    if (im == null && ins.Operand is MethodSpec sp) im = sp.Method;
+                    if (im is MemberRef mr3 && mr3.Name == "generatedMethod_0290") { mr3.Name = "r3vw2AFBgZ"; nMember++; }
+                }
+            }
         int nType = (gt != null ? 1 : 0) + (ge != null ? 1 : 0);
         Console.WriteLine("[fixrefs] TypeRef 改名 = " + nType + "   成员名替换 = " + nMember);
         var wopt = new ModuleWriterOptions(mod);
