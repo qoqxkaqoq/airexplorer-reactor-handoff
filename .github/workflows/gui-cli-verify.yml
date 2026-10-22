@@ -25,6 +25,13 @@ jobs:
       matrix:
         exe: ${{ fromJSON(inputs.exes) }}
     steps:
+      - name: 取本仓库 exes（sparse checkout）
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: exes
+          sparse-checkout-cone-mode: false
+          path: repo
+
       - name: 准备运行目录
         shell: pwsh
         run: |
@@ -37,21 +44,11 @@ jobs:
           if ("${{ matrix.exe }}" -ne "official") {
             $cand = "AirExplorer_${{ matrix.exe }}.exe"
             # raw.githubusercontent 对刚 push 的文件有缓存/传播延迟, 重试 8 次
-            # raw.githubusercontent 对刚 push 的文件有明显 CDN 延迟(几分钟),
-            # 改用 GitHub API 的 raw 媒体类型直接取 blob, 没有缓存问题。
-            $ok = $false
-            $api = "https://api.github.com/repos/qoqxkaqoq/airexplorer-reactor-handoff/contents/exes/$cand?ref=main"
-            for ($i = 1; $i -le 6; $i++) {
-              try {
-                Invoke-WebRequest -Uri $api -OutFile "app\AirExplorer.exe" -Headers @{ "Accept" = "application/vnd.github.raw"; "User-Agent" = "ci-probe" } -ErrorAction Stop
-                if ((Get-Item "app\AirExplorer.exe").Length -lt 1000000) { throw "too small" }
-                $ok = $true; break
-              } catch {
-                Write-Host ("retry $i : " + $_.Exception.Message)
-                Start-Sleep -Seconds 8
-              }
-            }
-            if (-not $ok) { throw ("download failed: " + $cand) }
+            # 不用 raw.githubusercontent(对新 push 的文件有数分钟 CDN 延迟),
+            # 也不用 contents API(raw 媒体类型只支持 <=1MB), 直接用 sparse checkout 下来的文件。
+            $src = Join-Path (Get-Location) "repo\exes\$cand"
+            if (-not (Test-Path $src)) { throw ("candidate missing: " + $src) }
+            Copy-Item $src "app\AirExplorer.exe" -Force
             Write-Host ("candidate = " + $cand)
           } else { Write-Host "baseline = official" }
           Write-Host ("md5 = " + (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)
