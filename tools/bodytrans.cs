@@ -10,6 +10,7 @@ using dnlib.DotNet.Emit;
 class BodyTrans {
     static ModuleDef curDstMod;   // 当前目标模块 (ImportSmart 全局成员重定向用)
     static int Main(string[] a) {
+        if (a.Length > 3 && a[0] == "localsdiff") return LocalsDiff(a);
         if (a.Length > 4 && a[0] == "fromlist") return FromList(a);
         if (a.Length > 5 && a[0] == "trace") return Trace(a);
         if (a.Length > 4 && a[0] == "clonetree") return CloneTree(a);
@@ -575,6 +576,50 @@ class BodyTrans {
             }
         }
         Console.WriteLine("[fromlist] ok=" + ok + " skip=" + skip + " fail=" + fail);
+        return WriteOut(dstMod, a[3], ok);
+    }
+
+    // ===== localsdiff: 扫"locals 里有 System.Object 且与源同名方法 locals 数不一致"的方法,
+    // 整份从源移植 (locals 签名是体的一部分, 数量不一致说明 nbjit 那份体不可信)
+    // 用法: bodytrans localsdiff <src> <dst> <out> [--dump]
+    static int LocalsDiff(string[] a) {
+        var srcMod = ModuleDefMD.Load(a[1]);
+        var dstMod = ModuleDefMD.Load(a[2]);
+        var importer = new Importer(dstMod);
+        curDstMod = dstMod;
+        bool dump = a.Any(x => x == "--dump");
+
+        var idx = new Dictionary<string, MethodDef>();
+        foreach (var t in srcMod.GetTypes())
+            foreach (var m in t.Methods) {
+                if (!m.HasBody) continue;
+                var k = t.FullName + "::" + m.Name + "/" + SigKey(m.MethodSig);
+                if (!idx.ContainsKey(k)) idx[k] = m;
+            }
+
+        int ok = 0, skipNoSrc = 0, skipSame = 0, skipAuth = 0, fail = 0;
+        foreach (var t in dstMod.GetTypes()) {
+            foreach (var m in t.Methods) {
+                if (!m.HasBody || m.Body.Variables.Count == 0) continue;
+                if (!m.Body.Variables.Any(v => v.Type.FullName == "System.Object")) continue;
+                var k = t.FullName + "::" + m.Name + "/" + SigKey(m.MethodSig);
+                MethodDef sm;
+                if (!idx.TryGetValue(k, out sm)) { skipNoSrc++; continue; }
+                if (sm.Body.Variables.Count == m.Body.Variables.Count) { skipSame++; continue; }
+                var sc = sm.Body.Instructions.Select(x => x.OpCode.Code).ToList();
+                if (sc.Count <= 6 && sc.All(c => c == Code.Nop || c == Code.Ldc_I4_1 || c == Code.Ret)) { skipAuth++; continue; }
+                try {
+                    TransplantBody(m, sm, importer);
+                    RebindRefs(m, dstMod);
+                    ok++;
+                    if (dump) Console.WriteLine("[fix] " + t.FullName + "::" + m.Name + "  locals " + m.Body.Variables.Count + " -> " + sm.Body.Variables.Count + "  insn " + sm.Body.Instructions.Count);
+                } catch (Exception ex) {
+                    fail++;
+                    if (fail <= 8) Console.WriteLine("[fail] " + t.FullName + "::" + m.Name + "  " + ex.GetType().Name + ": " + ex.Message);
+                }
+            }
+        }
+        Console.WriteLine("[localsdiff] ok=" + ok + " srcMissing=" + skipNoSrc + " sameCount=" + skipSame + " authStub=" + skipAuth + " fail=" + fail);
         return WriteOut(dstMod, a[3], ok);
     }
 
