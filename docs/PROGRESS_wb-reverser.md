@@ -829,3 +829,51 @@ Reactor 平坦化后的版本（每个基本块一个临时变量），cilantro 
 v48 的 `exit_code = 4` 值得单独说：这是**程序自己返回的退出码**，不是 `-1073741819`（AV）
 也不是 `-532462766`（未处理异常）。也就是说程序已经能正常启动、解析命令行、走完初始化、
 输出错误信息、然后正常退出。剩下的是**逻辑不对**，不是**跑不起来**。
+
+### 12.5 v50–v53：卡在 `InvalidCastException: VirtualInitializer → ProgramFinder`
+
+`fixeh` 之后错误层级彻底变了 —— 不再是崩溃，而是**程序正常退出并打印错误**：
+
+```
+=== gui-cli label=v53 ===
+exit_code = 4                     ← 程序自己的退出码
+System.InvalidCastException: Unable to cast object of type 'VirtualInitializer' to type 'ProgramFinder'.
+   at TemplateThread.GenerateAdaptableExtractor(Boolean&)
+```
+
+试过的（都还是同一个错）：
+
+| 版本 | 改动 | 结果 |
+|---|---|---|
+| v50 | `GenerateAdaptableExtractor` 换 cilantro 版（491 指令 / 14 locals） | `MissingFieldException: booleanField_0287` |
+| v51 | + `fixfieldidx` | `MissingMethodException: generatedMethod_0288` |
+| v52 | + `fixmethidx`（新工具，按类型内方法序号回退） | 回到 `InvalidCastException` |
+| v53 | `InstantiateStatelessUser` 也换 cilantro 版（888 / 50 locals） | 同一个 `InvalidCastException` |
+
+**已排除的**：
+
+| 假设 | 验证 | 结论 |
+|---|---|---|
+| 排序被跳过导致顺序错 | 官方 `URqFYq3xtmntT2OcLub\`1::r3vw2AFBgZ`（比较器）就是 `nop;nop;ldc.i4.0;ret`（恒等 0） | 跳过 `Sort` 与官方等价，不是原因 |
+| `GenerateAdaptableExtractor` 自身的 locals | 已换 cilantro 版 14 locals | 无关 |
+| 解释器 `InstantiateStatelessUser` 与脚本不同源 | 已换 cilantro 版 | 无关 |
+
+**剩下的怀疑**：`GenerateAdaptableExtractor` 里
+
+```
+02F6  newobj ProgramFinder::.ctor(Object setup)
+```
+
+调的是 `ProgramFinder::.ctor(ProgramFinder, Object)`，而它的第一条指令是
+
+```
+ldarg.0 ; ldc.i4.0 ; call ConnectedObserver::.ctor(a13Nrt3eN4sDIpSxIRj)
+```
+
+`a13Nrt3eN4sDIpSxIRj` 这个类型名在 `fixgen` 的映射表里**没有**（它在目标模块里同名存在，
+所以既没被当成假名换掉、也没有 TypeLoad）。如果它其实是 `ProgramFinder` 而传进去的是
+其它 `DistributorStrategy` 子类，就会在基类构造里抛这个 `InvalidCastException`
+（栈帧被 JIT 内联，所以只显示 `GenerateAdaptableExtractor`）。
+
+**下一步**：确认 `a13Nrt3eN4sDIpSxIRj` 在官方 exe 里对应哪个类型，
+以及 `ConnectedObserver::.ctor` 内部对它的用法。
