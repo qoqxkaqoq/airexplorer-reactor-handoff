@@ -405,31 +405,39 @@ class NbRestore2 {
         if (s.EndsWith("*")) { var e = ParseType(s.Substring(0, s.Length - 1)); return e == null ? null : new PtrSig(e); }
         int bt = s.IndexOf('`');
         if (bt > 0 && s.Contains("[[")) {
-            int bracket = s.IndexOf("[[");
-            string head = s.Substring(0, bracket);
+            // CLR 泛型名真实格式: Head`N[[Arg1, asm],[Arg2, asm]]
+            // 外层 [ 是参数列表, 每个参数一层 [TypeName, asm] —— 旧实现按"每参数 [[..]]"切, 参数永远少一个!
+            int gpStart = s.IndexOf('[', bt + 1);
+            if (gpStart < 0) return null;
+            string head = s.Substring(0, gpStart);
             int arity = 0;
             int.TryParse(head.Substring(bt + 1), out arity);
+            int depth = 0, end = -1;
+            for (int j = gpStart; j < s.Length; j++) {
+                if (s[j] == '[') depth++;
+                else if (s[j] == ']') { depth--; if (depth == 0) { end = j; break; } }
+            }
+            if (end < 0) return null;
+            string list = s.Substring(gpStart + 1, end - gpStart - 1);
             var args = new List<TypeSig>();
-            int i = bracket;
-            while (i < s.Length - 1) {
-                if (s[i] == '[' && s[i + 1] == '[') {
-                    int depth = 0, j = i;
-                    for (; j < s.Length; j++) {
-                        if (s[j] == '[') depth++;
-                        else if (s[j] == ']') { depth--; if (depth == 0) { j++; break; } }
-                    }
-                    if (depth != 0) return null;
-                    string block = s.Substring(i + 2, j - i - 4);
-                    int kdepth = 0, comma = -1;
-                    for (int k = 0; k < block.Length; k++) {
-                        if (block[k] == '[') kdepth++;
-                        else if (block[k] == ']') kdepth--;
-                        else if (block[k] == ',' && kdepth == 0) { comma = k; break; }
-                    }
-                    string typeName = comma > 0 ? block.Substring(0, comma).Trim() : block.Trim();
-                    args.Add(ParseType(typeName));
-                    i = j;
-                } else i++;
+            int i = 0;
+            while (i < list.Length) {
+                if (list[i] != '[') { i++; continue; }
+                int d2 = 0, k = i;
+                for (; k < list.Length; k++) {
+                    if (list[k] == '[') d2++;
+                    else if (list[k] == ']') { d2--; if (d2 == 0) { k++; break; } }
+                }
+                string block = list.Substring(i + 1, k - i - 2);
+                int kd = 0, cm = -1;
+                for (int q = 0; q < block.Length; q++) {
+                    if (block[q] == '[') kd++;
+                    else if (block[q] == ']') kd--;
+                    else if (block[q] == ',' && kd == 0) { cm = q; break; }
+                }
+                string tn = cm > 0 ? block.Substring(0, cm).Trim() : block.Trim();
+                args.Add(ParseType(tn));
+                i = k;
             }
             if (args.Any(x => x == null)) return null;
             if (arity > 0 && args.Count != arity) return null;
@@ -447,8 +455,12 @@ class NbRestore2 {
         if (tdr != null) {
             bool st = IsKnownValueType(full);
             if (!st) {
-                var res = tdr.ResolveTypeDef();
-                if (res != null) return res.ToTypeSig(res.IsValueType);
+                // ResolveTypeDef 在新建 TypeRefUser/坏元数据上会抛异常(官方原版基座 TypeRef
+                // 表近乎空, 606 个 Dictionary\`2 missType 的根因) → 捕获后按名字判 class
+                try {
+                    var res = tdr.ResolveTypeDef();
+                    if (res != null) return res.ToTypeSig(res.IsValueType);
+                } catch { }
             }
             return st ? (TypeSig)new ValueTypeSig(tdr) : new ClassSig(tdr);
         }
