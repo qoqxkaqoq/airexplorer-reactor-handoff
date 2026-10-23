@@ -43,6 +43,7 @@ class Host {
             Console.WriteLine("[ost] loaded " + asm.FullName);
             var ep = asm.EntryPoint;
             Console.WriteLine("[ost] entry " + ep.DeclaringType + "::" + ep.Name);
+            ResolveScan(asm);
             object[] args = ep.GetParameters().Length == 1 ? new object[] { new string[0] } : new object[0];
 
             var worker = new Thread(delegate() {
@@ -86,6 +87,47 @@ class Host {
         } catch (Exception ex) {
             Dump("HOST-FATAL", ex);
             return 1;
+        }
+    }
+
+    // 解析诊断: 对 ITP 方法体的全部 call/callvirt/newobj/ldfld/stsfld token 做 Module.Resolve*
+    // 提前暴露 CLR 解析失败的 MemberRef(Reactor 元数据在标准 binder 下的失配)
+    static void ResolveScan(Assembly asm) {
+        try {
+            var mi = asm.GetType("CloudClient.Templating.DispatcherInitializer").GetMethod("InstantiateTransferableProgram", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (mi == null) { File.AppendAllText(TraceFile, "[resolve] ITP not found" + Environment.NewLine); return; }
+            var body = mi.GetMethodBody();
+            byte[] il = body.GetILAsByteArray();
+            var mod2 = mi.Module;
+            int ok = 0, bad = 0;
+            var sb = new StringBuilder();
+            int i = 0;
+            while (i < il.Length) {
+                byte op = il[i]; int len = 1;
+                bool isMember = false;
+                if (op == 0x28 || op == 0x6F || op == 0x73 || op == 0x7B || op == 0x7D || op == 0x7E || op == 0x80 || op == 0x29 || op == 0x70 || op == 0x8C) isMember = true;
+                if (op == 0xFE) { len = 2; i += 2; continue; }
+                // 单字节 opcode 长度表(简化: 大多 1, 含 4 字节操作数的常见项)
+                if (op == 0x20 || op == 0x22 || op == 0x23 || op == 0x28 || op == 0x29 || op == 0x2B || op == 0x2C || op == 0x2D || op == 0x2E || op == 0x2F || op == 0x33 || op == 0x34 || op == 0x35 || op == 0x36 || op == 0x6F || op == 0x70 || op == 0x71 || op == 0x72 || op == 0x73 || op == 0x74 || op == 0x75 || op == 0x79 || op == 0x7B || op == 0x7D || op == 0x7E || op == 0x7F || op == 0x80 || op == 0x81 || op == 0x8C || op == 0x8D || op == 0x8E || op == 0xA3 || op == 0xA5 || op == 0xDD || op == 0xDE || op == 0x1F) len = op == 0x1F ? 2 : 5;
+                else if (op == 0x1E || op == 0x1F || op == 0x2A) len = op == 0x2A ? 1 : 2;
+                if (isMember) {
+                    uint tok = BitConverter.ToUInt32(il, i + 1);
+                    try {
+                        if (op == 0x7B || op == 0x7D || op == 0x7E || op == 0x80) mod2.ResolveField((int)tok);
+                        else mod2.ResolveMethod((int)tok);
+                        ok++;
+                    } catch (Exception ex) {
+                        bad++;
+                        sb.AppendLine("[resolve] BAD 0x" + tok.ToString("X8") + " op=0x" + op.ToString("X2") + " " + ex.GetType().Name + ": " + ex.Message);
+                    }
+                }
+                i += len;
+            }
+            sb.Insert(0, "[resolve] ITP il=" + il.Length + " ok=" + ok + " bad=" + bad + Environment.NewLine);
+            File.AppendAllText(TraceFile, sb.ToString());
+            Console.WriteLine("[resolve] ok=" + ok + " bad=" + bad);
+        } catch (Exception ex) {
+            File.AppendAllText(TraceFile, "[resolve] scan fatal " + ex + Environment.NewLine);
         }
     }
 }
