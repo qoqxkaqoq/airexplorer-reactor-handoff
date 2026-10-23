@@ -50,7 +50,7 @@ jobs:
           Write-Host "ttdExe=[$ttdExe] exists=$(Test-Path $ttdExe)"
           if (-not (Test-Path $ttdExe)) { throw "TTD.exe not found" }
           $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
-          & $ttdExe -out C:\ttd\trace.run $exe help $ttdExe -accepteula -out C:\ttd\trace.run $exe help 2>&1 | Tee-Object -FilePath C:\out\ttd-record.log | Select-Object -Last 12
+          & $ttdExe -accepteula -out C:\ttd\trace.run $exe help 2>&1 | Tee-Object -FilePath C:\out\ttd-record.log | Select-Object -Last 12
           if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; Get-Content C:\out\ttd-record.log -Tail 30; exit 1 }
           Write-Host ("trace 大小: " + (Get-Item C:\ttd\trace.run).Length)
 
