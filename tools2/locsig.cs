@@ -17,14 +17,33 @@ class LocSig {
         bool dump = a.Any(x => x == "--dump");
         var importer = new Importer(mod, ImporterOptions.TryToUseDefs);
 
-        int fixedM = 0, fixedV = 0, missLoc = 0, missType = 0, already = 0;
+        int fixedM = 0, fixedV = 0, missLoc = 0, missType = 0, already = 0, bodyMismatch = 0;
         foreach (var t in mod.GetTypes()) {
             foreach (var m in t.Methods) {
                 if (!m.HasBody || m.Body.Variables.Count == 0) continue;
-                string lp = Path.Combine(dumpDir, "m_" + m.MDToken.Raw.ToString("X8") + ".loc");
+                string tok = m.MDToken.Raw.ToString("X8");
+                string lp = Path.Combine(dumpDir, "m_" + tok + ".loc");
                 if (!File.Exists(lp)) { missLoc++; continue; }
                 var lines = File.ReadAllLines(lp).Where(x => x.Trim().Length > 0).ToList();
                 if (lines.Count != m.Body.Variables.Count) { missLoc++; continue; }
+
+                // ★ 体一致性指纹: 官方 .bin 头的 ilSize/ehCount 必须与当前 body 一致。
+                // 不一致说明该方法的 IL 不是这份 dump 对应的体(cilantro 移植体等),
+                // 官方 locals 序号语义对不上, 换了必炸(v68 教训: Dictionary`2 args 错)。
+                string bp = Path.Combine(dumpDir, "m_" + tok + ".bin");
+                if (!File.Exists(bp)) { bodyMismatch++; continue; }
+                var braw = File.ReadAllBytes(bp);
+                if (braw.Length < 24) { bodyMismatch++; continue; }
+                uint offIlSize = BitConverter.ToUInt32(braw, 4);
+                uint offEhCnt = BitConverter.ToUInt32(braw, 12);
+                int curIlSize = m.Body.Instructions.Sum(i => i.GetSize());
+                int curEhCnt = m.Body.ExceptionHandlers.Count;
+                if (offIlSize != (uint)curIlSize || offEhCnt != (uint)curEhCnt) {
+                    bodyMismatch++;
+                    if (dump) Console.WriteLine("[bodyMismatch] " + tok + " il " + offIlSize + "/" + curIlSize + " eh " + offEhCnt + "/" + curEhCnt);
+                    continue;
+                }
+
                 bool anyObj = m.Body.Variables.Any(v => v.Type.FullName == "System.Object");
                 if (!anyObj) { already++; continue; }
                 bool ok = true;
@@ -43,7 +62,7 @@ class LocSig {
                 if (dump && fixedM <= 5) Console.WriteLine("[fix] " + t.FullName + "::" + m.Name + " " + sigs.Count + " locals");
             }
         }
-        Console.WriteLine("[locsig] fixed=" + fixedM + " locals=" + fixedV + " noDump=" + missLoc + " missType=" + missType + " alreadyReal=" + already);
+        Console.WriteLine("[locsig] fixed=" + fixedM + " locals=" + fixedV + " noDump=" + missLoc + " missType=" + missType + " alreadyReal=" + already + " bodyMismatch=" + bodyMismatch);
         var wopt = new ModuleWriterOptions(mod);
         wopt.MetadataOptions.Flags |= MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack;
         mod.Write(a[2], wopt);
@@ -59,26 +78,42 @@ class LocSig {
         int bt = s.IndexOf('`');
         if (bt > 0 && s.Contains("[[")) {
             // 泛型: Name`N[[Arg1, asm]][[Arg2, asm]]
+            // v2: depth 按单字符 '[' ']' 计数(等价于 [[ ]] 配对), 对任意嵌套正确;
+            //     每个参数块内只在 depth==0 处切第一个逗号(asm 部分丢弃)。
+            //     旧实现在嵌套参数(List`1[[...]] 作 arg)上会切出残缺文本 → 参数数错
+            //     → TypeLoadException: Dictionary`2 wrong number of generic arguments。
             int bracket = s.IndexOf("[[");
             string head = s.Substring(0, bracket);
+            int arity = 0;
+            int.TryParse(head.Substring(bt + 1), out arity);
             var args = new List<TypeSig>();
             int i = bracket;
             while (i < s.Length - 1) {
-                if (s.Substring(i).StartsWith("[[")) {
-                    int depth = 1, j = i + 2;
-                    while (j < s.Length && depth > 0) {
-                        if (s[j] == '[' && s[j + 1] == '[') { depth += 2; j += 2; }
-                        else if (s[j] == ']' && j + 1 < s.Length && s[j + 1] == ']') { depth -= 2; j += 2; }
-                        else if (s[j] == '[') depth++; else if (s[j] == ']') depth--;
-                        else j++;
+                if (s[i] == '[' && s[i + 1] == '[') {
+                    int depth = 0, j = i;
+                    for (; j < s.Length; j++) {
+                        if (s[j] == '[') depth++;
+                        else if (s[j] == ']') { depth--; if (depth == 0) { j++; break; } }
                     }
-                    string inner = s.Substring(i + 2, j - i - 4);
-                    int comma = inner.IndexOf(',');
-                    args.Add(ParseType(comma > 0 ? inner.Substring(0, comma).Trim() : inner, mod));
+                    if (depth != 0) return null;   // 括号不配对
+                    string block = s.Substring(i + 2, j - i - 4);   // 去掉外层 [[ ]]
+                    int kdepth = 0, comma = -1;
+                    for (int k = 0; k < block.Length; k++) {
+                        if (block[k] == '[') kdepth++;
+                        else if (block[k] == ']') kdepth--;
+                        else if (block[k] == ',' && kdepth == 0) { comma = k; break; }
+                    }
+                    string typeName = comma > 0 ? block.Substring(0, comma).Trim() : block.Trim();
+                    args.Add(ParseType(typeName, mod));
                     i = j;
                 } else i++;
             }
             if (args.Any(x => x == null)) return null;
+            // ★ arity 安全网: 参数个数必须等于 head 的 `N, 不等则放弃(宁可保 Object 不猜)
+            if (arity > 0 && args.Count != arity) {
+                Console.WriteLine("[arityMismatch] " + head + " want " + arity + " got " + args.Count + "  src=" + s);
+                return null;
+            }
             var gsig = ResolveRefSig(head, mod) as ClassOrValueTypeSig;
             if (gsig == null) return null;
             return new GenericInstSig(gsig, args);
