@@ -37,6 +37,7 @@ jobs:
       - name: PEVerify 候选 (md+il)
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path C:\out | Out-Null
           $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
           Write-Host "target = $exe  md5 = $((Get-FileHash $exe -Algorithm MD5).Hash)"
           & $env:PEEXE /md /il /hresult $exe 2>&1 | Tee-Object -FilePath C:\out\peverify.log | Select-Object -Last 40
