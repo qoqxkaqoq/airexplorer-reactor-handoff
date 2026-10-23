@@ -29,13 +29,23 @@ class EhFixOff {
         _mod = ModuleDefMD.Load(a[1]);
         var importer = new Importer(_mod, ImporterOptions.TryToUseDefs);
 
-        int fixedM = 0, fixedC = 0, kindMismatch = 0, noDump = 0, cntMismatch = 0, tokHit = 0, nameHit = 0, keepOld = 0;
+        int fixedM = 0, fixedC = 0, kindMismatch = 0, noDump = 0, cntMismatch = 0, tokHit = 0, nameHit = 0, keepOld = 0, bodyMismatch = 0;
 
         foreach (var t in _mod.GetTypes()) {
             foreach (var m in t.Methods) {
                 if (!m.HasBody || m.Body.ExceptionHandlers.Count == 0) continue;
-                string ep = Path.Combine(dumpDir, "m_" + m.MDToken.Raw.ToString("X8") + ".eh");
+                string tok = m.MDToken.Raw.ToString("X8");
+                string ep = Path.Combine(dumpDir, "m_" + tok + ".eh");
                 if (!File.Exists(ep)) { noDump++; continue; }
+
+                // ★ 体一致性指纹(同 locsig v2): IL 不是这份 dump 的体时不碰
+                string bp = Path.Combine(dumpDir, "m_" + tok + ".bin");
+                if (!File.Exists(bp)) { bodyMismatch++; continue; }
+                var braw0 = File.ReadAllBytes(bp);
+                if (braw0.Length < 24) { bodyMismatch++; continue; }
+                if (BitConverter.ToUInt32(braw0, 4) != (uint)m.Body.Instructions.Sum(i => i.GetSize())
+                    || BitConverter.ToUInt32(braw0, 12) != (uint)m.Body.ExceptionHandlers.Count) { bodyMismatch++; continue; }
+
                 var raw = File.ReadAllBytes(ep);
                 if (raw.Length < 4) continue;
                 uint cnt = BitConverter.ToUInt32(raw, 0);
@@ -100,7 +110,7 @@ class EhFixOff {
         }
         Console.WriteLine("[ehfixoff] methodsChecked=" + fixedM + " catchFixed=" + fixedC
             + " tokHit=" + tokHit + " nameHit=" + nameHit + " keepOld=" + keepOld
-            + " cntMismatch=" + cntMismatch + " kindMismatch=" + kindMismatch + " noDump=" + noDump);
+            + " cntMismatch=" + cntMismatch + " kindMismatch=" + kindMismatch+ " noDump=" + noDump + " bodyMismatch=" + bodyMismatch);
         var wopt = new ModuleWriterOptions(_mod);
         wopt.MetadataOptions.Flags |= MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack;
         _mod.Write(a[2], wopt);
