@@ -62,7 +62,7 @@ jobs:
           $js = (Resolve-Path "ci\ttd\JitScan.js").Path -replace '\\','/'
           & $cdbExe -z C:\ttd\trace.run `
             -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
-            -c ".scriptrun $js; q" 2>&1 | Tee-Object -FilePath C:\out\cdb.log | Select-Object -Last 25
+            -c ".reload /f clrjit.dll; .scriptrun $js; q" 2>&1 | Tee-Object -FilePath C:\out\cdb.log | Select-Object -Last 25
           if (Test-Path C:\out\jitscan.json) {
             $sz = (Get-Item C:\out\jitscan.json).Length
             Write-Host "jitscan.json = $sz 字节"
