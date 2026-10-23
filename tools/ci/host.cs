@@ -1,13 +1,16 @@
 // host.cs — 在受控宿主中调用目标 WinForms 程序入口, 用于抓取未处理异常的完整堆栈
-// v2: 异常同步落盘 host_trace.txt (崩溃时 Console 缓冲会丢) + ThreadException + 参数明细
+// v3: invoke 放后台线程 + 超时 Thread.Abort —— Abort 异常的栈 = 死循环/卡死位置(定位 CPU 满转)
 using System;
 using System.Reflection;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 
 class Host {
     static string TraceFile = "host_trace.txt";
+    static Exception _workerEx;
+    static bool _returned;
 
     static void Dump(string tag, Exception ex) {
         var sb = new StringBuilder();
@@ -35,18 +38,46 @@ class Host {
         try {
             var path = Path.GetFullPath(a[0]);
             Directory.SetCurrentDirectory(Path.GetDirectoryName(path));
-            File.AppendAllText(TraceFile, "=== host v2 start " + DateTime.Now.ToString("HH:mm:ss.fff") + " jitNoInline=" + Environment.GetEnvironmentVariable("COMPlus_JitNoInline") + " ===" + Environment.NewLine);
+            File.AppendAllText(TraceFile, "=== host v3 start " + DateTime.Now.ToString("HH:mm:ss.fff") + " ===" + Environment.NewLine);
             var asm = Assembly.LoadFrom(path);
             Console.WriteLine("[ost] loaded " + asm.FullName);
             var ep = asm.EntryPoint;
             Console.WriteLine("[ost] entry " + ep.DeclaringType + "::" + ep.Name);
             object[] args = ep.GetParameters().Length == 1 ? new object[] { new string[0] } : new object[0];
-            ep.Invoke(null, args);
-            Console.WriteLine("[ost] entry returned");
-            File.AppendAllText(TraceFile, "=== entry returned normally ===" + Environment.NewLine);
-            return 0;
+
+            var worker = new Thread(delegate() {
+                try {
+                    ep.Invoke(null, args);
+                    _returned = true;
+                    Console.WriteLine("[ost] entry returned");
+                } catch (ThreadAbortException tab) {
+                    // 超时 Abort: 栈即卡死位置
+                    Dump("ABORTED-STUCK(死循环/卡点栈)", tab);
+                    Thread.ResetAbort();
+                } catch (Exception ex) {
+                    _workerEx = ex;
+                    Dump("ENTRY-INVOCATION", ex);
+                }
+            });
+            worker.SetApartmentState(ApartmentState.STA);
+            worker.Start();
+            int timeoutMs = a.Length > 1 ? int.Parse(a[1]) * 1000 : 45000;
+            if (!worker.Join(timeoutMs)) {
+                Console.WriteLine("[ost] TIMEOUT " + timeoutMs + "ms — aborting to capture stuck stack");
+                File.AppendAllText(TraceFile, "=== TIMEOUT — aborting worker ===" + Environment.NewLine);
+                try { worker.Abort(); } catch {}
+                worker.Join(8000);
+            }
+            if (_returned) {
+                File.AppendAllText(TraceFile, "=== entry returned normally ===" + Environment.NewLine);
+                return 0;
+            }
+            if (_workerEx != null) return 1;
+            // 卡死后被 abort: 让 probe 继续跑剩余流程(窗口检查由外层负责)
+            Console.WriteLine("[ost] worker stuck-aborted, continuing");
+            return 2;
         } catch (Exception ex) {
-            Dump("ENTRY-INVOCATION", ex);
+            Dump("HOST-FATAL", ex);
             return 1;
         }
     }
