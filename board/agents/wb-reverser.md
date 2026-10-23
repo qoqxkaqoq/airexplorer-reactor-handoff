@@ -236,3 +236,43 @@ GUI 录制成功（1.37GB/60s）但**录制态进程极慢：60s 仅 930 次 JIT
 2. 修真非法方法（优先 `<Module>.cctor` 调用链上的）
 3. 4268 个 skipParse 方法：606 个 Dictionary`2 missType（FindRef 对空 TypeRef 表的兜底路径待查）→ 修复后重跑 nbrestore2
 4. v100 循环直到 ui-probe 出窗 → TTD 补抓 forcedump failed 名单
+
+## 第五轮战报（2026-10-23 14:05 · 工具包进化 + v102）
+
+### 🎯 重大修复：ParseType 的 CLR 泛型名格式错误（全工具链传染）
+
+**旧实现对所有泛型类型解析错误**：CLR 真实格式是 `Head\`N[[Arg1, asm],[Arg2, asm]]`——
+**外层 [ 是参数列表，每个参数一层 [TypeName, asm]**；旧实现按"每参数 [[..]] 块"切，
+**参数永远少一个**（Dictionary\`2 双参只切出 1 个 → arity 失败 → NULL）。
+这正是 v68 `Dictionary\`2 wrong number of generic arguments` 崩溃的深层根源。
+
+**重写**（testparse.cs 独立测试桩校准）→ **同步到 nbrestore2/locsig/bodyswap 三处**。
+
+### v102（nbrestore2 重跑）指标跃升
+
+| 指标 | v100 | v102 |
+|---|---|---|
+| locMissType | 606 | **0** |
+| 官方 .loc 消费方法 | 7657 | **8258** |
+| 写回方法 | 12330 | **12907** |
+| 解析失败(skipParse) | 4268 | 3691 |
+
+### verifyil 校准进展
+
+- call/callvirt/newobj 的**签名感知 pop**（MethodSpec/MemberRef/MethodDef 全覆盖）
+- StackBehaviour 枚举名修正（dnlib 用 `Popi/Pushref` 小写风格）
+- EH 边界：handler/filter 入口清栈独立起算（**try 入口不清**）；leave 系不加 fallthrough
+- 官方对照：bad 21 → **8**（残余 8 个为官方真体的极端模式，占比 0.03%）
+- v102：ok=20589 / bad=2341（疑似清单，待与官方 8 差集过滤）
+
+### 当前卡点（下一棒）
+
+v102 CI：启动即崩（<Module>.cctor InvalidProgram 家族）。
+**2341 个疑似方法清单在 /tmp/v102x.txt 格式 `[BAD] token Type::Method 原因`**——
+与官方 8 误报差集 → 真非法 → 逐修。**注意官方 8 误报里 0600419C(DefineEfficientProfiler)
+官方真体也报不平衡——模拟器对官方真体的某指令模式仍少 pop，先修它才能区分真假**。
+
+### C 线（TTD 18/19）
+
+GUI 录制 v2（动态窗口检测+20min 上限）第 18 次因 Add-Type 死代码炸 step（已删），
+第 19 次运行中。管线其余部分已稳定。
