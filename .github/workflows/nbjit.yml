@@ -80,9 +80,9 @@ jobs:
         shell: pwsh
         run: |
           cd ar
-          $extra = ""
-          if ("${{ github.event.inputs.force }}" -eq "1") { $extra = "--force" }
-          python v3/jitdump/nbjitdump.py "..\input\AirExplorer.exe" --out "..\jitout" --wait ${{ github.event.inputs.wait }} $extra 2>&1 | Tee-Object -FilePath ..\jitdump.log
+          $args2 = @("v3/jitdump/nbjitdump.py", "..\input\AirExplorer.exe", "--out", "..\jitout", "--wait", "${{ github.event.inputs.wait }}")
+          if ("${{ github.event.inputs.force }}" -eq "1") { $args2 += "--force" }
+          python @args2 2>&1 | Tee-Object -FilePath ..\jitdump.log
           $rc = $LASTEXITCODE
           Write-Host "=== nbjitdump rc=$rc ==="
           if (Test-Path "..\jitout") {
