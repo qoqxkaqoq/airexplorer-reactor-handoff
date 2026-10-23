@@ -51,10 +51,9 @@ var calls = session.TTD.Calls("clrjit!CILJit::compileMethod");
 var out = { arch: isX86 ? "x86" : "x64", targets: TARGET_ILSIZES, methods: [], sizeHistogram: {} };
 var scanned = 0;
 
-var it = calls.GetEnumerator();
-while (it.MoveNext() && scanned < MAX_CALLS && out.methods.length < 50) {
+for (var call of calls) {
+    if (scanned >= MAX_CALLS || out.methods.length >= 50) break;
     scanned++;
-    var call = it.Current;
     var infoAddr;
     try {
         if (isX86) infoAddr = Number(call.Parameters[2]) >>> 0;
