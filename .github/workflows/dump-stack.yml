@@ -48,15 +48,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "HOST COMPILE FAILED"; exit 1 }
           Copy-Item app\host.exe C:\out\host_used.exe
 
-      - name: cdb -o 跟随启动 + 延时抓栈(托管+原生)
+      - name: 启动(带 ui-probe 同款 COMPLUS 环境) + 延时 attach 抓栈
         shell: pwsh
         run: |
-          # cdb -o: 调试器跟随 host.exe 拉起的子进程(AirExplorer); initial break 后 load sos,
-          # .sleep 等运行, 再抓全部线程托管栈
+          # ★ ui-probe 同款环境变量 — v106 存活依赖(无此环境 20s 内即死, 已实证)
+          $env:COMPLUS_ReadyToRun = "0"
+          $env:COMPlus_JitNoInline = "1"
           Set-Location app
-          & $env:CDb -o -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
-            -c ".loadby sos clr; .sleep ${{ inputs.wait }}000; .echo ===CLRSTACK===; ~*e !clrstack; .echo ===NATIVE===; ~*k 40; qd" `
-            host.exe AirExplorer.exe 2>&1 | Tee-Object -FilePath C:\out\stacks.log | Select-Object -Last 50
+          $hp = Start-Process -FilePath ".\host.exe" -ArgumentList "AirExplorer.exe" -PassThru -NoNewWindow -RedirectStandardOutput C:\out\host_stdout.txt -RedirectStandardError C:\out\host_stderr.txt
+          Write-Host "host pid = $($hp.Id)"
+          Start-Sleep -Seconds ${{ inputs.wait }}
+          $tgt = Get-Process -Name "AirExplorer" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $tgt) { Write-Host "AirExplorer exited early"; Get-Content C:\out\host_stdout.txt -ErrorAction SilentlyContinue | Select-Object -Last 15; exit 1 }
+          Write-Host "target pid = $($tgt.Id) CPU=$($tgt.TotalProcessorTime)"
+          & $env:CDb -p $tgt.Id -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
+            -c ".loadby sos clr; .echo ===CLRSTACK===; ~*e !clrstack; .echo ===NATIVE===; ~*k 40; qd" `
+            2>&1 | Tee-Object -FilePath C:\out\stacks.log | Select-Object -Last 60
           Write-Host "=== done ==="
 
       - name: 线程 CPU 记录
