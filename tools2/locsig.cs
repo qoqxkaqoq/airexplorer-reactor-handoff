@@ -77,43 +77,41 @@ class LocSig {
         if (s.EndsWith("*")) { var e = ParseType(s.Substring(0, s.Length - 1), mod); return e == null ? null : new PtrSig(e); }
         int bt = s.IndexOf('`');
         if (bt > 0 && s.Contains("[[")) {
-            // 泛型: Name`N[[Arg1, asm]][[Arg2, asm]]
-            // v2: depth 按单字符 '[' ']' 计数(等价于 [[ ]] 配对), 对任意嵌套正确;
-            //     每个参数块内只在 depth==0 处切第一个逗号(asm 部分丢弃)。
-            //     旧实现在嵌套参数(List`1[[...]] 作 arg)上会切出残缺文本 → 参数数错
-            //     → TypeLoadException: Dictionary`2 wrong number of generic arguments。
-            int bracket = s.IndexOf("[[");
-            string head = s.Substring(0, bracket);
+            // CLR 泛型名真实格式: Head`N[[Arg1, asm],[Arg2, asm]]
+            int gpStart = s.IndexOf('[', bt + 1);
+            if (gpStart < 0) return null;
+            string head = s.Substring(0, gpStart);
             int arity = 0;
             int.TryParse(head.Substring(bt + 1), out arity);
+            int depth = 0, end = -1;
+            for (int j = gpStart; j < s.Length; j++) {
+                if (s[j] == '[') depth++;
+                else if (s[j] == ']') { depth--; if (depth == 0) { end = j; break; } }
+            }
+            if (end < 0) return null;
+            string list = s.Substring(gpStart + 1, end - gpStart - 1);
             var args = new List<TypeSig>();
-            int i = bracket;
-            while (i < s.Length - 1) {
-                if (s[i] == '[' && s[i + 1] == '[') {
-                    int depth = 0, j = i;
-                    for (; j < s.Length; j++) {
-                        if (s[j] == '[') depth++;
-                        else if (s[j] == ']') { depth--; if (depth == 0) { j++; break; } }
-                    }
-                    if (depth != 0) return null;   // 括号不配对
-                    string block = s.Substring(i + 2, j - i - 4);   // 去掉外层 [[ ]]
-                    int kdepth = 0, comma = -1;
-                    for (int k = 0; k < block.Length; k++) {
-                        if (block[k] == '[') kdepth++;
-                        else if (block[k] == ']') kdepth--;
-                        else if (block[k] == ',' && kdepth == 0) { comma = k; break; }
-                    }
-                    string typeName = comma > 0 ? block.Substring(0, comma).Trim() : block.Trim();
-                    args.Add(ParseType(typeName, mod));
-                    i = j;
-                } else i++;
+            int i = 0;
+            while (i < list.Length) {
+                if (list[i] != '[') { i++; continue; }
+                int d2 = 0, k = i;
+                for (; k < list.Length; k++) {
+                    if (list[k] == '[') d2++;
+                    else if (list[k] == ']') { d2--; if (d2 == 0) { k++; break; } }
+                }
+                string block = list.Substring(i + 1, k - i - 2);
+                int kd = 0, cm = -1;
+                for (int q = 0; q < block.Length; q++) {
+                    if (block[q] == '[') kd++;
+                    else if (block[q] == ']') kd--;
+                    else if (block[q] == ',' && kd == 0) { cm = q; break; }
+                }
+                string tn = cm > 0 ? block.Substring(0, cm).Trim() : block.Trim();
+                args.Add(ParseType(tn, mod));
+                i = k;
             }
             if (args.Any(x => x == null)) return null;
-            // ★ arity 安全网: 参数个数必须等于 head 的 `N, 不等则放弃(宁可保 Object 不猜)
-            if (arity > 0 && args.Count != arity) {
-                Console.WriteLine("[arityMismatch] " + head + " want " + arity + " got " + args.Count + "  src=" + s);
-                return null;
-            }
+            if (arity > 0 && args.Count != arity) return null;
             var gsig = ResolveRefSig(head, mod) as ClassOrValueTypeSig;
             if (gsig == null) return null;
             return new GenericInstSig(gsig, args);
