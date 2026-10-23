@@ -1,0 +1,58 @@
+name: peverify
+
+# PEVerify(官方 IL 验证器) 对重建 exe 做完整类型级验证 —
+# 定位 InvalidProgramException 的精确方法与错误码
+on:
+  workflow_dispatch:
+    inputs:
+      exe:
+        description: '候选 exe 短名(如 v102)'
+        required: false
+        default: 'v102'
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 定位 PEVerify
+        shell: pwsh
+        run: |
+          $cands = @(
+            "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\PEVerify.exe",
+            "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\PEVerify.exe",
+            "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6.1 Tools\PEVerify.exe"
+          )
+          $pe = $cands | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $pe) {
+            Write-Host "PEVerify not found, searching..."
+            $pe = Get-ChildItem -Path "C:\Program Files (x86)\Microsoft SDKs" -Recurse -Filter "PEVerify.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $pe) { Write-Host "NO PEVERIFY"; exit 1 }
+          Write-Host "PEVerify = $pe"
+          "PEEXE=$pe" | Add-Content $env:GITHUB_ENV
+
+      - name: PEVerify 候选 (md+il)
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
+          Write-Host "target = $exe  md5 = $((Get-FileHash $exe -Algorithm MD5).Hash)"
+          & $env:PEEXE /md /il /hresult $exe 2>&1 | Tee-Object -FilePath C:\out\peverify.log | Select-Object -Last 40
+          # 错误清单也存文件供 diff
+          & $env:PEEXE /md /il $exe 2>&1 | Out-File -Encoding utf8 C:\out\peverify_full.txt
+
+      - name: PEVerify 官方原版对照
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae.exe | Out-Null
+          & $env:PEEXE /md /il app\AirExplorer.exe 2>&1 | Tee-Object -FilePath C:\out\peverify_official.log | Select-Object -Last 20
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: peverify-out
+          path: |
+            C:\out\
