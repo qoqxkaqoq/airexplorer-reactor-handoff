@@ -36,23 +36,31 @@ jobs:
           if (-not $ttd) { Get-ChildItem -Recurse D:\wd -Filter "TTD.exe" | Select-Object -First 3 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
           # 用 Add-Content 写 GITHUB_ENV: Out-File -Append utf8 会带 CRLF, 值末尾的 CR
           # 会让 & $env:TDDEXE 报 "expression not valid"
-          Add-Content $env:GITHUB_ENV "TTDEXE=$ttd"
-          Add-Content $env:GITHUB_ENV "CDbEXE=$cdb"
+          # 路径写文件传递: GITHUB_ENV 在本镜像上渲染正常但进程内偶发读不到,
+          # 文件传递 100% 可靠
+          Set-Content -Path D:\wd\paths.txt -Value $ttd
+          Add-Content -Path D:\wd\paths.txt -Value $cdb
 
       - name: TTD 录制 (help 模式自然退出)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path C:\ttd, C:\out | Out-Null
+          $p = Get-Content D:\wd\paths.txt
+          $ttdExe = $p[0].Trim(); $cdbExe = $p[1].Trim()
+          Write-Host "ttdExe=[$ttdExe] exists=$(Test-Path $ttdExe)"
+          if (-not (Test-Path $ttdExe)) { throw "TTD.exe not found" }
           $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
-          & $env:TDDEXE -out C:\ttd\trace.run $exe help 2>&1 | Tee-Object -FilePath C:\out\ttd-record.log | Select-Object -Last 12
+          & $ttdExe -out C:\ttd\trace.run $exe help 2>&1 | Tee-Object -FilePath C:\out\ttd-record.log | Select-Object -Last 12
           if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; Get-Content C:\out\ttd-record.log -Tail 30; exit 1 }
           Write-Host ("trace 大小: " + (Get-Item C:\ttd\trace.run).Length)
 
       - name: cdb 无头时间旅行扫描 (JitScan.js)
         shell: pwsh
         run: |
+          $p = Get-Content D:\wd\paths.txt
+          $cdbExe = $p[1].Trim()
           $js = (Resolve-Path "ci\ttd\JitScan.js").Path -replace '\\','/'
-          & $env:CDbEXE -z C:\ttd\trace.run `
+          & $cdbExe -z C:\ttd\trace.run `
             -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
             -c ".scriptload $js; q" 2>&1 | Tee-Object -FilePath C:\out\cdb.log | Select-Object -Last 25
           if (Test-Path C:\out\jitscan.json) {
