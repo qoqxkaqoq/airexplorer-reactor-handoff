@@ -35,7 +35,9 @@ class NbRestore2 {
         // 第二个模块只用来取局部变量: 原版 NecroBit 方法是空壳(locals=0),
         // 而 nb_original 的 locals 签名完好, 但它的 token 布局被 nb_slayer 改过,
         // 所以 token 认原版、locals 按 FullName 去 nb_original 找。
-        var localsMod = a.Length > 3 && a[3] != "--only" ? ModuleDefMD.Load(a[3]) : null;
+        // a[3] 只有在"不是 --only/--onlylist 开关"时才是 localsMod 路径
+        var localsMod = a.Length > 3 && a[3] != "--only" && a[3] != "--onlylist" && File.Exists(a[3])
+            ? ModuleDefMD.Load(a[3]) : null;
         var localsByName = new Dictionary<string, MethodDef>();
         if (localsMod != null)
             foreach (var t in localsMod.GetTypes())
