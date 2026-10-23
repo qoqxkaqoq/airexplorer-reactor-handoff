@@ -450,3 +450,51 @@ trace 1.45GB，**录制态进程慢 ~100x：20 分钟仅 1005 次 JIT**（≈官
 2. dump ArgumentGateway.cctor 的 **switch 表**（dnlib Instruction[]）确认状态流转目标
 3. 死循环若是 m_df3c7fc7 类字段值驱动 → patch 状态机（把 V_0 流转改为直通终态）
 4. 或 windbg 外部抓栈（~*k 原生栈 + JIT 地址对齐）——TTD 管线的 WinDbg 下载可复用
+
+## 🎯 第十一轮战报（2026-10-23 20:45 · 全部现象贯通 + 破局路线确定）
+
+### 基线对照实验（关键转折）
+
+| 版本 | 构成 | 结果 |
+|---|---|---|
+| 官方原版 e8runnable | 不动 | **1.5 秒出主窗** ✓ 环境无问题 |
+| v110 = 官方+仅fixcatch | dnlib 重写 | **秒崩** |
+| v109 = v106+1364处nop | dnlib 重写+写回 | 存活但 CPU 满转无窗 |
+
+### 全部现象贯通（统一理论）
+
+1. **dnlib 重写官方原版 → Reactor 引导崩**（v110 实锤）：Reactor 用文件内偏移定位关键数据，
+   dnlib ModuleWriter 重排布局 → 引导找不到 → 崩。**v106 能活是因为引导已中和**（掩盖了此伤害）
+2. **v70 系为什么能出窗**：基座是前代重建版（Reactor 特征早不在），不受文件偏移伤害
+3. **v106/v109 的 CPU 满转**：字符串解密链
+   `业务真体 → call InstantiateTransferableProgram(int) → 资源流(GlobalValidator.FactoryValidator) → 官方引导建立的密钥`
+   ——**引导中和后密钥状态缺失 → 解密循环空转**（v107 的 NRE / v106 的满转同根）
+4. v109 的 IGC nop 化无效（CPU 时间不变）→ 证明卡点不在 IGC 重复执行，在解密链
+
+### 💡 破局路线：字符串静态化（下一棒主线）
+
+**观察**：写回体的字符串引用是 `ldc.i4 <id>; call InstantiateTransferableProgram` —— id 是常量！
+**官方原版在 CI 正常运行**（引导完整、解密可用）→ **用 host 反射枚举全部 id 调用解密器抓映射表**：
+
+```
+步骤1: 扫描全部写回体, 收集 (ldc.i4 id, call ITP) 的 id 全集 → ids.json
+步骤2: CI 加"字符串抓取"步骤: host 加载官方原版(不patch!), 反射调用
+        InstantiateTransferableProgram(id) × N → strings.json (id→明文)
+步骤3: nbrestore2 写回时: call ITP(id) → ldstr 明文 + nop 填充
+        → 业务真体彻底摆脱解密器/引导 → v111 = 完全静态化的官方等价体
+```
+
+**已知风险**：ITP 可能有防反射保护（StackFrame 检查调用者程序集 @0041-00CB——
+官方原版里调用者=host.exe 程序集会被 throw！**绕过**：把抓取器做成 AirExplorer 内嵌
+类型（反射 emit/或直接改官方原版的某个桩方法为抓取器体——等长塞不下，用 ModuleWriter
++ 引导失效矛盾……**替代**：抓取走 cctor 触发路径——把 ids 注入某业务 cctor 顺带记录？）
+→ 细节待打样，方向已定。
+
+### 产物现状
+
+| 产物 | 说明 |
+|---|---|
+| v106 | **里程碑**：全量重建首个存活版（90s alive/responding） |
+| v109 | v106+IGC调用nop化（CPU 时间不变→卡点在解密链） |
+| v110 | 官方+重写=崩（证明 dnlib 重写破坏 Reactor 文件偏移依赖） |
+| exes/AirExplorer_v70.exe | 现行"可出主窗"基线（前代架构） |
