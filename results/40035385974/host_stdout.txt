@@ -1,0 +1,15 @@
+[ost] loaded AirExplorer, Version=5.11.0.0, Culture=neutral, PublicKeyToken=null
+[ost] entry CloudClient.Models.StatelessModel::SearchAdapter
+=== ENTRY-INVOCATION 22:43:31.540 ===
+EX System.TypeInitializationException: The type initializer for '<Module>' threw an exception.
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor)
+   at System.Reflection.RuntimeMethodInfo.UnsafeInvokeInternal(Object obj, Object[] parameters, Object[] arguments)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at Host.<>c__DisplayClass5.<Main>b__2()
+-- inner --
+EX System.InvalidProgramException: Common Language Runtime detected an invalid program.
+   at CloudClient.Templating.DispatcherInitializer.VerifyCombinedStateRequest()
+   at CloudClient.Templating.DispatcherInitializer.DefineEfficientProfiler()
+   at .cctor()
+-- inner --
+host exit code: 1
