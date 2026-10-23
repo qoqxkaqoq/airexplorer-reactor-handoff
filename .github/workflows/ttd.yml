@@ -34,8 +34,10 @@ jobs:
           Write-Host "TTD = $ttd"
           Write-Host "cdb = $cdb"
           if (-not $ttd) { Get-ChildItem -Recurse D:\wd -Filter "TTD.exe" | Select-Object -First 3 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
-          "TTDEXE=$ttd" | Out-File $env:GITHUB_ENV -Append utf8
-          "CDbEXE=$cdb" | Out-File $env:GITHUB_ENV -Append utf8
+          # 用 Add-Content 写 GITHUB_ENV: Out-File -Append utf8 会带 CRLF, 值末尾的 CR
+          # 会让 & $env:TDDEXE 报 "expression not valid"
+          Add-Content $env:GITHUB_ENV "TTDEXE=$ttd"
+          Add-Content $env:GITHUB_ENV "CDbEXE=$cdb"
 
       - name: TTD 录制 (help 模式自然退出)
         shell: pwsh
