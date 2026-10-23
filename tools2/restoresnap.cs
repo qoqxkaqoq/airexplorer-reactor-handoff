@@ -1,26 +1,31 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 using dnlib.DotNet.Writer;
 
-// restoresnap <in.exe> <snapshot.txt> <out.exe>
-// 把官方运行时快照恢复为 <Module>.cctor 开头的 IL:
+// restoresnap <in.exe> <snapshot.txt> <out.exe> <methodRVA-token-hex>
+// 把官方运行时快照恢复为方法开头的 IL:
 //   B64 → ldstr; call Convert.FromBase64String; stsfld
-//   INT → ldc.i4; stsfld
+//   INT → ldc.i4; stsfld (含 bool True/False)
 //   STR → ldstr b64; FromBase64String; Encoding.UTF8.GetString; stsfld
-// 只处理 DI.* (DispatcherInitializer 静态字段) — IGC 的哈希输入就在这里
+//   LIST → newobj List<T>; dup; 元素 Add ×N; stsfld (泛型参数取自字段签名)
+// 容器: DI.=DispatcherInitializer TA.=TemplateArgument 静态字段
 class RestoreSnap {
     static void Main(string[] a) {
         var mod = ModuleDefMD.Load(a[0]);
-        var di = mod.Find("CloudClient.Templating.DispatcherInitializer", false);
-        if (di == null) { Console.WriteLine("DI not found"); return; }
         var flds = new Dictionary<string, FieldDef>();
-        foreach (var f in di.Fields) if (f.IsStatic) flds[f.Name.String] = f;
+        foreach (var pfx in new[] { "DI.", "TA." }) {
+            var tn = pfx == "DI." ? "CloudClient.Templating.DispatcherInitializer" : "CloudClient.Templating.TemplateArgument";
+            var ty = mod.Find(tn, false);
+            if (ty == null) { Console.WriteLine(pfx + " type not found"); continue; }
+            foreach (var f in ty.Fields) if (f.IsStatic) flds[pfx + f.Name.String] = f;
+        }
         // 插入点可参数化: ITP(06004196)=业务首次解密时恢复(配 IGC ret); IGC(06004192)=IGC 执行前
         var cctor = mod.ResolveToken(0x06000000u | Convert.ToUInt32(a[3], 16)) as MethodDef;
-        if (cctor == null || !cctor.HasBody) { Console.WriteLine("IGC null"); return; }
+        if (cctor == null || !cctor.HasBody) { Console.WriteLine("target method null"); return; }
 
         var il = cctor.Body.Instructions;
         var ins = new List<Instruction>();
@@ -30,42 +35,35 @@ class RestoreSnap {
             var ln = allLines[li];
             var sp = ln.Split(' ');
             if (sp.Length < 2) continue;
-            if (!sp[1].StartsWith("DI.")) continue;
-            var fname = sp[1].Substring(3);
-            if (!flds.TryGetValue(fname, out var f)) continue;
-            // LIST 恢复: newobj List<T>; dup; 元素 Add ×N; stsfld
-            if (sp[0] == "LIST" && li + 1 < allLines.Length) {
-                var nxt = allLines[li + 1].Split(' ');
-                if (nxt.Length >= 2 && nxt[1] == sp[1] + "[]") {
-                    var isStr = nxt[0] == "STR";
-                    var listType = isStr ? "System.Collections.Generic.List`1<System.String>" : "System.Collections.Generic.List`1<System.Int32>";
-                    var elSig = isStr ? mod.CorLibTypes.String : (TypeSig)mod.CorLibTypes.Int32;
-                    var lr = new TypeRefUser(mod, "System.Collections.Generic", "List`1", mod.CorLibTypes.AssemblyRef);
-                    var addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig),
-                        new ClassSig(new TypeRefUser(mod, "System.Collections.Generic", "List`1", mod.CorLibTypes.AssemblyRef)));
-                    ins.Add(new Instruction(OpCodes.Newobj, new MemberRefUser(mod, ".ctor",
-                        MethodSig.CreateInstance(mod.CorLibTypes.Void), lr)));
-                    int added = 0;
-                    for (int k2 = li + 1; k2 < allLines.Length; k2++) {
-                        var e2 = allLines[k2].Split(' ');
-                        if (e2.Length < 2 || e2[1] != sp[1] + "[]") break;
-                        if (isStr && e2[0] == "STR") {
-                            var s2 = Encoding.UTF8.GetString(Convert.FromBase64String(e2[2]));
-                            ins.Add(new Instruction(OpCodes.Dup));
-                            ins.Add(new Instruction(OpCodes.Ldstr, s2));
-                            ins.Add(new Instruction(OpCodes.Callvirt, addRef));
-                        } else if (!isStr && e2[0] == "INT" && long.TryParse(e2[2], out var iv)) {
-                            ins.Add(new Instruction(OpCodes.Dup));
-                            ins.Add(new Instruction(OpCodes.Ldc_I4, (int)iv));
-                            ins.Add(new Instruction(OpCodes.Callvirt, addRef));
-                        }
-                        added++;
-                        li = k2;
+            if (!flds.TryGetValue(sp[1], out var f)) continue;
+            var fname = sp[1];
+            // LIST 恢复: newobj List<T>(封闭泛型 TypeSpec 取自字段签名); dup; 元素 Add ×N; stsfld
+            if (sp[0] == "LIST") {
+                TypeSig elSig = null;
+                if (f.FieldType is GenericInstSig) elSig = ((GenericInstSig)f.FieldType).GenericArguments.Count > 0 ? ((GenericInstSig)f.FieldType).GenericArguments[0] : null;
+                if (elSig == null) { skip++; continue; }
+                var listSpec = new TypeSpecUser(f.FieldType); // 封闭 List<T> — newobj 必需
+                var addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), listSpec);
+                ins.Add(new Instruction(OpCodes.Newobj, new MemberRefUser(mod, ".ctor",
+                    MethodSig.CreateInstance(mod.CorLibTypes.Void), listSpec)));
+                for (int k2 = li + 1; k2 < allLines.Length; k2++) {
+                    var e2 = allLines[k2].Split(' ');
+                    if (e2.Length < 2 || e2[1] != fname + "[]") break;
+                    if (e2[0] == "STR" && e2.Length >= 3 && elSig.GetElementType() != ElementType.I4) {
+                        var s2 = Encoding.UTF8.GetString(Convert.FromBase64String(e2[2]));
+                        ins.Add(new Instruction(OpCodes.Dup));
+                        ins.Add(new Instruction(OpCodes.Ldstr, s2));
+                        ins.Add(new Instruction(OpCodes.Callvirt, addRef));
+                    } else if (e2[0] == "INT" && e2.Length >= 3 && long.TryParse(e2[2], out var iv) && elSig.GetElementType() == ElementType.I4) {
+                        ins.Add(new Instruction(OpCodes.Dup));
+                        ins.Add(new Instruction(OpCodes.Ldc_I4, (int)iv));
+                        ins.Add(new Instruction(OpCodes.Callvirt, addRef));
                     }
-                    ins.Add(new Instruction(OpCodes.Stsfld, f));
-                    nList++;
-                    continue;
+                    li = k2;
                 }
+                ins.Add(new Instruction(OpCodes.Stsfld, f));
+                nList++;
+                continue;
             }
             f.Attributes = (f.Attributes & ~FieldAttributes.FieldAccessMask) | FieldAttributes.Public;
             if (sp[0] == "B64" && sp.Length >= 3) {
@@ -76,7 +74,10 @@ class RestoreSnap {
                 ins.Add(new Instruction(OpCodes.Stsfld, f));
                 nB64++;
             } else if (sp[0] == "INT" && sp.Length >= 3) {
-                long v; if (!long.TryParse(sp[2], out v)) continue;
+                long v;
+                if (sp[2] == "True") { ins.Add(new Instruction(OpCodes.Ldc_I4_1)); ins.Add(new Instruction(OpCodes.Stsfld, f)); nInt++; continue; }
+                if (sp[2] == "False") { ins.Add(new Instruction(OpCodes.Ldc_I4_0)); ins.Add(new Instruction(OpCodes.Stsfld, f)); nInt++; continue; }
+                if (!long.TryParse(sp[2], out v)) continue;
                 ins.Add(new Instruction(OpCodes.Ldc_I4, (int)v));
                 ins.Add(new Instruction(OpCodes.Stsfld, f));
                 nInt++;
