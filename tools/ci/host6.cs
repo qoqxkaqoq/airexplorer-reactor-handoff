@@ -114,6 +114,29 @@ class Host6 {
                     dumped++;
                 }
             }
+            // 目标4: ArgumentGateway 静态字段(cctor 解密后的明文终值 — agfix 用)
+            var ag = asm.GetType("AirExplorer.Values.ArgumentGateway");
+            if (ag != null) {
+                foreach (var f in ag.GetFields(flags)) {
+                    object v = null; try { v = f.GetValue(null); } catch { continue; }
+                    DumpObject("AG." + f.Name, v, 1);
+                    dumped++;
+                }
+            }
+            // 目标5: RequestWorker 单例 m_RequestClient → 实例字段(_RequestSorter 等)
+            var rw = asm.GetType("AirExplorer.Networking.RequestWorker");
+            if (rw != null) {
+                var mf = rw.GetField("m_RequestClient", flags);
+                object inst = null; try { inst = mf.GetValue(null); } catch { }
+                if (inst != null) {
+                    Log("OBJ RW.m_RequestClient " + inst.GetType().FullName);
+                    foreach (var f in inst.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
+                        object v = null; try { v = f.GetValue(inst); } catch { continue; }
+                        DumpObject("RW.m_RequestClient." + f.Name, v, 1);
+                    }
+                    dumped++;
+                } else Log("NULL RW.m_RequestClient");
+            }
             Console.WriteLine("[h6] dumped " + dumped + " static fields");
             File.AppendAllText(TraceFile, "=== snapshot done " + dumped + " fields ===\n");
             W.Close();
