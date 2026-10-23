@@ -1,0 +1,10 @@
+[11:27:12.880] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[11:27:12.923] size = 9070592  md5 = 077726F29FF9EEFB314D16461424E719
+[11:27:12.933] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[11:27:12.976] started pid = 3008
+[11:28:43.265] still alive, windows = 0
+[11:28:43.278] responding = True  threads = 5  WS(MB) = 26.2  CPU = 00:01:29.7812500
+[11:28:43.290] modules(head40) = AirExplorer.exe,ntdll.dll,MSCOREE.DLL,KERNEL32.dll,KERNELBASE.dll,ADVAPI32.dll,msvcrt.dll,sechost.dll,RPCRT4.dll,mscoreei.dll,SHLWAPI.dll,ucrtbase.dll,kernel.appcore.dll,VERSION.dll,clr.dll,USER32.dll,VCRUNTIME140_1_CLR0400.dll,win32u.dll,VCRUNTIME140_CLR0400.dll,GDI32.dll,ucrtbase_clr0400.dll,gdi32full.dll,msvcp_win.dll,IMM32.DLL,mscorlib.ni.dll,ole32.dll,combase.dll,bcryptPrimitives.dll,uxtheme.dll,clrjit.dll,shell32.dll,wintypes.dll,windows.storage.dll,SHCORE.dll,profapi.dll,bcrypt.dll,CRYPTSP.dll,rsaenh.dll,CRYPTBASE.dll,System.ni.dll
+[11:28:47.307] killed
+[11:28:48.399] eventlog: No events were found that match the specified selection criteria.
+[11:28:48.401] done
