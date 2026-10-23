@@ -16,10 +16,32 @@ const MAX_CALLS = 200000;
 
 log("[JitScan] start, targets=" + JSON.stringify(TARGET_ILSIZES));
 
-var isX86 = host.currentThread.Registers.User.esp !== undefined;
-log("[JitScan] arch = " + (isX86 ? "x86 (WoW64)" : "x64"));
+// ---- API 面探测 (新版 WinDbg JS host 兼容) ----
+log("[JitScan] probe: host keys=" + Object.keys(host).join(","));
+try { log("[JitScan] probe: currentSession=" + (typeof host.currentSession)); } catch(e) { log("[JitScan] probe: currentSession threw " + e); }
+try { log("[JitScan] probe: currentThread=" + (typeof host.currentThread)); } catch(e) { log("[JitScan] probe: currentThread threw " + e); }
+try { log("[JitScan] probe: namespace.Debugger=" + (typeof host.namespace.Debugger)); } catch(e) { log("[JitScan] probe: namespace.Debugger threw " + e); }
 
-var session = host.currentSession;
+function getRegsUser() {
+    try { if (typeof host.currentThread !== "undefined" && host.currentThread) return host.currentThread.Registers.User; } catch (e) { }
+    try {
+        var t = host.namespace.Debugger.Sessions.First().Processes.First().Threads.First();
+        return t.Registers.User;
+    } catch (e) { log("[JitScan] getRegsUser fallback failed: " + e); }
+    return null;
+}
+function getSession() {
+    try { if (typeof host.currentSession !== "undefined" && host.currentSession) return host.currentSession; } catch (e) { }
+    try { return host.namespace.Debugger.Sessions.First(); } catch (e) { log("[JitScan] getSession fallback failed: " + e); }
+    return null;
+}
+
+var regsObj = getRegsUser();
+var isX86 = false;
+try { isX86 = regsObj !== null && regsObj.esp !== undefined; } catch (e) { }
+log("[JitScan] arch = " + (isX86 ? "x86 (WoW64)" : "x64/unknown"));
+
+var session = getSession();
 var calls = session.TTD.Calls("clrjit!CILJit::compileMethod");
 var out = { arch: isX86 ? "x86" : "x64", targets: TARGET_ILSIZES, methods: [], sizeHistogram: {} };
 var scanned = 0;
