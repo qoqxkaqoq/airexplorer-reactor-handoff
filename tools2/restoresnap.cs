@@ -87,17 +87,30 @@ class RestoreSnap {
                         nList++;
                         continue;
                     }
-                    // SortedList/Hashtable 等非泛型引用集合 → newobj 无参 ctor(空集合)
-                    var fr = ft.ToTypeDefOrRef();
-                    ins.Add(new Instruction(OpCodes.Newobj, new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), fr)));
+                    // SortedList/Hashtable/Dictionary 等非泛型引用集合 → newobj 无参 ctor(空集合)
+                    // 复用官方已验证的 newobj 引用(自造 TypeRef 在 .NET FW 可能 MissingMethod)
+                    var ctorRef = FindOfficialNewobj(mod, ft.FullName);
+                    if (ctorRef == null) {
+                        var fr = ft.ToTypeDefOrRef();
+                        ctorRef = new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), fr);
+                    }
+                    ins.Add(new Instruction(OpCodes.Newobj, ctorRef));
                     ins.Add(new Instruction(OpCodes.Stsfld, f));
                     nList++;
                     continue;
                 }
-                var listSpec = new TypeSpecUser(f.FieldType); // 封闭 List<T> — newobj 必需
-                var addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), listSpec);
-                ins.Add(new Instruction(OpCodes.Newobj, new MemberRefUser(mod, ".ctor",
-                    MethodSig.CreateInstance(mod.CorLibTypes.Void), listSpec)));
+                // 复用官方已验证的 List<T>::Add / .ctor 引用 — 自造 MemberRef 在 .NET FW 解析 MissingMethod
+                var addRef = FindOfficialAdd(mod, elSig);
+                if (addRef == null) {
+                    var listSpecA = new TypeSpecUser(f.FieldType);
+                    addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), listSpecA);
+                }
+                var ctor2 = FindOfficialNewobj(mod, f.FieldType.FullName);
+                if (ctor2 == null) {
+                    var listSpec2 = new TypeSpecUser(f.FieldType);
+                    ctor2 = new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), listSpec2);
+                }
+                ins.Add(new Instruction(OpCodes.Newobj, ctor2));
                 for (int k2 = li + 1; k2 < allLines.Length; k2++) {
                     var e2 = allLines[k2].Split(' ');
                     if (e2.Length < 2 || e2[1] != fname + "[]") break;
@@ -161,5 +174,31 @@ class RestoreSnap {
         opts.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.PreserveAll;
         mod.Write(a[2], opts);
         Console.WriteLine("[restoresnap] wrote " + a[2]);
+    }
+
+    // 在官方程序集里找已存在且能被 CLR 解析的引用(官方代码里出现过的 MemberRef 必然可解析)
+    static MemberRef FindOfficialAdd(ModuleDef mod, TypeSig elSig) {
+        foreach (var t in mod.GetTypes()) foreach (var m in t.Methods) {
+            if (!m.HasBody) continue;
+            foreach (var oi in m.Body.Instructions) {
+                if (oi.OpCode.Code != Code.Callvirt) continue;
+                var mr = oi.Operand as MemberRef;
+                if (mr == null || mr.Name != "Add" || mr.MethodSig == null || mr.MethodSig.Params.Count != 1) continue;
+                if (mr.MethodSig.Params[0].FullName == elSig.FullName && mr.Class != null && mr.Class.FullName.Contains("List`1")) return mr;
+            }
+        }
+        return null;
+    }
+    static MemberRef FindOfficialNewobj(ModuleDef mod, string typeFullName) {
+        foreach (var t in mod.GetTypes()) foreach (var m in t.Methods) {
+            if (!m.HasBody) continue;
+            foreach (var oi in m.Body.Instructions) {
+                if (oi.OpCode.Code != Code.Newobj) continue;
+                var mr = oi.Operand as MemberRef;
+                if (mr == null || mr.Class == null) continue;
+                if (mr.Class.FullName == typeFullName && mr.MethodSig != null && mr.MethodSig.Params.Count == 0) return mr;
+            }
+        }
+        return null;
     }
 }
