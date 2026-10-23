@@ -58,7 +58,7 @@ class NbRestore2 {
                 break;
             }
         }
-        int ok = 0, skipNoMethod = 0, skipParse = 0, skipNoLocals = 0, locMissType = 0, locUsed = 0;
+        int ok = 0, skipNoMethod = 0, skipParse = 0, skipNoLocals = 0, locMissType = 0, locUsed = 0, skipGenericDef = 0;
 
         foreach (var f in files.OrderBy(x => x)) {
             byte[] d;
@@ -74,6 +74,10 @@ class NbRestore2 {
 
             var m = mod.ResolveToken(tok) as MethodDef;
             if (m == null) { skipNoMethod++; continue; }
+            // 泛型方法定义跳过: forcedump 实例化抓的 .loc 是具体类型(T=object/int32),
+            // 写进泛型方法定义会类型错乱(PEVerify: Unexpected array type ×502)。
+            // 这些方法保持官方桩, 真体后续用 TTD 按执行流补。
+            if (m.HasGenericParameters || m.DeclaringType.HasGenericParameters) { skipGenericDef++; continue; }
 
             byte[] il = new byte[ilSize];
             Array.Copy(d, 24, il, 0, ilSize);
@@ -145,7 +149,7 @@ class NbRestore2 {
             if (oldVars.Count > 0 && File.Exists(locFile)) locUsed++;
         }
 
-        Console.WriteLine("[nbrestore2] 写回 " + ok + " (官方.loc=" + locUsed + ", locMissType=" + locMissType + ") / 无对应方法 " + skipNoMethod + " / 解析失败 " + skipParse);
+        Console.WriteLine("[nbrestore2] 写回 " + ok + " (官方.loc=" + locUsed + ", locMissType=" + locMissType + ") / 无对应方法 " + skipNoMethod + " / 解析失败 " + skipParse + " / 泛型定义跳过 " + skipGenericDef);
         if (ok == 0) return;
         var wopt = new dnlib.DotNet.Writer.ModuleWriterOptions(mod);
         wopt.MetadataOptions.Flags = dnlib.DotNet.Writer.MetadataFlags.PreserveAll | dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack;
