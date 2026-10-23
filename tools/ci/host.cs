@@ -61,10 +61,17 @@ class Host {
             });
             worker.SetApartmentState(ApartmentState.STA);
             worker.Start();
-            int timeoutMs = a.Length > 1 ? int.Parse(a[1]) * 1000 : 45000;
-            if (!worker.Join(timeoutMs)) {
-                Console.WriteLine("[ost] TIMEOUT " + timeoutMs + "ms — aborting to capture stuck stack");
-                File.AppendAllText(TraceFile, "=== TIMEOUT — aborting worker ===" + Environment.NewLine);
+            // v4: 心跳监控(每5s落盘) — 区分主线程卡点 vs worker卡点
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (worker.IsAlive && sw.Elapsed.TotalSeconds < 70) {
+                Thread.Sleep(5000);
+                string hb = "=== heartbeat " + (int)sw.Elapsed.TotalSeconds + "s alive=" + worker.IsAlive + " ===";
+                try { File.AppendAllText(TraceFile, hb + Environment.NewLine); } catch {}
+                try { Console.WriteLine("[ost] hb " + (int)sw.Elapsed.TotalSeconds); Console.Out.Flush(); } catch {}
+            }
+            if (worker.IsAlive) {
+                Console.WriteLine("[ost] TIMEOUT — aborting to capture stuck stack");
+                try { File.AppendAllText(TraceFile, "=== TIMEOUT — aborting worker ===" + Environment.NewLine); } catch {}
                 try { worker.Abort(); } catch {}
                 worker.Join(8000);
             }
