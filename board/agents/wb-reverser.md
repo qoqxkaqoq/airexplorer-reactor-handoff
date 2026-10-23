@@ -354,3 +354,36 @@ nbrestore2 → peverify(官方对照差集 = 真清单) → 修 → 复测
 1. peverify workflow：官方对照改独立 job（不被候选步骤失败连坐）
 2. 差集 = 真 validity 错误 → 按 token 定位修复
 3. host.exe 增强：打印 InvalidProgramException 的 JIT 失败方法名（搭 ICLRDebugging...）
+
+## 第八轮战报（2026-10-23 15:30 · 崩溃链精确定位 + TTD 定量评估）
+
+### 🎯 v103 崩溃链精确定位（排除法收敛到单链）
+
+```
+<Module>.cctor → DefineEfficientProfiler(0600419C 官方真体,已写回)
+  → VerifyCombinedStateRequest(06004204, forcedump failed 保持桩)
+    → call AirExplorer.Search.FinderMap::DirectDefinition()  (06004282)
+```
+- VerifyCombinedStateRequest 桩 = `nop; call DirectDefinition; ret`（官方原版原样）
+- **DirectDefinition() 在 v103 = `nop; ret`**（forcedump 抓到的 ilSize=2 体）
+- **崩溃栈帧 "at VerifyCombinedStateRequest()" = 它 call 的目标 JIT 失败时异常挂调用者帧**
+
+### 官方基线（PEVerify 独立 job 实测）
+
+**官方原版自带 1752 条 verifiability 错误仍正常运行**（found-ref 186 / Nullobjref 89 /
+.ctor-uninit 大量）→ **PEVerify 错误≠崩溃原因**；CLR 的 validity 界限远宽于 PEVerify。
+**差集方法失效**——verifiability 清单不能直接当修复清单用。
+
+### TTD 定量评估（第 19 次，GUI 录制 20 分钟）
+
+trace 1.45GB，**录制态进程慢 ~100x：20 分钟仅 1005 次 JIT**（≈官方真实启动 2-3 秒进度）。
+**结论：录完整 UI 启动需 1-2 小时录制 + 数 GB trace + 1 小时索引** —— 单次实验 3 小时。
+**决策**：TTD 降为最后手段（补抓 forcedump failed 名单时一次性使用）。
+
+### 当前优先级重排
+
+1. **崩溃链深查**：DefineEfficientProfiler 真体（9992 指令）调用的所有方法在 v103 的状态
+   逐一核对（methodtok+verifyil 组合，本地秒级）——找第一个 JIT 失败点
+2. **DirectDefinition() 疑点**：官方运行时真体 vs forcedump 抓到的 nop;ret —— PrepareMethod
+   时机可能早于 NecroBit 解密完成（**forcedump 时机缺陷**）→ 影响"官方 .bin 可信度"的评估
+3. jitscan 文件写入 API 适配（Write/WriteLine/WriteAllText 全非——需探测新版 API）
