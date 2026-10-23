@@ -9,7 +9,7 @@ on:
 jobs:
   ttd:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -50,8 +50,15 @@ jobs:
           Write-Host "ttdExe=[$ttdExe] exists=$(Test-Path $ttdExe)"
           if (-not (Test-Path $ttdExe)) { throw "TTD.exe not found" }
           $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
-          & $ttdExe -accepteula -out C:\ttd\trace.run $exe help 2>&1 | Tee-Object -FilePath C:\out\ttd-record.log | Select-Object -Last 12
-          if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; Get-Content C:\out\ttd-record.log -Tail 30; exit 1 }
+          # GUI 录制(help 模式不走 OnLoad 链, 抓不到目标方法): 启动后等 60s(窗口+Error detected 出现)
+          # 再杀 target —— target 退出让 TTD finalize trace
+          $tt = Start-Process -FilePath $ttdExe -ArgumentList "-accepteula","-out","C:\ttd\trace.run","$exe" -PassThru -NoNewWindow
+          Start-Sleep 60
+          $tgtName = [System.IO.Path]::GetFileNameWithoutExtension($exe)
+          Get-Process -Name $tgtName -ErrorAction SilentlyContinue | Stop-Process -Force
+          Wait-Process -Id $tt.Id -Timeout 240 -ErrorAction SilentlyContinue
+          if (Test-Path "C:\out\ttd-record.log") { Get-Content C:\out\ttd-record.log -Tail 12 }
+          if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; exit 1 }
           Write-Host ("trace 大小: " + (Get-Item C:\ttd\trace.run).Length)
 
       - name: cdb 无头时间旅行扫描 (JitScan.js)
