@@ -558,3 +558,37 @@ v106 强行 JIT IGC → 它内部逻辑依赖"解释器才会维护的运行时�
 | v113 | +字段值恢复（时机待修正为 <Module>.cctor 开头） |
 | dump-stack.yml | **一次 CI 定位卡点**的通用武器(windbg+SOS) |
 | fetch-strings.yml | 官方运行时状态抓取管线(可扩展为快照抓取) |
+
+## 🧅 第十三轮战报（2026-10-24 03:00 · 快照恢复管线全通 + 剥洋葱推进中）
+
+### 快照抓取管线全通（host6 v4 → snapshot.txt 4566 行）
+
+- **`_ExtractorVisitors` 密钥流 398KB**（B64）+ 658 INT + 473 STR + 11 LIST 已抓全
+- 恢复工具族：restoresnap(插 ITP 开头)/restoresnap2(插 r6cf451d0d 开头+自建容器)
+
+### v114-v120 迭代链（每步错误都是路标）
+
+| 版本 | 变化 | CI 结果 | 学到 |
+|---|---|---|---|
+| v114 | 快照恢复插 cctor 开头 | MissingMethodException | FromBase64String 签名需带 String 参数 |
+| v114b | 修签名 | FieldAccessException | 跨类型访问 private → 需提 public |
+| v114c | 字段提 public | **TypeLoadException: Invalid Field Access Flags** | `\|=Public` 产生非法组合(1+6=7) → 必须**先清 FieldAccessMask** |
+| v116 | 恢复插 r6cf451d0d 开头+自建容器 | 满转依旧 | 恢复时机对但基座错了 |
+| v117 | **v107(IGC ret)+双点恢复** | FieldAccessException at r6cf451d0d | 同可见性问题 |
+| v118 | 可见性位正确重置 | **推进两层**：`<Module>{}.cctor` 通过！ | NRE 现位于 ITP 内部 |
+| v119c | +automatedError=GetExecutingAssembly | ITP 内部 NRE 仍在 | ITP 还依赖 **List 字段** |
+| v120 | +LIST 恢复(newobj+Add) | **6 编译错未跑**（留给下一棒修完即跑） | — |
+
+### 当前精确卡点（ITP 内部 NRE 的已知依赖）
+
+ITP(06004196) 使用的静态：`_ExtractorVisitors`(B64✓已恢复) / `_RecommenderTemplates`(List✓代码已写**有6编译错**) /
+`editableMonitorTemplates`(List<string>✓同上) / `automatedError`(✓已恢复) / `_TemplateNotifierSize`(✓已恢复)
+
+**下一棒第一件事**：修 restoresnap.cs 的 6 个编译错（LIST 恢复块）→ v120 重出 → CI。
+之后每暴露一个新 NRE → dump-stack 抓栈 → 补对应快照字段 → 迭代（**管线全自动，每轮 5 分钟**）。
+
+### 关键工作流提醒
+
+- **gh_sync push 会静默失败**（约 1/3 概率）——**必须看到 commit URL 才算成功**；dispatch 与 push
+  间隔需 >10 秒（main 传播延迟），否则 CI 跑旧代码（**看 size/md5 是否匹配**判断）
+- 官方安装包下载偶发 500/不完整——重跑即过
