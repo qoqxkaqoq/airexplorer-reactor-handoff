@@ -44,9 +44,8 @@ jobs:
           & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
           if (-not (Test-Path "app\AirExplorer.exe")) { Write-Host "extract failed"; exit 1 }
           Copy-Item "exes\AirExplorer_${{ inputs.exe }}.exe" app\AirExplorer.exe -Force
-          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:app\host.exe /r:System.Windows.Forms.dll tools\ci\host.cs
+          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:tools\ci\host.exe /r:System.Windows.Forms.dll tools\ci\host.cs
           if ($LASTEXITCODE -ne 0) { Write-Host "HOST COMPILE FAILED"; exit 1 }
-          Copy-Item app\host.exe C:\out\host_used.exe
 
       - name: 启动(带 ui-probe 同款 COMPLUS 环境) + 延时 attach 抓栈
         shell: pwsh
@@ -54,8 +53,11 @@ jobs:
           # ★ ui-probe 同款环境变量 — v106 存活依赖(无此环境 20s 内即死, 已实证)
           $env:COMPLUS_ReadyToRun = "0"
           $env:COMPlus_JitNoInline = "1"
+          $env:COMPLUS_JitDisasm = "*"
+          $env:COMPLUS_JitDiffableDasm = "1"
           Set-Location app
-          $hp = Start-Process -FilePath ".\host.exe" -ArgumentList "AirExplorer.exe" -PassThru -NoNewWindow -RedirectStandardOutput C:\out\host_stdout.txt -RedirectStandardError C:\out\host_stderr.txt
+          New-Item -ItemType Directory -Force -Path probe | Out-Null
+          $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "AirExplorer.exe" -WorkingDirectory "app" -PassThru -NoNewWindow -RedirectStandardOutput C:\out\host_stdout.txt -RedirectStandardError C:\out\host_stderr.txt
           Write-Host "host pid = $($hp.Id)"
           Start-Sleep -Seconds ${{ inputs.wait }}
           $tgt = Get-Process -Name "AirExplorer" -ErrorAction SilentlyContinue | Select-Object -First 1
