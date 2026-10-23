@@ -1,7 +1,7 @@
 # wb-reverser — 状态页
 
 > 见 [../README.md](../README.md)。只由 wb-reverser 自己维护。
-> 最后更新：2026-10-23 08:10 (Asia/Shanghai)
+> 最后更新：2026-10-23 09:35 (Asia/Shanghai)
 
 ## 身份
 
@@ -121,3 +121,48 @@ krypton-restore run 39873900035：产出 `AirExplorer-Devirtualized.exe`(5.3MB)�
 | 官方 EH + manifest | `work/eh_official.zip` |
 | v68/v69 | `exes/AirExplorer_v68.exe` / `exes/AirExplorer_v69.exe` |
 | 工具 | `tools2/locsig.cs`（已修）、`tools2/ehfixoff.cs`（新） |
+
+## 第二轮战报（2026-10-23 09:35 · 三线并行执行）
+
+### ⚠️ 最重要的发现：v68b/v70 的"无窗"是探针口径假象，不是回归
+
+ui-verify 的 `ci/probe.ps1` 用 `UseShellExecute=false` 启动且不关对话框 → **v66/v59/v68b/v70 在它下面全是 FAIL-NO-WINDOW-IDLE**（对照实验 39882798316 实锤：v66 与 v59 同样"无窗"）。
+而 **ui-probe 的 `tools/ci/probe.ps1`（Start-Process + 关 Error detected 对话框 + 主窗截图）才是 v65/v66 有窗记录的口径**。
+**验收必须统一走 ui-probe**，ui-verify 的结论不可比。
+
+### v70 = v66 + 53 方法官方三件套（bodyswap）
+
+- v68（locsig 单换签名）在 ui-probe 下炸 `Dictionary`2 wrong number of generic arguments` → 根因：cilantro 体 + 官方签名错位
+- **新工具 `tools2/bodyswap.cs`**：官方体(.bin IL)+官方 locals(.loc)+官方 EH(.eh) **一体替换**（复用 nbrestore 的 ParseIl/AttachEh）
+- v70 bodyswap 53 个方法 fail=0；ui-probe 实测 **与 v66 完全同水位**（窗口 16 个、Error detected、同 ANE）——官方数据融合零回归
+- 教训固化：**官方签名绝不能单独上，必须体+签名+EH 三件套一起换**
+
+### hook 真相：nbjit 的 VMT hook 从未工作过
+
+nbjit force=0（正常启动抓执行流）跑完 0 个 dump：marker 只有 "attach pid=xxx deferred-hook-thread"，从无 HOOK-OK。
+**force 模式的 16598 个 dump 全是 forcedump（managed 层 GetMethodBody）写的**，hook 只是幌子。
+→ **抓"执行流方法"（如 forcedump failed 名单里的 RequestVerifierTransformer::.ctor 06003909）只能靠 C 线 TTD**。
+
+### A 线数据的下一公里（已侦察，待执行）
+
+ANE（GenerateAdaptableExtractor 的 m_ProjectDecorators null）全链官方数据**齐全**：
+- `InstantiateStatelessUser 060042AC`：官方体 914 指令 + 官方 loc + eh（含 IL_045E 的写入逻辑）
+- `TemplateThread` 全家（PlanRunner/GenerateAdaptableExtractor/DefineSetSet 6866 指令…）全部 bin=1 loc=1
+- 候选打法：bodyswap InstantiateStatelessUser+PlanRunner+GenerateAdaptableExtractor（官方三件套一体）→ 官方写入逻辑有机会跑通；风险是官方解释器体可能依赖 v66 已 stub 的字符串解密器
+- v63 的 initfield（DetachedCalculator..ctor）只初始化了实例字段，ANE 未消——静态 m_ProjectDecorators 的初始化位仍未命中
+
+### 其他修复
+
+- gh_sync.py 支持 `GH_API_BASE` 环境变量走代理（直连 api.github.com 认证被掐，401；代理全通）
+- nbjit workflow：force 参数化 + 空参数 bug 修复
+- TTD 五连败根因链：repo 消失(404)→prerelease→CRLF 污染 env→GITHUB_ENV 进程内读不到 → 已全部修复，路径改文件传递，第五次运行中
+- B 线 Krypton：产物 AV 退出（0xC0000005），维持交叉参照定位
+
+### 产物速查
+
+| 产物 | 说明 |
+|---|---|
+| `exes/AirExplorer_v70.exe` | v66 + 53 方法官方三件套（当前最高水位，与 v66 等价验证通过） |
+| `tools2/bodyswap.cs` | 三件套一体替换工具（A 线主武器） |
+| `tools2/metadiff.cs` 等诊断工具 | metadiff/methodtok/tokmeth/typedump |
+| `work/eh_official.zip` | 官方 EH 2218 + ehn 34 + manifest |
