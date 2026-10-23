@@ -1,0 +1,51 @@
+name: Fetch Strings
+# 字符串抓取: 官方原版正常启动(引导完整)后反射批量调用解密器, 抓 id→明文映射
+on:
+  workflow_dispatch:
+    inputs:
+      delay:
+        description: '启动后等待秒数(让 _TemplateNotifierSize>=75 跳过保护)'
+        required: false
+        default: '15'
+
+jobs:
+  fetch:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载官方安装包并解出原版
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\out | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { Write-Host "extract failed"; exit 1 }
+          Write-Host "official md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
+
+      - name: 编译抓取器
+        shell: pwsh
+        run: |
+          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:tools\ci\host6.exe /r:System.Windows.Forms.dll tools\ci\host6.cs
+          if ($LASTEXITCODE -ne 0) { Write-Host "COMPILE FAILED"; exit 1 }
+
+      - name: 批量抓取字符串
+        shell: pwsh
+        run: |
+          $hp = Start-Process -FilePath "tools\ci\host6.exe" -ArgumentList "AirExplorer.exe","ids.txt","C:\out\strings.json","${{ inputs.delay }}" -WorkingDirectory "app" -PassThru -RedirectStandardOutput "..\fetch_stdout.txt" -RedirectStandardError "..\fetch_stderr.txt" -NoNewWindow
+          $deadline = (Get-Date).AddMinutes(20)
+          while (-not $hp.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
+          if (-not $hp.HasExited) { try { $hp.Kill() } catch {} }
+          Write-Host "host6 exit = $($hp.ExitCode)"
+          Copy-Item ..\fetch_stdout.txt C:\out\ -Force -ErrorAction SilentlyContinue
+          Copy-Item ..\fetch_stderr.txt C:\out\ -Force -ErrorAction SilentlyContinue
+          Copy-Item fetch_trace.txt C:\out\ -Force -ErrorAction SilentlyContinue
+          if (-not (Test-Path "C:\out\strings.json")) { Write-Host "strings.json missing"; Get-Content ..\fetch_stdout.txt -ErrorAction SilentlyContinue | Select-Object -Last 20; exit 1 }
+          Write-Host ("strings.json size = " + (Get-Item C:\out\strings.json).Length)
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strings-fetch
+          path: C:\out\
