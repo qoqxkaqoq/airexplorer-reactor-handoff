@@ -1,0 +1,12 @@
+=== host v2 start 10:02:50.744 jitNoInline=1 ===
+=== ENTRY-INVOCATION 10:02:50.799 ===
+EX System.TypeInitializationException: The type initializer for '<Module>' threw an exception.
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor)
+   at System.Reflection.RuntimeMethodInfo.UnsafeInvokeInternal(Object obj, Object[] parameters, Object[] arguments)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at Host.Main(String[] a)
+-- inner --
+EX System.Exception: AirExplorer is tampered.
+   at CloudClient.Templating.DispatcherInitializer.InstantiateGlobalCalculator()
+   at .cctor()
+-- inner --
