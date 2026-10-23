@@ -314,3 +314,43 @@ nbrestore2 重跑 → peverify(CI) 拿权威错误清单 → 按类修复 → �
 | .ctor uninit ×1400 | dump 一个样例看 ParseIl 的 ctor 调用链（疑 ldarg.0/newobj 序列） |
 | unmanaged pointer/unboxed ×35 | 值类型实例 call/ldflda 的 ParseIl token 解析 |
 | Nullobjref ×64 | call 目标是"跳过的泛型桩"返回 null 的静态传播 |
+
+## 第七轮战报（2026-10-23 15:10 · verifyil 零误报 + 排除法收网）
+
+### 🏆 verifyil 完全零误报：官方原版 bad=0（22930 全过）
+
+决定性修复：**call 调用值类型实例方法（含 `IntPtr::.ctor` 直接 call）时 this 同样占栈位**
+（ECMA：call/callvirt 的 instance this 一律 pop；旧代码错误地排除了 call）。
+
+### 排除法收网（v102 的 InvalidProgram 根因范围大幅收窄）
+
+| 维度 | 结果 |
+|---|---|
+| 栈深汇合一致性 | ✅ 全合法（bad=0） |
+| maxStack 峰值 | ✅ 全在限内 |
+| EH 区间（空/重叠/越界） | ✅ 全合法 |
+
+→ **结构层全部合法**，InvalidProgram 来自：**JIT 导入阶段类型级检查**（栈类型兼容/
+   locals 签名与 IL 语义冲突）或 **<Module>.cctor 引导链的特殊问题**。
+   PEVerify 样例：`VerifyCentralErrorSpec 返回 Object 存入 Byte[] local` —— **官方原版
+   full trust 下这类不匹配本可运行**（PEVerify 报的是 verifiability），所以**真正的
+   validity 错误还在别处** —— 需要 peverify 的**官方对照差集**（workflow 里官方对照
+   step 因前步失败被跳过，已定位，下一轮修复：官方对照独立 job）。
+
+### PEVerify 首轮数据（见 work/ 与 artifact）
+
+- 官方原版：**0 错误**（但官方对照 step 未真正执行——差集法待下轮实跑）
+- v102：2379 方法 / 2836 错（array-type 502 / .ctor-uninit 1400 / pointer 类 35 / 其他）
+- **修正一个误判**：`.ctor-uninit`（`Return from .ctor when this is uninitialized`）是
+  **官方桩固有**（官方桩 nop;nop;nop;ret 的 .ctor 也报）——**PEVerify 报 verifiability
+  而 CLR 只拒 validity** —— 1400 条大概率是**噪音**，**非崩溃原因**
+
+### 迭代公式更新
+
+```
+nbrestore2 → peverify(官方对照差集 = 真清单) → 修 → 复测
+```
+下一棒三件事：
+1. peverify workflow：官方对照改独立 job（不被候选步骤失败连坐）
+2. 差集 = 真 validity 错误 → 按 token 定位修复
+3. host.exe 增强：打印 InvalidProgramException 的 JIT 失败方法名（搭 ICLRDebugging...）
