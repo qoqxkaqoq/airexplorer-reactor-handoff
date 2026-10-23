@@ -1,0 +1,71 @@
+name: Dump Stack
+# 卡死诊断: 启动候选 → CPU 满转时 windbg attach → SOS 抓托管栈 → 定位卡死方法
+on:
+  workflow_dispatch:
+    inputs:
+      exe:
+        description: '候选短名(如 v106)'
+        required: true
+        default: 'v106'
+      wait:
+        description: '启动后等待秒数'
+        required: false
+        default: '20'
+
+jobs:
+  dump:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载 WinDbg(prss CDN, 复用 TTD 管线已验证姿势)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\out, C:\wd | Out-Null
+          $app = Invoke-RestMethod "https://p.xixky.eu.org/https://windbg.download.prss.microsoft.com/dbazure/prod/1-0-0/windbg.appinstaller" -Headers @{ "User-Agent" = "ci" }
+          $uri = ([xml]$app).AddOnsBundle.Uri; $hash = ([xml]$app).AddOnsBundle.Sha256
+          if (-not $uri) { $uri = ([xml]$app).MainBundle.Uri }
+          Write-Host "bundle = $uri"
+          Invoke-WebRequest -Uri $uri -OutFile C:\wd\windbg.msixbundle
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oC:\wd\x C:\wd\windbg.msixbundle | Out-Null
+          $cdb = Get-ChildItem -Recurse C:\wd\x -Filter "cdb.exe" | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $cdb) { Get-ChildItem -Recurse C:\wd\x -Filter "*.exe" | Select-Object -First 10 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
+          Write-Host "cdb = $cdb"
+          "CDb=$cdb" | Add-Content $env:GITHUB_ENV
+
+      - name: 编译 host 并启动候选
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { Write-Host "extract failed"; exit 1 }
+          Copy-Item "exes\AirExplorer_${{ inputs.exe }}.exe" app\AirExplorer.exe -Force
+          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:tools\ci\host.exe /r:System.Windows.Forms.dll tools\ci\host.cs
+          $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "AirExplorer.exe" -WorkingDirectory "app" -PassThru -NoNewWindow
+          Start-Sleep -Seconds ${{ inputs.wait }}
+          Write-Host "host pid = $($hp.Id), CPU = $((Get-Process -Id $hp.Id).TotalProcessorTime)"
+          "HPPID=$($hp.Id)" | Add-Content $env:GITHUB_ENV
+
+      - name: windbg 抓栈(托管+原生)
+        shell: pwsh
+        run: |
+          # host.exe 拉起的 AirExplorer 是子进程; 抓它的 pid
+          $tgt = Get-Process -Name "AirExplorer" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $tgt) { Write-Host "AirExplorer not running"; exit 1 }
+          Write-Host "target pid = $($tgt.Id) CPU=$($tgt.TotalProcessorTime)"
+          & $env:CDb -p $tgt.Id -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" -c ".loadby sos clr; ~*e !clrstack; ~*k; qd" 2>&1 | Tee-Object -FilePath C:\out\stacks.log | Select-Object -Last 40
+          Write-Host "=== done ==="
+
+      - name: 采集进程内线程 CPU(判断哪个线程满转)
+        if: always()
+        shell: pwsh
+        run: |
+          $tgt = Get-Process -Name "AirExplorer" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($tgt) { $tgt.Threads | Sort-Object -Property TotalProcessorTime -Descending | Select-Object -First 6 | ForEach-Object { Write-Host ("thread " + $_.Id + " cpu=" + $_.TotalProcessorTime) } | Out-File C:\out\threads.txt }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stackdump
+          path: C:\out\
