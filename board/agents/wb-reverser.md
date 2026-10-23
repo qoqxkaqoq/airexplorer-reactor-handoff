@@ -166,3 +166,43 @@ ANE（GenerateAdaptableExtractor 的 m_ProjectDecorators null）全链官方数�
 | `tools2/bodyswap.cs` | 三件套一体替换工具（A 线主武器） |
 | `tools2/metadiff.cs` 等诊断工具 | metadiff/methodtok/tokmeth/typedump |
 | `work/eh_official.zip` | 官方 EH 2218 + ehn 34 + manifest |
+
+## 第三轮战报（2026-10-23 11:50 · v71 实验定性 + 路线收敛）
+
+### v71（ANE 链官方体实验）= 失败，已定性
+
+bodyswap `InstantiateStatelessUser 060042AC` + `PlanRunner 06004521` + `GenerateAdaptableExtractor 06004523`
+官方三件套进 v70 → **5 秒崩**（ui-probe run 39896593292）：
+
+```
+InvalidProgramException at VerifyCombinedStateRequest() ← DefineEfficientProfiler() ← <Module>.cctor
+```
+
+**机制**：官方 InstantiateStatelessUser 体引用 Reactor 引导成员 → DispatcherInitializer cctor → 引导链，
+而 v66 系架构里 DefineEfficientProfiler 是 ret 桩、VerifyCombinedStateRequest 保持原样 → InvalidProgram。
+
+### ⚖️ 结构性结论（最终，勿再重试同路线）
+
+**官方解密态方法体与"绕过 Reactor"架构（v59-v70 系）结构性互斥**：
+- 绕过架构里官方体依赖的引导（解密器/解释器状态）已被中和，官方体一调用就崩
+- 官方体要能跑，必须**完整保留 Reactor 引导** —— 即 nbrestore 系全量重建（v47 时代走到 AV 的那条）
+
+### 🎯 路线收敛：v100 全量重建（数据已齐，仅此一途）
+
+v47 时代 nbrestore 系卡点 = "12768 真体 + locals 全 Object → AV"。**现在官方 .loc 8392 个全在手**——
+v100 = nbrestore(16598 官方体全量写回, **保留全部引导不 stub**) + bodyswap 官方 locals/EH + PreserveAll。
+Anticipated 卡点：`TrackCompiler` token 约束（PreserveAll 已解）与 cctor 链顺序（v10-v25 有完整笔记）。
+
+### C 线 TTD 进展（第 17 次运行中）
+
+管线全通：WinDbg 下载→EULA→JS(apiVersionSupport 1,7 + invokeScript)→**符号解析成功**
+（`x clrjit!CILJit*` 列出全部方法，第 15 次）。第 16 次完成 help 模式全扫（606 calls, hits=0 —
+**help 不走 OnLoad 链是必然**）。第 17 次改 **GUI 录制**（60s 后杀 target finalize）+ 扫描跳过前 85%
+（桩 JIT 海量小方法）+ 文件写入 API 自适应。
+
+### v70 仍是最高水位（v71 已废）
+
+| 产物 | 状态 |
+|---|---|
+| `exes/AirExplorer_v70.exe` | **基线**（=v66 水位 + 53 方法官方三件套，ui-probe 同水位验证通过） |
+| `exes/AirExplorer_v71.exe` | ❌ 实验失败保留归档，勿使用 |
