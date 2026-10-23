@@ -67,7 +67,7 @@ class Host {
                 Thread.Sleep(5000);
                 string hb = "=== heartbeat " + (int)sw.Elapsed.TotalSeconds + "s alive=" + worker.IsAlive + " ===";
                 try { File.AppendAllText(TraceFile, hb + Environment.NewLine); } catch {}
-                try { Console.WriteLine("[ost] hb " + (int)sw.Elapsed.TotalSeconds); Console.Out.Flush(); } catch {}
+                // 不写 Console: PowerShell 管道缓冲满会阻塞主线程(stdout 塞满即死锁)
             }
             if (worker.IsAlive) {
                 Console.WriteLine("[ost] TIMEOUT — aborting to capture stuck stack");
