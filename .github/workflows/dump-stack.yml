@@ -55,7 +55,6 @@ jobs:
           $env:COMPlus_JitNoInline = "1"
           $env:COMPLUS_JitDisasm = "*"
           $env:COMPLUS_JitDiffableDasm = "1"
-          Set-Location app
           New-Item -ItemType Directory -Force -Path probe | Out-Null
           $appDir = (Resolve-Path "app").Path
           $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "AirExplorer.exe" -WorkingDirectory $appDir -PassThru -NoNewWindow -RedirectStandardOutput C:\out\host_stdout.txt -RedirectStandardError C:\out\host_stderr.txt
