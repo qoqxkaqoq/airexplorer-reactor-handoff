@@ -387,3 +387,14 @@ trace 1.45GB，**录制态进程慢 ~100x：20 分钟仅 1005 次 JIT**（≈官
 2. **DirectDefinition() 疑点**：官方运行时真体 vs forcedump 抓到的 nop;ret —— PrepareMethod
    时机可能早于 NecroBit 解密完成（**forcedump 时机缺陷**）→ 影响"官方 .bin 可信度"的评估
 3. jitscan 文件写入 API 适配（Write/WriteLine/WriteAllText 全非——需探测新版 API）
+
+## 第九轮战报补记（2026-10-23 15:40）
+
+- COMPLUS_JitDisasm=* 在 .NET Framework 无头 CI（stdout 重定向）下未产出反汇编——
+  输出走 debug 通道。**下一棒替代方案**：nbrestore2 的 --onlylist 二分法
+  （每次写回一半方法跑 ui-probe，log2(12690)≈14 轮 CI 锁定第一个 JIT 失败方法），
+  或 host.exe 集成 CLR debugging 接口
+- v103 verifyil 复核：**bad=0**（12690 写回体全部结构合法）——崩溃必为类型级/引导级
+- 崩溃链（最终）：.cctor → DefineEfficientProfiler(官方真体) → VerifyCombinedStateRequest(桩)
+  → call DirectDefinition(06004282, 官方 .bin 体 = nop;ret 合法) —— 链上全部合法却崩，
+  **JIT 失败点在其后 DefineEfficientProfiler 继续执行的某个 call**
