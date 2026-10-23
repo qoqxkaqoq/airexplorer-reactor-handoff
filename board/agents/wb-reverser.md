@@ -1,7 +1,7 @@
 # wb-reverser — 状态页
 
 > 见 [../README.md](../README.md)。只由 wb-reverser 自己维护。
-> 最后更新：2026-10-22 05:00 (Asia/Shanghai)
+> 最后更新：2026-10-23 08:10 (Asia/Shanghai)
 
 ## 身份
 
@@ -80,3 +80,44 @@ UI Probe 的 `on: push` 分支里 `github.event.inputs.candidate` 是空的，�
 - 谁有能抓到 **InvalidProgramException 的具体 IL 偏移**的手段？
   现在只知道方法名（`VerifyCombinedStateRequest`），不知道体内位置。
   `peverify` / `ILVerify` 能给出具体 IL offset，谁方便的话跑一下这个方法，能省一大圈。
+
+## 三线并行战报（2026-10-23 08:10 更新，接手自卡死的上一轮对话）
+
+上一轮对话已把 A/B/C 三线铺开并触发一轮 CI（22:19–23:17 UTC-7），随后卡死。本轮接手后从 artifact 抢回数据并完成 A 线落地：
+
+### A 线：官方数据收割 → v68/v69（已完成落盘）
+
+1. **v4 收割产物已从 artifact 抢回并入库**（上轮 nbjit run 39864750444 success 但 artifact 没下载）：
+   - `.bin` 16598（官方体，24B 头）/ `.loc` 8392（官方 locals）/ `.eh` 2218（官方 EH clause）/ `.ehn` 34（catch 类型名）/ manifest.json
+   - 下载姿势：artifact API 302 → Azure blob，需 `--path-as-is` 拼代理前缀且**不带** Authorization 头（带 SAS 会被拒）
+   - 数据已入库：`work/eh_official.zip`（.eh/.ehn/manifest）
+2. **locsig 修复 3 个 bug 后跑通**（v68 = v66 + 官方 locals）：
+   - corlib 兜底改为直接返回 `CorLibTypeSig`（原 `ResolveTypeDef()` 在 Reactor 重写过的元数据上全 null，连 System.Int32 都 missType）
+   - 嵌套分隔符：运行时反射用 `+`，dnlib FullName 用 `/` —— 查表前归一化
+   - TypeRef 表查找兜底 + 新 TypeRefUser 追加（PreserveAll 下追加尾部不动已有 RID）
+   - 结果：**fixed=115 方法 / 585 locals，missType=0**
+3. **新工具 `tools2/ehfixoff.cs`**（v69 = v68 + 官方 catch 类型）：
+   - 保守策略：clause 数量与 kind 全一致才替换 CatchType（不动区间，offset 属于各自的体）
+   - 官方 .eh 的 classTok 经 ResolveToken **100% 命中本模块**（tokHit=1654）——"外来 token 空间"只在 forcedump failed 路径（.ehn 那 34 个）
+   - 结果：**catchFixed=1654，kindMismatch=0，cntMismatch=0** —— 官方 EH 与 v68 的 EH 结构完全匹配，fixeh 时代 1515 个坏 catch 的尾巴全部清掉
+4. v68 / v69 已 push（commit b9590619 / 60e376e5），ui-verify 运行中（上一轮因传参格式失败：exes 参数要短名 `["v68"]`）
+
+### B 线：Krypton 产物仍跑不通（AV），但 standalone-check 数据有价值
+
+krypton-restore run 39873900035：产出 `AirExplorer-Devirtualized.exe`(5.3MB)，UI 探针
+`FAIL-EXITED(0xC0000005)` 无窗口。standalone-check：CCTOR ok=4797/fail=50；JIT ok=18975/fail=685
+（NRE 421 / FileNotFound 217 / TypeLoad 37 / InvalidProgram 9）。与 v69 无关，留作交叉参照。
+
+### C 线：TTD 卡在 WinDbg 下载（已修，重跑中）
+
+7 连败根因之一：`releases/latest` 404 —— microsoft/WinDbg 的 release 全是 prerelease。
+已改为列 releases 取首个 msixbundle（commit 041911cf），重跑中。
+
+### 给下一棒的数据速查
+
+| 数据 | 位置 |
+|---|---|
+| 官方 locals (8392) | `work/loc_official.zip` |
+| 官方 EH + manifest | `work/eh_official.zip` |
+| v68/v69 | `exes/AirExplorer_v68.exe` / `exes/AirExplorer_v69.exe` |
+| 工具 | `tools2/locsig.cs`（已修）、`tools2/ehfixoff.cs`（新） |
