@@ -1,0 +1,6 @@
+=== host v3 start 12:20:50.414 ===
+=== heartbeat 5s alive=True ===
+=== heartbeat 10s alive=True ===
+=== heartbeat 15s alive=True ===
+=== heartbeat 20s alive=True ===
+=== heartbeat 25s alive=True ===
