@@ -54,7 +54,6 @@ jobs:
           # 动态检测: 每 15s 查 target 的 WinForms 可见窗(Error detected/主窗), 出现后再录 30s finalize;
           # 上限 20 分钟(公开仓库 CI 免费且充足)
           $tt = Start-Process -FilePath $ttdExe -ArgumentList "-accepteula","-out","C:\ttd\trace.run","$exe" -PassThru -NoNewWindow
-          Add-Type -Namespace W -Name P -MemberDefinition '[DllImport("user32.dll")] public static extern bool EnumWindows(System.Func<IntPtr,IntPtr,bool> cb, IntPtr l); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, System.Text.StringBuilder t, int n);'
           $tgtName = [System.IO.Path]::GetFileNameWithoutExtension($exe)
           $deadline = (Get-Date).AddMinutes(20)
           $seenWin = $false
@@ -62,10 +61,7 @@ jobs:
             Start-Sleep -Seconds 15
             $tgt = Get-Process -Name $tgtName -ErrorAction SilentlyContinue
             if (-not $tgt) { Write-Host "target exited early"; break }
-            $tpid = [uint32]$tgt.Id
             $found = $false
-            $cb = [W.P+EnumWindows]::GetType()  # placeholder no-op
-            # 简化: 用 Get-Process 的 MainWindowTitle 轮询
             if ($tgt.MainWindowTitle -and $tgt.MainWindowTitle.Length -gt 0) {
               Write-Host ("window: '" + $tgt.MainWindowTitle + "'")
               if ($tgt.MainWindowTitle -like "*Error detected*" -or $tgt.MainWindowTitle -like "*Air Explorer*") { $found = $true }
