@@ -1,0 +1,18 @@
+[ost] loaded AirExplorer, Version=5.11.0.0, Culture=neutral, PublicKeyToken=null
+[ost] entry CloudClient.Models.StatelessModel::SearchAdapter
+=== ENTRY-INVOCATION 18:46:14.113 ===
+EX System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor)
+   at System.Reflection.RuntimeMethodInfo.UnsafeInvokeInternal(Object obj, Object[] parameters, Object[] arguments)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at Host.<>c__DisplayClass5.<Main>b__2()
+-- inner --
+EX System.TypeInitializationException: The type initializer for 'AirExplorer.Values.ArgumentGateway' threw an exception.
+   at AirExplorer.Values.ArgumentGateway.EvaluateVisibleAttribute()
+   at CloudClient.Models.StatelessModel.SearchAdapter(String[] info)
+-- inner --
+EX System.NullReferenceException: Object reference not set to an instance of an object.
+   at CloudClient.Templating.DispatcherInitializer.InstantiateTransferableProgram(Int32 num_config)
+   at AirExplorer.Values.ArgumentGateway..cctor()
+-- inner --
+host exit code: 1
