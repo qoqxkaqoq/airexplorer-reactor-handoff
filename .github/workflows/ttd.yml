@@ -9,7 +9,7 @@ on:
 jobs:
   ttd:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -50,13 +50,33 @@ jobs:
           Write-Host "ttdExe=[$ttdExe] exists=$(Test-Path $ttdExe)"
           if (-not (Test-Path $ttdExe)) { throw "TTD.exe not found" }
           $exe = (Resolve-Path "exes\AirExplorer_${{ inputs.exe }}.exe").Path
-          # GUI 录制(help 模式不走 OnLoad 链, 抓不到目标方法): 启动后等 60s(窗口+Error detected 出现)
-          # 再杀 target —— target 退出让 TTD finalize trace
+          # GUI 录制 v2: 录制态进程慢 10-100x, UI 启动需数分钟-数十分钟。
+          # 动态检测: 每 15s 查 target 的 WinForms 可见窗(Error detected/主窗), 出现后再录 30s finalize;
+          # 上限 20 分钟(公开仓库 CI 免费且充足)
           $tt = Start-Process -FilePath $ttdExe -ArgumentList "-accepteula","-out","C:\ttd\trace.run","$exe" -PassThru -NoNewWindow
-          Start-Sleep 60
+          Add-Type -Namespace W -Name P -MemberDefinition '[DllImport("user32.dll")] public static extern bool EnumWindows(System.Func<IntPtr,IntPtr,bool> cb, IntPtr l); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, System.Text.StringBuilder t, int n);'
           $tgtName = [System.IO.Path]::GetFileNameWithoutExtension($exe)
+          $deadline = (Get-Date).AddMinutes(20)
+          $seenWin = $false
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 15
+            $tgt = Get-Process -Name $tgtName -ErrorAction SilentlyContinue
+            if (-not $tgt) { Write-Host "target exited early"; break }
+            $tpid = [uint32]$tgt.Id
+            $found = $false
+            $cb = [W.P+EnumWindows]::GetType()  # placeholder no-op
+            # 简化: 用 Get-Process 的 MainWindowTitle 轮询
+            if ($tgt.MainWindowTitle -and $tgt.MainWindowTitle.Length -gt 0) {
+              Write-Host ("window: '" + $tgt.MainWindowTitle + "'")
+              if ($tgt.MainWindowTitle -like "*Error detected*" -or $tgt.MainWindowTitle -like "*Air Explorer*") { $found = $true }
+            }
+            if ($found) {
+              if (-not $seenWin) { $seenWin = $true; Write-Host "window seen, extra 30s..." ; Start-Sleep -Seconds 30 }
+              else { break }
+            }
+          }
           Get-Process -Name $tgtName -ErrorAction SilentlyContinue | Stop-Process -Force
-          Wait-Process -Id $tt.Id -Timeout 240 -ErrorAction SilentlyContinue
+          Wait-Process -Id $tt.Id -Timeout 600 -ErrorAction SilentlyContinue
           if (Test-Path "C:\out\ttd-record.log") { Get-Content C:\out\ttd-record.log -Tail 12 }
           if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; exit 1 }
           Write-Host ("trace 大小: " + (Get-Item C:\ttd\trace.run).Length)
