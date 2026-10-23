@@ -33,6 +33,7 @@ jobs:
       - name: 批量抓取字符串
         shell: pwsh
         run: |
+          Copy-Item ids.txt app\ids.txt -Force
           $hp = Start-Process -FilePath "tools\ci\host6.exe" -ArgumentList "AirExplorer.exe","ids.txt","C:\out\strings.json","${{ inputs.delay }}" -WorkingDirectory "app" -PassThru -RedirectStandardOutput "..\fetch_stdout.txt" -RedirectStandardError "..\fetch_stderr.txt" -NoNewWindow
           $deadline = (Get-Date).AddMinutes(20)
           while (-not $hp.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
