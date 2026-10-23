@@ -17,10 +17,17 @@ jobs:
         shell: pwsh
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          # microsoft/WinDbg releases 提供 msixbundle(zip 容器), 7z 直接解包
-          $rel = Invoke-RestMethod "https://api.github.com/repos/microsoft/WinDbg/releases/latest" -Headers @{ "User-Agent" = "ci" }
-          $asset = $rel.assets | Where-Object { $_.name -match "msixbundle$" } | Select-Object -First 1
-          if (-not $asset) { Write-Host "no msixbundle asset"; $rel.assets | ForEach-Object { Write-Host $_.name }; exit 1 }
+          # microsoft/WinDbg 的 release 全部标记为 prerelease, /releases/latest 会 404,
+          # 改为列出 releases 取第一个带 msixbundle 的
+          $hdr = @{ "User-Agent" = "ci"; "Accept" = "application/vnd.github+json" }
+          if ($env:GITHUB_TOKEN) { $hdr["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
+          $rel = Invoke-RestMethod "https://api.github.com/repos/microsoft/WinDbg/releases?per_page=10" -Headers $hdr
+          $asset = $null
+          foreach ($r in $rel) {
+            $asset = $r.assets | Where-Object { $_.name -match "msixbundle$" } | Select-Object -First 1
+            if ($asset) { break }
+          }
+          if (-not $asset) { Write-Host "no msixbundle asset"; $rel[0].assets | ForEach-Object { Write-Host $_.name }; exit 1 }
           Write-Host "asset = $($asset.name)  $($asset.size) bytes"
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile D:\windbg.msixbundle
           New-Item -ItemType Directory -Force -Path D:\wd | Out-Null
