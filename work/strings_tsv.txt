@@ -1,0 +1,6461 @@
+-4294966516	tableLayoutPanel1
+-4294966316	Segoe UI
+-4294966194	Id
+-4294965982	A maximum of 32 actions is allowed within a single task.
+-4294965470	d
+-4294965464	''
+-4294963678	>
+-4294963066	, 
+-4294963012	path
+-4294962304	type
+-4294962256	Title
+-4294961564	v
+-4294961330	Only a single ExecAction is supported unless the PowerShellConversion property includes the Version1 value.
+-4294960456	id
+-4294959938	Name
+-4294959926	Value
+-4294959906	name
+-4294959552	.
+-4294959300	value
+-4294959206	i
+-4294959058	\
+-4294958348	MaintenanceSettings
+-4294957932	URI
+-4294957612	EventTrigger
+-4294957488	RestartOnFailure
+-4294956950	WnfStateChangeTrigger
+-4294954038	must be false.
+-4294951920	  
+-4294951462	*
+-4294950036	.job
+-4294947002	\\
+-4294946638	Enabled
+-4294946554	Z
+-4294946134	-
+-4294946058	Delay
+-4294945578	RandomDelay
+-4294942472	dateTimePickerTime
+-4294942406	$this
+-4294942352	BEGINTASK
+-4294942248	:
+-4294942144	OK
+-4294942136	CANCEL
+-4294941452	triggerTypeLabel
+-4294941416	triggerTypeCombo
+-4294940976	startupIntroLabel
+-4294940904	onEventTab
+-4294940060	.*
+-4294940032	\*
+-4294939678	System.DateTime
+-4294939260	Add
+-4294939202	obj
+-4294937028	NAME
+-4294936970	SCHEDULE
+-4294936858	...
+-4294936792	EDIT
+-4294936718	LASTEXECUTION
+-4294936572	 
+-4294936134	""
+-4294936126	"
+-4294936104	yyyMMdd
+-4294936066	COPY
+-4294935846	 - 
+-4294935770	}
+-4294935280	buttonEditSchedule
+-4294934834	tableLayoutPanel4
+-4294934762	Browse...
+-4294934118	radioButtonOnlyLoggedOn
+-4294933610	menuButtonSourceZip
+-4294933184	checkBoxEncrypt
+-4294932662	tableLayoutPanel8
+-4294931946	Status
+-4294931156	Edit
+-4294930860	0
+-4294930854	ProductFeatures
+-4294929800	/
+-4294929776	modified
+-4294929756	size
+-4294929692	Authorization
+-4294929580	GET
+-4294929570	href
+-4294929514	overwrite=true&path=
+-4294929454	POST
+-4294929336	DELETE
+-4294929226	PUT
+-4294929026	items
+-4294929012	total
+-4294928504	access_token
+-4294928476	refresh_token
+-4294928446	expires_in
+-4294928114	expires_in=
+-4294927868	?
+-4294927848	path1
+-4294927392	.7z
+-4294926946	faviconyandex
+-4294926124	.//d:displayname
+-4294925934	Accept
+-4294925918	*/*
+-4294925908	Overwrite
+-4294924880	.jpg .jpeg .png .tiff .tif .gif .bmp .avi .mov .mp4 .3gp
+-4294923866	.Login
+-4294923322	//d:quota-available-bytes
+-4294923188	application/binary
+-4294923126	User:
+-4294923112	labelPassword
+-4294923000	buttonCancel
+-4294922972	Cancel
+-4294922956	buttonOK
+-4294922786	$this.Icon
+-4294921430	trash/
+-4294919874	application/json
+-4294919618	icon
+-4294919258	data
+-4294918186	list
+-4294917756	. 
+-4294917506	display_name
+-4294915950	Content-Disposition: form-data; name="{0}"; filename="{1}"  Content-Type: {2}    
+-4294915772	application/octet-stream
+-4294914932	22
+-4294914764	Cancelled
+-4294914590	modified_time
+-4294914318	"]}
+-4294914292	usage=FETCH
+-4294913940	PATCH
+-4294913904	"}
+-4294913750	files
+-4294912610	Pikpak.ExpireTime
+-4294912530	Bearer 
+-4294911250	resumable
+-4294909972	parentfolderid
+-4294909878	metadata
+-4294908386	sha1
+-4294908268	True
+-4294908052	result
+-4294907990	url
+-4294907944	access_token=
+-4294903770	/upload/create_file.json
+-4294903172	Content-Disposition: form-data; name="{0}"    {1}
+-4294901942	Content-Range
+-4294901676	driveId
+-4294901658	/drives/
+-4294901554	lastModifiedDateTime
+-4294901494	hashes
+-4294901458	quickXorHash
+-4294901430	{"name": 
+-4294901262	 was not found, probably it was already deleted.
+-4294900920	small
+-4294900824	VERSIONSHISTORY
+-4294900756	remoteItem
+-4294900696	 Drive
+-4294900600	/children
+-4294900476	children@odata.nextLink
+-4294900322	{"name": "
+-4294900008	429
+-4294899998	Retry-After
+-4294899952	CompactToken validation failed
+-4294899842	message
+-4294899652	OneDrive.ExpireTime
+-4294898692	owner
+-4294898636	remaining
+-4294898414	/permissions
+-4294898386	/permissions/
+-4294897788	KUbu62saC3FWjNUctFimQyO6pbRUeHQQ
+-4294897572	https://login.microsoftonline.com/common/oauth2/nativeclient
+-4294896212	False
+-4294894974	"        }      }    ]  }
+-4294894846	resource
+-4294894422	status
+-4294891206	User-Agent
+-4294891074	OneDriveForBusiness.ShowOthersDrives
+-4294890998	OneDriveForBusiness.ShowOthersRoots
+-4294888136	https://files.cloud.naver.com/
+-4294886336	Naver.Login
+-4294886182	files.cloud.naver.com
+-4294886136	NID_SES
+-4294885572	Origin
+-4294885464	cloud.naver.com
+-4294883242	 
+-4294881414	"c":\s*"([^"]+)"(}|,)
+-4294881354	k
+-4294880892	}]
+-4294880710	/0
+-4294880432	+
+-4294878844	Mega.Mkey
+-4294878174	Timed out while solving Mega X-Hashcash challenge.
+-4294876714	owner_name
+-4294876690	hash
+-4294876678	mimetype
+-4294876578	filename
+-4294876502	Central Standard Time
+-4294873236	storage_limit
+-4294872918	yyyy/MM/ddTHH:mm:ss
+-4294872164	yes
+-4294870530	{0}{1}
+-4294870514	./
+-4294869966	{0}/api/v2/file/{1}
+-4294869690	Request error
+-4294869352	{0}/api/v2/folder?home={1}&limit=4000
+-4294868994	Mail.ru.AccessToken
+-4294868352	https://o2.mail.ru/token
+-4294864328	X-Apple-OAuth-Redirect-URI
+-4294862570	https://idmsa.apple.com/appleauth/auth/signin/complete?isRememberMeEnabled=true
+-4294857872	etag
+-4294857764	/moveItemsToTrash
+-4294857682	folders
+-4294856776	signature
+-4294856236	Could not start the upload for the copy
+-4294855742	dateCreated
+-4294855578	extension
+-4294855070	ETag
+-4294854266	/drive/file-entries?perPage=1000&page=
+-4294854162	last_page
+-4294852214	entries
+-4294851184	" }
+-4294850416	spaceTotal
+-4294849328	cpDir=/
+-4294847018	createdTime
+-4294846936	sha256
+-4294846290	mimeType
+-4294846270	application/vnd.huawei-apps.folder
+-4294844972	userCapacity
+-4294842494	?pid=
+-4294842418	share_type
+-4294842272	uri
+-4294840844	HiDrive.RefreshToken
+-4294838980	Owners
+-4294838928	imageMediaMetadata
+-4294838766	thumbnailLink
+-4294838678	downloadUrl
+-4294838652	https://www.googleapis.comhttps:
+-4294838342	application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+-4294837836	application/vnd.oasis.opendocument.presentation
+-4294837634	text/html
+-4294837600	text/plain
+-4294837558	createdDate
+-4294836620	anyone
+-4294836604	role
+-4294832240	GoogleDrive.RefreshToken
+-4294830976	502
+-4294830760	drives
+-4294827090	GoogleDriveService.Impersonation
+-4294827022	PLEASEENTERPARAMETERS
+-4294826422	application/octetstream
+-4294825786	F
+-4294825534	TimeSpanHourStrings
+-4294822436	SIZE
+-4294822310	XSHA512
+-4294822220	SHA-1
+-4294817872	pwd
+-4294817682	Don't know how to delete object type: 
+-4294812992	group
+-4294812408	version
+-4294808336	{"path": 
+-4294807734	,"include_media_info": true,"include_deleted": false,"include_has_explicit_shared_members": false}
+-4294807310	export_as
+-4294807008	path_lookup/not_found/
+-4294806390	,"mode": "path","limit": 100}
+-4294806214	shared_folder_id
+-4294804620	DropBox.ExpireTime
+-4294802352	invitees
+-4294801948	sharing/update_file_member
+-4294796436	dir_seq
+-4294796392	part_size
+-4294796008	file_seq
+-4294795786	all
+-4294795710	download_url
+-4294795450	parent_node
+-4294795294	v1/folders/index/
+-4294793980	{"file_id_list":["
+-4294793794	no status
+-4294793716	copied_files
+-4294793058	file_url
+-4294790974	"tp_identifier":"
+-4294770474	AdditionalBody
+-4294769358	Box.ChunkRetries
+-4294769286	Box.RefreshIfChanged
+-4294769088	Box.SaveCache
+-4294768868	parent
+-4294767804	open
+-4294766820	https://api.box.com/2.0/folders/
+-4294765956	next_marker
+-4294765306	{"folder":{"type":"folder","id":"
+-4294763358	Can not complete file - timeout
+-4294763258	Box.ExpireTime
+-4294761922	https://api.box.com/2.0/users/me
+-4294760304	https://api.box.com/2.0/collaborations/
+-4294757716	origin
+-4294756984	part
+-4294756666	https://pcs.baidu.com/rest/2.0/pcs/file?
+-4294753634	Destination for MoveTo operation does not exist.
+-4294752158	Stream does not support seeking
+-4294746246	/v2/file/copy
+-4294741704	upload_id
+-4294741616	/v2/file/complete
+-4294741350	folderId=
+-4294741094	name=
+-4294740148	oauth_token
+-4294739430	oauth_callback
+-4294739358	oauth_nonce
+-4294739194	oauth_verifier
+-4294738864	uet
+-4294737856	state
+-4294736186	pick_code
+-4294734728	http://127.0.0.1:3321
+-4294734682	Microsoft Account
+-4294734606	email.refreshtoken
+-4294734566	email.oauthexpire
+-4294734246	.htm
+-4294733852	 BASE >> 
+-4294733810	Win32_Processor
+-4294732682	AccountsDBxml
+-4294732622	account
+-4294732366	Bookmark
+-4294732346	property
+-4294732326	Provider
+-4294732236	bookmarks
+-4294732166	.cloudencoded2
+-4294732070	-vrfy-
+-4294731932	https://dmb.junglejapan.com/
+-4294731242	REFRESH
+-4294731190	STOP
+-4294730602	Delete
+-4294729912	SYNCTASKS
+-4294729072	ERRORCONNECTING
+-4294728844	bytes
+-4294728330	skills
+-4294723950	ENTERACTIVATION
+-4294723604	WindowLocationX
+-4294723450	Theme
+-4294721772	toolStripContainer1
+-4294718996	winLepImageCompressorToolStripMenuItem
+-4294718722	FormMain
+-4294717824	LIMITUPLOADSPEED
+-4294717526	CONNECTION
+-4294717332	EMAIL
+-4294716830	Language
+-4294716690	*.xml
+-4294716400	SimultaneousUploads
+-4294715848	DetailedLog
+-4294715536	email.fromname
+-4294715164	LogFileSize
+-4294714742	,4
+-4294714274	EMAILNOTSENT
+-4294713982	General
+-4294713410	numericUpDownLargeDownloads
+-4294713038	Check file integrity after each download
+-4294710898	Command Line Password:
+-4294709948	groupBoxConnection
+-4294708568	tableLayoutPanel18
+-4294708438	Destination email address:
+-4294707634	Air Explorer can send emails on certain events. Enter your email configuration here.
+-4294707378	Do not log "Comparing" events
+-4294705536	127.0.0.1
+-4294705274	${query}
+-4294702700	CacheSearchs
+-4294702520	float
+-4294702460	string
+-4294702428	string[]
+-4294702150	cortar16x16.png
+-4294701952	TYPE
+-4294701926	CUT
+-4294701818	PROPERTIES
+-4294701542	folderPending
+-4294700616	toolStripMenuItemCopy
+-4294700510	Paste
+-4294700446	Rename
+-4294700276	toolStripMenuItemOpenWebBrowser
+-4294700094	toolStripMenuItemProperties
+-4294699666	AIREXPLORERLINK
+-4294699616	\.DRIVE\w$
+-4294699440	.MYPICTURES
+-4294698700	.part.segments
+-4294698184	State
+-4294697974	COPYTOLEFT
+-4294696754	PanelPages-path
+-4294694406	UploadFolder
+-4294694358	TransferFolder
+-4294693630	Encryption password not specified, the file can not be encrypted. Please save the encryption password in the account with the user interface or include the encryption password in the command line
+-4294693198	413
+-4294693052	HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
+-4294692556	AirExplorer
+-4294691914	COPYRIGHT
+-4294689548	\\{0}\{1}
+-4294688906	ayuda32x32
+-4294687788	favicon_32_115com
+-4294686652	favicon_32_pikpak
+-4294686486	favicon_32_wasabi
+-4294684948	favicon_azure
+-4294683980	favicon_opendrive
+-4294683620	favicondegoo
+-4294683558	favicondirectcloud
+-4294682936	licence16x16
+-4294682356	paste16x16
+-4294681532	sincronizar32x32
+-4294681068	unaventana16x16
+-4294678556	NEWFOLDER
+-4294678260	REFRESHERROR
+-4294677980	toolStripSplitButton1
+-4294676054	CREATESUBFOLDERFOR
+-4294676014	NEWFOLDERNAME
+-4294675942	VIRT
+-4294675802	toolStripMenuItemNewFolder
+-4294672302	COMPARE
+-4294671796	Folder not found 
+-4294670300	buttonSave.Image
+-4294669860	Filtered
+-4294669064	FormSync
+-4294668812	FILTER
+-4294668712	labelDescription
+-4294667450	button1
+-4294666612	%>
+-4294666192	<%=SyncType%>
+-4294665054	<%=FailedFilesSize%>
+-4294664942	none
+-4294662504	<%=ErrorMessage%>
+-4294662466	<%=ErrorDate%>
+-4294661402	Filtered-Name-Exclude
+-4294661090	excludeLargerThan
+-4294660988	lowerSizeUnits
+-4294660724	NewFilesValue
+-4294658452	Include only the files matching:
+-4294658050	labelExamples
+-4294657888	Do not synchronize subdirectories, only the root folder
+-4294656390	//SyncTasks/*
+-4294652272	upload
+-4294652234	transfer
+-4294652168	Invalid task
+-4294651164	labelDrivesFound
+-4294646264	application/xml
+-4294645776	image/bmp
+-4294644878	.crt
+-4294644196	.dot
+-4294643828	application/x-dvi
+-4294643724	.eml
+-4294643586	text/x-setext
+-4294643338	Application/xml
+-4294643304	.fla
+-4294642632	.hpp
+-4294642226	.ico
+-4294640522	video/mpeg
+-4294640028	application/x-ms-manifest
+-4294639962	.master
+-4294639554	.mny
+-4294639358	.mp3
+-4294638660	.odl
+-4294638328	.p10
+-4294638264	application/x-pkcs12
+-4294637784	image/pict
+-4294637592	.pkgundef
+-4294637136	application/vnd.ms-powerpoint.template.macroEnabled.12
+-4294635658	.ram
+-4294634540	.setpay
+-4294634450	.setreg
+-4294633592	audio/x-smd
+-4294633462	.spc
+-4294632254	.tsv
+-4294631974	text/vbscript
+-4294631182	.wave
+-4294631046	application/vnd.ms-works
+-4294630548	.wm
+-4294629758	.wrz
+-4294629132	.xll
+-4294629108	.xls
+-4294628850	.xltm
+-4294628482	.xps
+-4294628470	application/vnd.ms-xpsdocument
+-4294628314	.xss
+-4294625894	Select file size range
+-4294624834	DESCRIPTION
+-4294622940	userstorage.mega.co.nz
+-4294617934	labelDisplayName
+-4294616824	textBoxType
+-4294616746	textBoxDescription
+-4294616410	Created:
+-4294615878	pictureBox1
+-4294615506	labelOpening
+-4294615126	RENAMECRITERIA
+-4294613970	labelTitle
+-4294610564	Business
+-4294608662	GETTINGLINKFOR
+-4294606148	delete
+-4294605030	yyyMMdd-HHmmss
+-4294604564	 cloud 
+-4294603370	No files match pattern '{0}' in folder '{1}'
+-4294603200	Could not find or create the destination folder {0}
+-4294603094	File already exists, skipping {0}
+-4294602616	Path not found {0}
+-4294602338	 path Path to the source file or folder to delete, it is possible to use wildcards to specify several files (ex: *.txt)
+-4294599292	 move cloud path destinationPath [/O | /R | /S]
+-4294598530	Enter one command per line, the commands will run in parallel
+-4294593214	/fullpath
+-4294585338	 /encryptName=<encryptionPassword>  encrypt file content and name
+-4294584556	Transfers a file from one cloud to another.
+-4294578136	numericUpDownRate
+-4294577422	Enable batch uploads
+-4294576760	textBoxService
+-4294576164	Bucket:
+-4294576114	buttonBuckets
+-4294575398	Set Selected
+-4294573318	code=
+-4294569274	Error opening file
+-4294569048	Error uploading {0}
+746	_CreateDelegate
+780	tableLayoutPanel1
+850	Start the task
+882	comboBox1
+904	groupBoxConfiguration
+950	Configuration
+980	Segoe UI
+1000	calendarTriggerUI1
+1040	TriggerUI
+1102	Id
+1110	FromPowerShellCommand
+1156	ActionId
+1176	ActionType
+1200	Path
+1212	powershell
+1236	Arguments
+1258	WorkingDirectory
+1294	iTaskDef
+1430	ClassId
+1448	Data
+1820	g
+1826	d
+1832	''
+1840	'
+1860	B
+1866	[Reflection.Assembly]::LoadFile('
+1936	'); 
+2098	D
+2118	Attachments
+2144	Attachments array cannot contain more than 8 items.
+2250	Each value of the array must contain a valid file reference.
+2374	Bcc
+2384	Body
+2396	Cc
+2404	From
+2416	Importance
+2440	ReplyTo
+2458	Server
+2474	Subject
+2492	To
+2500	{1} {0}
+3520	from
+3540	;
+3546	body
+3558	server
+3574	cc
+3582	bcc
+3592	att
+3602	imp
+3612	<
+3618	>
+3624	Send-MailMessage -From '{0}' -Subject '{1}' -SmtpServer '{2}' -Encoding UTF8
+3800	 -Cc {0}
+3842	 -BodyAsHtml
+3870	 -Body '{0}'
+3936	 -Priority 
+3962	Under Windows 8 and later, EmailAction objects are converted to PowerShell. This action contains headers that are not supported.
+4222	; 
+4230	, 
+4238	HeaderFields
+4266	{0} {1}
+4284	path
+4296	-NoLogo -NonInteractive -WindowStyle Hidden -Command "& {{<# {0}:{1} #> {2}}}"
+4456	TSML_20140424
+4486	^Start-Process -FilePath '(?<p>[^']*)'(?: -ArgumentList '(?<a>[^']*)')?(?: -WorkingDirectory '(?<d>[^']*)')?;?\s*$
+4718	p
+4724	a
+4730	Start-Process -FilePath '
+4784	 -ArgumentList '
+4820	 -WorkingDirectory '
+4864	powershell.exe
+4896	<# TSML_20140424:(?<type>\w+) #> (?<cmd>.+)}"$
+4992	type
+5004	cmd
+5014	MessageBody
+5040	Title
+5054	{0}
+5064	^\[System.Reflection.Assembly\]::LoadWithPartialName\('System.Windows.Forms'\); \[System.Windows.Forms.MessageBox\]::Show\('(?<msg>(?:[^']|'')*)'(?:,'(?<t>(?:[^']|'')*)')?\);?\s*$
+5426	msg
+5436	t
+5442	[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('
+5688	PowerShellConversion
+5738	ActionCollectionContext
+5812	index
+5826	Index is not a valid index in the ActionCollection
+5930	actionId
+5950	action
+5966	Only a single ExecAction is supported unless the PowerShellConversion property includes the Version1 value.
+6184	actionType
+6208	actions
+6226	array
+6240	arrayIndex
+6264	count
+6278	match
+6292	startIndex
+6316	Multi-dimensional arrays are not supported.
+6406	http://schemas.microsoft.com/windows/2004/02/mit/task
+6516	Context
+6534	Exec
+6546	Execute
+6656	Multiple actions defined
+6708	EMPTY
+6722	MULTIPLE
+6742	<# (?<id>\w+):(?<t>\w+) #>\s*(?<c>[^<#]*)\s*
+6834	c
+6840	id
+6848	NO_ID
+6862	v1Task
+6878	<# {0}:{1} #> {2} 
+6996	DaysOfTheWeek
+7026	MonthsOfTheYear
+7060	TaskTriggerType
+7094	WhichWeek
+7116	TaskActionType
+7148	TaskState
+7170	TriggerType
+7196	WW
+7204	DOWAllDays
+7228	,
+7234	MOYAllMonths
+7358	Name
+7370	Value
+7384	=
+7390	name
+7402	Count
+7416	Item[]
+7432	Items in collection exceed available items in destination array.
+7564	Array index must be 0 or greater.
+7734	min
+7744	.
+7796	info
+7808	Task Scheduler 1.0
+7848	Task Scheduler 2.0 (1.2)
+7900	Task Scheduler versions prior to 2.{0} (1.{1})
+7996	value
+8010	^\$\(\@ (?<x>[^,]+), (?<i>-?\d+)\)$
+8084	x
+8090	i
+8096	Invalid resource file path.
+8154	$(@ {0}, {1})
+8184	IdleDuration
+8238	\
+8244	Tasks which have been registered previously with stored passwords must use the TaskFolder.RegisterTaskDefinition method for updates.
+8512	parameters
+8536	A maximum of 32 values is allowed.
+8716	Microsoft.Win32.TaskScheduler.TaskEditDialog
+8808	Microsoft.Win32.TaskSchedulerEditor.dll
+8890	ShowDialog
+8914	Volatile
+8934	false
+8948	MaintenanceSettings
+8990	UseUnifiedSchedulingEngine
+9046	DisallowStartOnRemoteAppSession
+9112	RequiredPrivileges
+9152	ProcessTokenSidType
+9194	Default
+9212	DisplayName
+9238	GroupId
+9256	RunLevel
+9276	LeastPrivilege
+9308	SecurityDescriptor
+9348	Source
+9364	URI
+9374	AllowStartOnDemand
+9414	true
+9426	AllowHardTerminate
+9466	MultipleInstancesPolicy
+9516	IgnoreNew
+9538	NetworkSettings
+9572	StartWhenAvailable
+9612	SendEmail
+9634	ShowMessage
+9660	ComHandler
+9684	EventTrigger
+9712	SessionStateChangeTrigger
+9808	RestartOnFailure
+9844	LogonType
+9866	None
+10138	The current version of the native library (1.{0}) does not support the version of the "{1}" task ({2})
+10346	WnfStateChangeTrigger
+10552	Principal.LogonType
+10684	Settings.MultipleInstances
+10740	== TaskInstancesPolicy.StopExisting
+10872	!= Guid.Empty
+10960	== false
+10980	Actions[{0}]
+11008	== typeof(EmailAction)
+11056	== typeof(ShowMessageAction)
+11116	Triggers[{0}]
+11146	is irretrievable.
+11184	== typeof(MonthlyTrigger)
+11238	== typeof(MonthlyDOWTrigger)
+11402	Triggers[{0}].Repetition
+11522	!= 0
+11534	Microsoft.Win32.TaskScheduler.V1.TaskSchedulerV1Schema.xsd
+11654	taskType
+11674	Settings.MaintenanceSettings
+11734	Period or Deadline must be at least 1 day and Deadline must be greater than Period.
+11904	Settings.StartWhenAvailable
+11962	== true requires time-based tasks with an end boundary or time-based tasks that are set to repeat infinitely.
+12242	>= Trigger.Repetition.Duration under Task Scheduler 1.0.
+12358	Settings.DeleteExpiredTaskAfter
+12424	!= TimeSpan.Zero requires at least one trigger with an end boundary.
+12602	cannot have a value.
+12646	cannot be Group, None or S4U.
+12946	must be true.
+12976	must be set to IgnoreNew.
+13126	must be 0.
+13258	must be false.
+13290	Actions
+13308	may only contain ExecAction types unless Actions.PowerShellConversion includes Version1.
+13730	cannot contain delays.
+13778	cannot contain an ExecutionTimeLimit or Id.
+13868	cannot contain a LogonTrigger with a UserId.
+13960	cannot contain a MonthlyDOWTrigger with RunOnLastWeekOfMonth set or multiple WeeksOfMonth.
+14144	cannot contain a MonthlyTrigger with RunOnLastDayOfMonth set.
+14270	cannot contain EventTrigger, SessionStateChangeTrigger, or RegistrationTrigger types.
+14572	must be Default.
+14668	must be empty.
+14928	must have no values set.
+15030	Documentation
+15060	PrincipalDisplayName
+15104	PrincipalId
+15130	SYSTEM
+15250	Principal
+15272	yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'FFFK
+15348	Version
+15366	 ? 
+15376	  
+15384	PT0S
+15396	Unsupported priority level on Task Scheduler 1.0.
+15498	Task Scheduler 2.0 (1.2) does not support setting this property. You must use an InteractiveToken in order to have the task run in the current user session.
+15814	Priority
+15834	*
+15840	\.job
+15854	TaskCollection; Count: {0}
+15910	RunningTaskCollection; Count: {0}
+15980	 and 
+16214	]
+16220	[
+16682	Enumeration of task history not available on systems prior to Windows Vista and Windows Server 2008.
+16886	Microsoft-Windows-TaskScheduler/Operational
+16976	Task history not available on systems prior to Windows Vista and Windows Server 2008.
+17186	Invalid folder name: 
+17232	Tasks
+17246	*.job
+17260	.job
+17272	folderSecurity
+17304	Security descriptor mismatch between specified credentials and credentials on existing folder by same name.
+17522	Invalid SDDL form
+17560	sddlForm
+17580	A task must be registered with at least one action and no more than 32 actions.
+17742	A valid system account name must be supplied for TaskLogonType.ServiceAccount. Valid entries are "NT AUTHORITY\SYSTEM", "SYSTEM", "NT AUTHORITY\LOCALSERVICE", or "NT AUTHORITY\NETWORKSERVICE".
+18130	userId
+18146	A password cannot be supplied when specifying TaskLogonType.ServiceAccount.
+18300	password
+18320	A password cannot be supplied when specifying TaskLogonType.Group.
+18456	Task names may not include any characters which are invalid for file names.
+18610	\.[^
+18622	]{0,3}\z
+18642	Task names ending with a period followed by three or fewer characters cannot be retrieved due to a bug in the native library.
+18896	This LogonType is not supported on Task Scheduler 1.0.
+19030	Security settings are not available on Task Scheduler 1.0.
+19150	Registration triggers are not available on Task Scheduler 1.0.
+19278	XML validation not available on Task Scheduler 1.0.
+19408	Path not found
+19440	TargetServer
+19468	UserName
+19526	UserPassword
+19554	forceV1
+19572	HighestSupportedVersion
+19622	The value of HighestSupportedVersion cannot exceed that of the underlying Windows version library.
+20076	trigger
+20094	Folder other than the root (\) was requested on a system only supporting Task Scheduler 1.0.
+20282	Temp
+20294	\\
+20302	A username, password, and domain must be provided.
+20434	The Task Scheduler library version for this system cannot be determined.
+20582	dab4c1e3-cd12-46f1-96fc-3981143c9bab
+20658	Enabled
+20676	EndBoundary
+20702	ExecutionTimeLimit
+20748	StartBoundary
+20778	triggerType
+20804	Trigger.Repetition.Interval must be less than Trigger.Repetition.Duration under Task Scheduler 1.0.
+21006	TriggerDuration0
+21084	TriggerRepetition
+21122	TriggerEndBoundary
+21162	-
+21168	TimeSpan2.dll
+21198	ToString
+21218	f
+21224	en-US
+21238	Delay
+21252	At system startup
+21290	Custom Trigger
+21322	n
+21328	n:Triggers/*[@id='
+21368	']
+21488	\<(?<T>ScheduleBy.+)\>
+21536	ScheduleByDay
+21566	ScheduleByWeek
+21598	ScheduleByMonth
+21632	ScheduleByMonthDayOfWeek
+21684	CalendarTrigger
+21718	RandomDelay
+21744	Repetition
+21768	DaysInterval
+21856	Subscription
+21884	log
+21894	<QueryList><Query Id="0" Path="{0}"><Select Path="{0}">*
+22010	[System[
+22030	Provider[@Name='{0}']
+22076	EventID={0}
+22102	]]
+22110	</Select></Query></QueryList>
+22172	QueryList
+22194	Query
+22208	Select
+22224	\*(?:\[System\[(?:Provider\[\@Name='(?<s>[^']+)'\])?(?:\s+and\s+)?(?:EventID=(?<e>\d+))?\]\])
+22414	s
+22420	e
+22426	On event - Log: {0}
+22468	, Source: {0}
+22498	, EventID: {0}
+22530	Custom event filter
+22618	UserId
+22634	any user
+22654	TriggerLogon1
+22684	DaysOfWeek
+22708	MonthsOfYear
+22736	RunOnLastWeekOfMonth
+22780	WeeksOfMonth
+22808	Weeks
+22822	Months
+22838	Week
+22850	Last
+22862	Week element must contain a 1-4 or Last as content.
+22968	Invalid days of the week element.
+23038	Invalid months of the year element.
+23152	1
+23158	2
+23164	3
+23170	4
+23176	DaysOfMonth
+23202	RunOnLastDayOfMonth
+23310	Day
+23320	WWLastWeek
+23378	When the task is created or modified
+23454	Duration
+23474	Interval
+23494	PT{0}M
+23610	StateChange
+23636	TriggerSession
+23668	user session of {0}
+23738	WeeksInterval
+23768	TriggerWeeklyMultWeeks
+23816	TriggerWeekly1Week
+23856	triggerId
+23958	Index is not a valid index in the TriggerCollection
+24064	unboundTrigger
+24096	triggers
+24116	BootTrigger
+24142	IdleTrigger
+24168	TimeTrigger
+24194	LogonTrigger
+24222	Failed to remove Trigger. Index out of range.
+24316	Multiple triggers defined
+24764	tableLayoutPanelFullDateTime
+24824	dateTimePickerTime
+24864	utcCheckBox
+24890	$this
+24986	ADVANCEDSETTINGS
+25022	REPEATEVERY
+25048	:
+25080	STOPRUNNINGTASKS
+25116	ACTIVATE
+25136	EXPIRE
+25152	OK
+25160	CANCEL
+25228	Version 1.0 of the Task Scheduler library cannot use the Unified Scheduling Engine.
+25398	The repetition duration value must be 1 minute or greater.
+25518	Task Scheduler
+25550	The repetition interval value must be 1 minute or greater and less than or equal to 31 days.
+25738	ONASCHEDULE
+25764	ATLOGON
+25782	Text
+25844	triggerTypeLabel
+25916	groupBox1
+25938	settingsTabControl
+26004	logonTab
+26060	groupBox6
+26152	logonChgUserBtn
+26186	logonUserLabel
+26218	logonSpecUserRadio
+26258	logonAnyUserRadio
+26296	startupTab
+26358	idleTab
+26376	label8
+26416	customTab
+26438	customPropsListView
+26506	propValCol
+26530	customNameText
+26562	label1
+26578	advSettingsGroup
+26614	stopIfRunsSpan
+26646	durationSpan
+26674	repeatSpan
+26720	expireDatePicker
+26756	activateDatePicker
+26796	durationLabel
+26826	stopAfterDurationCheckBox
+26880	enabledCheckBox
+26914	expireCheckBox
+26946	activateCheckBox
+26982	stopIfRunsCheckBox
+27022	repeatCheckBox
+27054	delayCheckBox
+27084	cancelBtn
+27106	okBtn
+27120	triggerIdText
+27150	label2
+27166	TriggerEditDialog
+27204	@
+27210	(?<!\\)\\\*
+27236	.*
+27244	\\\\\\\*
+27264	\*
+27272	(?<!\\)\\\?
+27318	\?
+27326	^
+27332	\\\\\\\\
+27352	$
+27388	ElementName
+27414	IXmlSerializable
+27450	IEnumerable
+27476	System.Boolean
+27508	System.Decimal
+27566	System.Char
+27592	System.Guid
+27686	System.DateTimeOffset
+27732	System.Double
+27762	System.Single
+27822	System.UInt32
+27852	System.UInt64
+27882	System.Int16
+27910	System.Int32
+27938	System.Int64
+27994	Namespace
+28036	Add
+28046	Can't get instance of 
+28104	XML element name does not match object.
+28298	Trigger Type: {0}; > Start: {1}; End: {2}; > DurMin: {3}; DurItv: {4}; >
+28446	null
+28458	START
+28472	schedStartDatePicker
+28516	panel1
+28532	BaseTriggerUI
+28580	DAILY
+28594	WEEKLY
+28610	MONTHLY
+28628	dailyTab
+28648	weeklyTab
+28670	monthlyTab
+28694	oneTimeTab
+28718	groupBox3
+28740	schedTabControl
+28808	weeklyTriggerUI1
+28844	monthlyTriggerUI1
+28916	schedMonthlyRadio
+28954	schedWeeklyRadio
+28990	schedDailyRadio
+29024	schedOneRadio
+29054	CalendarTriggerUI
+29092	DAYS
+29104	RECUREVERY
+29128	panel2
+29144	dailyRecurNumUpDn
+29182	dailyDaysLabel
+29214	dailyRecurLabel
+29248	DailyTriggerUI
+29280	MONTHS
+29296	MONTHLYON
+29318	SELECTALLMONTHS
+29352	SELECTALLDAYS
+29382	Trigger must be MonthlyDOWTrigger or MonthlyTrigger.
+29508	monthlyOnRadio
+29540	monthlyDaysRadio
+29576	monthlyMonthsLabel
+29616	monthlyDaysDropDown
+29658	monthlyOnDOWDropDown
+29702	monthlyOnWeekDropDown
+29748	monthlyMonthsDropDown
+29794	MonthlyTriggerUI
+29830	WEEKSON
+29848	weeklySunCheck
+29880	weeklyMonCheck
+29912	weeklyTueCheck
+29944	weeklyWedCheck
+29976	weeklyThuCheck
+30008	weeklyFriCheck
+30040	weeklySatCheck
+30072	weeklyRecurNumUpDn
+30112	weeklyOnWeeksLabel
+30152	weeklyRecurLabel
+30222	CONFIGURATION
+30252	STATUS
+30268	NAME
+30280	OPERATION
+30302	PARAMETERS
+30326	SCHEDULE
+30346	SYNCHRONIZATION
+30380	SOURCE
+30396	DESTINATION
+30422	BROWSE
+30438	...
+30486	ENABLED
+30504	EDIT
+30516	LOGTOFILE
+30560	LOGFILE
+30578	LASTEXECUTION
+30608	NEXTEXECUTION
+30638	OPENLOGFILE
+30664	LASTLOGLINES
+30692	RUNNOTLOGGEDON
+30724	 
+30730	PASSWORDREQUIRED1
+30768	RUNONLYLOGGEDON
+30802	DATEINNAME
+30926	SENDRESULTSEMAIL
+30962	ENABLEBANDWIDTHLIMIT
+31006	ENCRYPTUPLOADS
+31038	TASKPRIORITY
+31102	net use
+31120	CONNECTNETWORKDRIVE
+31162	""
+31170	"
+31176	{DATE}
+31192	yyyMMdd
+31210	????????
+31230	COPY
+31242	SYNCHRONIZE
+31268	ZIPUPLOADS
+31292	Key
+31302	REALTIME
+31322	HIGH
+31334	AVOBENORMAL
+31360	NORMAL
+31376	BELOWNORMAL
+31402	LOW
+31412	.txt
+31424	.MYCOMPUTER
+31450	 - 
+31460	ScheduledTasksLog-{DATE}
+31512	{
+31518	{{
+31526	}
+31532	}}
+31540	-{0}.txt
+31560	ScheduledTasksLog-{DATE}.txt
+31620	.html
+31634	SyncReport-{DATE}
+31672	-{0}.html
+31694	SyncReport-{DATE}.html
+31774	Operation
+31860	comboBoxOperation
+31898	labelName
+31920	Name:
+31934	textBoxName
+31960	groupBoxSchedule
+31996	Schedule
+32056	Edit...
+32074	textBoxSchedule
+32108	groupBoxLog
+32134	Log
+32174	Send an email with the operation results
+32258	labelDateInName
+32292	To have one log file for each day you can include the text {DATE} in the file namee
+32462	tableLayoutPanel4
+32500	buttonBrowseLog
+32534	Browse...
+32556	textBoxLogLocation
+32596	labelLogLocation
+32632	Log file:
+32654	checkBoxEnableLog
+32714	tabControl2
+32740	tabPageConfiguration
+32784	tableLayoutPanel7
+32822	labelrunSysCommand
+32862	Run a command before the task:
+32926	textBoxRunSysCommand
+32970	buttoneditSysCommand
+33014	radioButtonNotLoggedOn
+33228	Run only when the user is logged on
+33302	checkBoxTaskEnabled
+33344	groupBoxParameters
+33384	Parameters
+33408	panelZipParameters
+33448	tableLayoutPanel10
+33488	buttonZipParameters
+33530	Zip paramaters...
+33568	tableLayoutPanel11
+33608	menuButtonDestinationZip
+33660	menuButton1
+33728	labelDestinationZip
+33770	Destination:
+33798	labelSourceZip
+33830	Source:
+33848	buttonBrowseSourceZip
+33894	textBoxSourceZip
+33930	buttonBrowseDestinationZip
+34032	panelCopyParameters
+34074	tableLayoutPanel9
+34112	checkBoxEncrypt
+34146	Encrypt Uploads
+34180	checkBoxOverwrite
+34218	Overwrite file if it exists
+34276	tableLayoutPanel2
+34314	menuButtonDestination
+34360	menuButtonSource
+34396	labelDestination
+34432	labelSource
+34458	buttonBrowseSource
+34498	textBoxSourcePath
+34536	buttonBrowseDestination
+34586	textBoxDestinationPath
+34634	tableLayoutPanel8
+34672	buttonEditBandwidth
+34714	checkBoxLimitBandWidth
+34762	Enable Bandwidth limit
+34810	panelSyncParameters
+34852	tableLayoutPanel6
+34890	buttonBrowseReportFile
+34938	textBoxReportFile
+34976	labelReportFile
+35010	Report file:
+35038	checkBoxSaveReport
+35140	tableLayoutPanel3
+35178	buttonBrowseSync
+35214	textBoxSync
+35240	labelSynchronization
+35284	Synchronization:
+35320	tabPageStatus
+35350	Status
+35366	labelLastLogLines
+35404	Last Log Lines
+35436	buttonOpenLogFile
+35504	richTextBoxLog
+35536	tableLayoutPanel5
+35574	labelNextExecutionTime
+35622	Next execution time:
+35666	labelLastExecutionTime
+35714	Last Execution time:
+35758	textBoxLastExecutionTime
+35810	textBoxNextExecutionTime
+35862	tableLayoutPanel12
+35902	labelTaskPriority
+35940	Task priority:
+35972	comboBoxTaskPriority
+36062	Select a printer:
+36100	Select a computer:
+36140	Edit
+36152	FolderBrowserDialogNoRootFolder
+36218	DebuggingException: ThreadMustBeSTA
+36320	Company
+36338	Email
+36370	Type
+36382	Trial
+36396	Standard
+36416	Quantity
+36436	0
+36442	ProductFeatures
+36476	Feature
+36494	Customer
+36514	LicenseAttributes
+36574	Expiration
+36598	r
+36604	 - Invalid date: 
+36642	Signature
+36664	Licensing for this product has expired!
+36746	Your license is expired. Please contact your distributor/vendor to renew the license.
+36920	License signature validation error!
+36994	The license signature and data does not match. This usually happens when a license file is corrupted or has been altered.
+37240	Tags
+37252	AddNewTagText
+37282	IsEditing
+37304	PART_CreateTagButton
+37376	PART_InputBox
+37406	PART_TagButton
+37438	PART_DeleteTagButton
+37482	disk:
+37496	/
+37502	created
+37520	modified
+37540	size
+37552	public_url
+37576	preview
+37594	md5
+37604	Authorization
+37634	OAuth 
+37702	path=
+37716	GET
+37726	href
+37738	/disk/resources/move
+37782	overwrite=true&path=
+37826	&from=
+37842	POST
+37854	resources
+37876	/disk/resources
+37910	permanently=false&path=
+37960	DELETE
+37976	/disk/resources/copy
+38020	/disk/resources/publish
+38070	PUT
+38080	offset=0&limit1&preview_size=M&path=
+38156	dir
+38184	&limit=
+38248	_embedded
+38270	items
+38284	total
+38364	Yandex.AccessToken
+38404	Yandex.ExpireTime
+38442	Yandex
+38458	, Login with refresh token 
+38516	application/x-www-form-urlencoded
+38792	access_token
+38820	refresh_token
+38850	expires_in
+38874	Yandex.RefreshToken
+39154	&login_hint=
+39182	expires_in=
+39208	https://cloud-api.yandex.net/v1/disk/
+39286	total_space
+39336	user
+39348	login
+39362	https://cloud-api.yandex.net/v1
+39428	?
+39434	path2
+39448	path1
+39462	success
+39480	failure
+39498	28164a93946640aead8e31f7b36a4bd3
+39566	f9a64d06ca6a4b8eaf04252338919e70
+39634	http://127.0.0.1:3021
+39680	cloud_api:disk.app_folder cloud_api:disk.read cloud_api:disk.write cloud_api:disk.info yadisk:disk
+39880	.zip
+39892	.rar
+39904	.7z
+39914	.avi
+39926	.mp4
+39938	.mpg
+39950	.mpeg
+39964	.mkv
+39976	.uploadtmp
+40000	/disk/resources/upload
+40048	method
+40064	/disk/trash/resources/restore
+40126	{"status":"in-progress"}
+40192	restored at 
+40220	/disk/trash/resources
+40266	TRASH
+40280	favicon_48_yandex
+40318	favicon_yandex
+40380	yandex32
+40400	Adrive
+40510	.dattodrive.com
+40614	http
+40626	https://
+41032	.stackstorage.com
+41070	.stackstorage.com/remote.php/webdav
+41144	DAV:
+41156	d:href
+41172	.//d:displayname
+41208	.//d:getcontentlength
+41254	.//d:getlastmodified
+41298	.//d:creationdate
+41336	Destination
+41362	Accept
+41378	*/*
+41388	Overwrite
+41410	T
+41416	MOVE
+41428	400
+41438	Depth
+41452	<D:propertyupdate xmlns:D="DAV:">    <D:set>     <D:prop>      <DAV:lastmodified xmlns="http://webdav.org/cadaver/custom-properties/">
+41858	PROPPATCH
+41880	.//d:prop
+41902	 [
+41910	PROPFIND
+41930	//d:response
+41958	.//d:resourcetype
+41996	collection
+42122	remote.php/dav/files/
+42168	${1}
+42202	OCS-APIRequest
+42234	remote.php
+42258	/ocs/v2.php/apps/files_sharing/api/v1/shares
+42388	ocs/data/url
+42416	.jpg .jpeg .png .tiff .tif .gif .bmp .avi .mov .mp4 .3gp
+42602	&x=256&y=256&a=1&mode=cover&forceIcon=0
+42938	?x=256&y=256&&forceIcon=0&preview=1
+43012	InfiniCLOUD
+43038	X-TeraCLOUD-API-KEY
+43080	0A96AAFAC8D648501FF07DD8A10C559C
+43148	https://api.teracloud.jp/v2/api/ba/user
+43230	webdav_url
+43254	node
+43266	/v2/api/ba/dataset/(capacity)
+43328	dataset
+43346	__ROOT__
+43366	quota
+43380	used
+43392	 login
+43408	TeraCLOUD
+43430	.Login
+43446	.Password
+43468	.Server
+43502	SERVER
+43518	USER
+43530	PASSWORD
+43550	 (
+43558	)
+43564	Content-Type
+43592	text/xml
+43612	<?xml version="1.0" encoding="utf-8" ?>  <D:propfind xmlns:D="DAV:">    <D:prop>      <D:quota-available-bytes/>      <D:quota-used-bytes/>    </D:prop>  </D:propfind>      
+43962	.php
+44028	//d:quota-used-bytes
+44072	HEAD
+44084	X-OC-MTIME
+44148	labelUser
+44170	User:
+44184	labelPassword
+44214	Password:
+44236	textBoxUser
+44262	textBoxPassword
+44296	buttonCancel
+44324	Cancel
+44340	buttonOK
+44360	textBoxServer
+44390	labelServer
+44416	Server:
+44434	labelDomain
+44460	    
+44472	linkLabelPassword
+44510	$this.Icon
+44534	FormLoginWebDav
+44568	WebDav login
+44596	ns
+44604	http://nextcloud.org/ns
+44654	/trash/
+44672	.//ns:trashbin-filename
+44722	/restore/
+44744	Operation not allowed for a deleted file
+44836	http://owncloud.org/ns
+44884	/remote.php/
+44912	.//oc:trashbin-original-filename
+44980	.//oc:trashbin-original-location
+45048	409
+45058	trash
+45072	/remote.php/dav/files/
+45120	/remote.php/dav/trashbin/
+45174	/trash
+45190	<?xml version="1.0"?>  <d:propfind xmlns:d="DAV:" xmlns:ns="http://nextcloud.org/ns">      <d:prop>          <ns:trashbin-filename />          <ns:trashbin-original-location />          <ns:trashbin-deletion-time />          <d:getcontentlength />          <d:getlastmodified />          <d:resourcetype />      </d:prop>  </d:propfind>
+46018	<?xml version="1.0"?>  <d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">      <d:prop>          <oc:trashbin-original-filename />          <oc:trashbin-original-location />          <oc:trashbin-delete-datetime />          <d:getcontentlength />          <d:getlastmodified />          <d:resourcetype />      </d:prop>  </d:propfind>
+46714	favicon_32_adrive
+46798	favicon_32_magenta
+46838	favicon_32_mail
+46872	favicon_32_stack
+46908	favicon_48_adrive
+46992	favicon_48_magenta
+47140	favicon_adrive
+47172	favicon_dattodrive
+47246	favicon_mail
+47274	favicon_stack
+47304	favicondattodrive
+47342	faviconstack
+47396	webdav32x32
+47422	application/json
+47458	Unexpected json response
+47510	errmsg
+47526	fs_id
+47540	server_filename
+47574	local_ctime
+47600	local_mtime
+47626	thumbs
+47642	url1
+47654	url2
+47666	url3
+47678	icon
+47690	async=0&onnest=fail&opera=copy
+47754	filelist=
+47890	"}]
+47900	/api/filemanager?
+47938	onnest=fail&opera=delete
+47990	["
+47998	"]
+48006	/api/home/info
+48038	data
+48050	sign1
+48064	sign3
+48078	timestamp
+48210	/api/download
+48240	dlink
+48468	link
+48480	async=0&onnest=fail&opera=move
+48574	onnest=fail&opera=rename
+48666	root
+48678	&isdir=1&block_list=%5B%5D
+48734	/api/create?a=commit
+48778	errno
+48792	isdir
+48870	&order=time&desc=1&dir=
+48920	&num=20000&page=1&showempty=0&cancelToken%5Breason%5D%5Bmessage%5D=manual%20cancel
+49088	/api/list
+49110	list
+49122	www
+49150	https://www.terabox.com/main
+49210	function%20fn%28a%29%7Bwindow.jsToken%20%3D%20a%7D%3Bfn%28%22(\w+)%22%29
+49358	.terabox.com
+49386	app_id=250528&web=1&channel=dubox&clienttype=0&jsToken=
+49500	&
+49506	4000023
+49524	450016
+49540	. 
+49548	Error: 
+49566	Terabox.Data
+49594	/api/check/login
+49630	https://www.terabox.com/
+49752	url_domain_prefix
+49790	display_name
+49846	/api/quota
+49926	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.117 Safari/537.36
+50160	"5910a591dd8fc18c32a8f3df4fdc1761"
+50232	c-jp.terabox.com
+50276	-data.terabox.com/rest/2.0/pcs/file?method=locateupload
+50390	host
+50402	It is not possible to upload empty files to Terabox
+50508	["5910a591dd8fc18c32a8f3df4fdc1761","a5fc157d78e6ad1c7e114b056c92821e"]
+50654	["5910a591dd8fc18c32a8f3df4fdc1761"]
+50730	path={0}&target_path={1}&size={2}&isdir=0&autoinit=1&block_list={3}&file_limit_switch_v34=true&local_mtime={4}
+50954	/api/precreate
+50986	uploadid
+51006	block_list
+51030	method=upload&partseq={0}&path={1}&uploadid={2}&app_id=250528&web=1&channel=dubox&clienttype=0
+51222	/rest/2.0/pcs/superfile2?
+51276	---------------------------
+51334	  --
+51346	Content-Disposition: form-data; name="{0}"; filename="{1}"  Content-Type: {2}    
+51512	file
+51524	application/octet-stream
+51576	Accept-Language
+51610	es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3
+51684	Mozilla/5.0 (Windows NT 6.3; WOW64; rv:33.0) Gecko/20100101 Firefox/33.0
+51832	multipart/form-data; boundary=
+51896	--  
+51908	partseq
+51926	upload out of sync
+51966	chunk error
+51992	path={0}&size={1}&uploadid={2}&target_path={3}&block_list={4}&local_mtime={5}
+52150	/api/create?isdir=0&rtype=1
+52230	ROOT
+52242	..
+52312	: 
+52350	.Port
+52364	22
+52372	.KeyFile
+52392	.PrivateKeyPassword
+52434	.RootFolder
+52532	Cancelled
+52554	favicon_16_sftp
+52588	favicon_32_sftp
+52622	favicon_48_sftp
+52656	parent_id
+52678	created_time
+52706	modified_time
+52736	thumbnail_link
+52768	files:batchCopy
+52802	{"ids":["
+52872	"}}
+52882	task_id
+52900	operation timed out
+52942	files:batchTrash
+52978	"]}
+52988	files/
+53030	web_content_link
+53066	{"file_ids":["
+53266	share
+53280	POSTJSON
+53300	share_url
+53322	files:batchMove
+53356	PATCH
+53370	{"name":"
+53392	"}
+53400	{"modified_time":"
+53440	o
+53546	files
+53560	kind
+53596	thumbnail_size=SIZE_MEDIUM&limit=500&parent_id=
+53716	{"phase":{"eq":"PHASE_TYPE_COMPLETE"},"trashed":{"eq":false}}
+53842	&page_token=
+53870	next_page_token
+54086	/v1/shield/captcha/init
+54252	captcha_token
+54316	POST:
+54330	{"username":"
+54508	Pikpak.Login
+54536	Pikpak.Password
+54570	Pikpak.AccessToken
+54610	Pikpak.RefreshToken
+54652	Pikpak.DeviceID
+54686	Pikpak.ExpireTime
+54724	X
+54730	 Login
+54766	Bearer 
+54784	X-Device-Id
+54810	application/json; charset=utf-8
+54876	error
+54890	invalid_token
+54920	Invalid token
+54950	401
+54960	/v1/auth/token
+54992	client_id=
+55016	&grant_type=refresh_token&refresh_token=
+55100	about
+55114	limit
+55128	usage
+55202	with=reference_resource&type=&thumbnail_size=SIZE_SMALL&limit=10000&filters=%7B%22phase%22%3A%7B%22eq%22%3A%22PHASE_TYPE_COMPLETE%22%7D%2C%22id%22%3A%7B%22in%22%3A%22
+55560	tasks
+55574	phase
+55630	YNxT9w7GMdWvEOKa
+55666	_Temp_Pikpak
+56220	key
+56274	1.
+56830	1.47.1
+56946	files:batchUntrash
+56986	files:batchDelete
+57062	thumbnail_size=SIZE_MEDIUM&limit=500&parent_id=%2A&filters=
+57184	{"phase":{"eq":"PHASE_TYPE_COMPLETE"},"trashed":{"eq":true}}
+57308	fileid
+57324	parentfolderid
+57356	fileid=
+57374	&toname=
+57394	renamefile
+57418	metadata
+57438	deletefile
+57462	result": 0
+57486	&tofolderid=
+57534	.ase.art.bmp.blp.cd5.cit.cpt.cr2.cut.dds.dib.djvu.egt.exif.gif.gpl.grf.icns.ico.iff.jng.jpeg.jpg.jfif.jp2.jps.lbm.max.miff.mng.msp.nitf.ota.pbm.pc1.pc2.pc3.pcf.pcx.pdn.pgm.PI1.PI2.PI3.pict.pct.pnm.pns.ppm.psb.psd.pdd.psp.px.pxm.pxr.qfx.raw.rle.sct.sgi.rgb.int.bw.tga.tiff.tif.vtf.xbm.xcf.xpm.3dv.amf.ai.awg.cgm.cdr.cmx.dxf.e2d.egt.eps.fs.gbr.odg.svg.stl.vrml.x3d.sxd.v2d.vnd.wmf.emf.art.xar.png.webp.jxr.hdp.wdp.cur.ecw.iff.lbm.liff.nrrd.pam.pcx.pgf.sgi.rgb.rgba.bw.int.inta.sid.ras.sun.tga.
+58520	.avi.mkv.mp4.flv.mpeg.mpg.mov.3gp.mpeg1.mpeg2.mts.ogm.a52.aac.m1v.mpeg4.oma.vob.m4a.wmv.ac3.asf.mp2.mka.m4p.
+58836	hosts
+58850	getfilepublink
+58882	checksumfile
+58910	sha1
+58942	listfolder
+58966	folderid=
+59008	isfolder
+59028	True
+59172	renamefolder
+59200	&name=
+59216	createfolder
+59244	result
+59260	deletefolderrecursive
+59306	url
+59316	getfolderpublink
+59352	access_token=
+59396	api.pcloud.com
+59428	pCloud
+59444	Log in failed
+59474	PCLoud.Token
+59502	/userinfo?access_token=
+59552	https://my.pcloud.com/oauth2/authorize?client_id=
+59766	PCLoud.OauthToken
+59804	PCLoud.Host
+59980	&password=
+60004	auth
+60016	PCLoud.Login
+60044	PCLoud.Password
+60116	PCLoud.ExpireTimeInactive
+60170	usedquota
+60192	email
+60226	Air Explorer
+60254	4L9EBeVxpkX
+60280	http://127.0.0.1:35890/
+60330	k583K6ryvyYmVIxKtPRH90L7sAyy
+60484	&mtime=
+60520	trash_restore
+60550	origparentfolderid
+60590	trash_clear
+60616	folderid=0
+60640	trash_list
+60664	favicon_32_pcloud
+60740	favicon_pcloud
+60802	/download/file.json/
+60846	This file type can not be downloaded
+60922	FileId
+60938	FileHash
+60958	ParentID
+60978	DateModified
+61006	Size
+61018	ThumbLink
+61040	DownloadLink
+61068	Link
+61314	/file/move_copy.json
+61358	{"session_id": "OAUTH", "file_id": "
+61470	n/a
+61738	FolderID
+61918	/folder.json
+61946	{"session_id": "OAUTH", "folder_id": "
+62026	/folder/trash.json
+62108	/folder/move_copy.json
+62196	/folder/list.json/OAUTH/
+62248	last_request_time=
+62288	&offset=
+62308	DirUpdateTime
+62338	Folders
+62356	Files
+62458	/folder/rename.json
+62500	OpenDrive.AccessToken
+62546	OpenDrive.ExpireTime
+62612	https://dev.opendrive.com/api/v1
+62680	?access_token=
+62712	https://dev.opendrive.com/api/v1/oauth2/grant.json
+62816	grant_type=password&client_id=OpenDrive&username=
+62918	OpenDrive.Login
+62952	OpenDrive.Password
+62992	OpenDrive.RefreshToken
+63234	/users/info.json/OAUTH
+63282	MaxStorage
+63306	StorageUsed
+63332	UserID
+63578	TempLocation
+63606	RequireHashOnly
+63678	, "file_hash": "
+63714	/upload/open_file_upload.json
+63814	, "temp_location": "
+63858	/upload/close_file_upload.json
+63922	/upload/upload_file_chunk.json
+63986	session_id
+64024	file_id
+64042	temp_location
+64072	chunk_offset
+64100	chunk_size
+64124	Content-Disposition: form-data; name="{0}"    {1}
+64248	DateTrashed
+64274	/folder/restore.json
+64358	/folder/remove.json
+64438	/folder/trash.json/OAUTH
+64640	favicon__sky_drive_16x16
+64692	favicon_48_onedrive
+64734	favicononedrive
+64768	nextExpectedRanges
+64808	(^\d+)
+65078	/children('
+65104	')/createUploadSession
+65152	uploadUrl
+65174	expirationDateTime
+65214	:/
+65222	prooftoken
+65246	&prooftoken=
+65274	&access_token=
+65306	bearer 
+65324	X-PROOF_TOKEN
+65354	Content-Range
+65400	"code":\s*"([^"]+)
+65440	"message":\s*"([^"]+)
+65486	/versions/
+65510	/content
+65530	416
+65540	/drive/items/
+65570	shared
+65586	parentReference
+65620	driveId
+65638	/drives/
+65658	/items/
+65676	fileSystemInfo
+65708	createdDateTime
+65742	lastModifiedDateTime
+65786	webUrl
+65802	hashes
+65818	sha1Hash
+65838	quickXorHash
+65866	{"name": 
+65974	404
+65984	itemNotFound
+66012	The file 
+66034	 was not found, probably it was already deleted.
+66134	{"parentReference" : {"id": "
+66224	copy
+66236	Location
+66256	status":"completed
+66296	/thumbnails
+66322	thumbnails
+66346	medium
+66362	large
+66376	small
+66390	{"type": "view"}
+66426	createLink
+66450	/versions
+66472	VERSIONSHISTORY
+66506	/restoreVersion
+66540	remoteItem
+66564	OneDrive
+66584	folder
+66600	 Drive
+66616	/drive/
+66634	sharedWithMe
+66662	expand=children
+66696	/children
+66718	expand=thumbnails
+66820	children@odata.nextLink
+66870	@odata.nextLink
+66974	{"name": "
+66998	","folder": {}}
+67094	 already exists
+67128	 - but subfolder not found
+67184	 - refresh folder error: 
+67238	The folder 
+67264	SHARE
+67278	://
+67288	429
+67298	Retry-After
+67324	500
+67334	504
+67344	CompactToken validation failed
+67408	OneDriveV2.ExpireTime
+67454	message
+67472	code
+67484	https://login.live.com/oauth20_token.srf
+67600	OneDrive.AccessToken
+67644	OneDrive.ExpireTime
+67686	OneDrive.RefreshToken
+67732	https://login.microsoftonline.com/common/oauth2/v2.0/token
+67852	OneDriveV2.AccessToken
+67900	OneDriveV2.RefreshToken
+68020	https://api.onedrive.com/v1.0
+68082	https://graph.microsoft.com/v1.0/me
+68604	owner
+68618	displayName
+68644	/drive
+68660	remaining
+68682	/me
+68692	oneDrive.
+68836	%
+68842	%2525
+68856	#
+68862	%23
+68872	%25
+68882	/permissions
+68910	/permissions/
+68940	{"roles": ["
+69206	invite
+69222	files.readwrite.all%20offline_access%20user.read
+69322	wl.skydrive_update%20wl.contacts_skydrive%20wl.offline_access%20wl.signin
+69472	0000000048128BCE
+69576	http://www.airexplorer.net/thanks/
+69648	805f4e78-18a8-408d-b41a-8e1955d4fd4a
+69848	http://localhost:4699/
+69982	One of the provided arguments is not acceptable.
+70082	Path length exceeds OneDrive limit
+70256	write
+70270	WRITER
+70286	read
+70298	READER
+70314	OWNER
+70396	/sites/
+70414	/drives
+70432	It is not possible to create a folder here
+70520	It is not possible to upload files here
+70602	It is not possible to delete a folder here
+70690	It is not possible to move a folder or files here
+70792	It is not possible to rename this item
+70872	SharePoint
+70896	OneDriveForBusiness.Rate
+70948	OneDriveForBusiness.Sites
+71002	OneDriveForBusiness.ShowFolderShortcuts
+71084	False
+71098	OneDriveForBusiness.SaveSitesList
+71288	accountCache
+71316	.sitescache
+71756	/sites/root
+71782	/sites
+71798	search=*&top=200
+71834	/me/drive
+71856	/sites/root:/sites/
+71984	 could not be found. 
+72030	{    "requests": [      {        "entityTypes": [          "driveItem", "listItem", "list"        ],        "query": {          "queryString": "
+72376	/search/query
+72406	hitsContainers
+72438	hits
+72450	resource
+72470	.xls.xlsx.doc.docx.ppt.pptx.xlsm
+72538	replace
+72556	rename
+72742	/me/drive/items/
+72874	status
+72890	resourceId
+72914	/copy
+72928	status":"failed
+72962	/createLink
+72988	/me/insights/shared
+73030	top=1&$filter=resourceReference/type eq 'microsoft.graph.driveItem'
+73168	resourceReference
+73206	microsoft.graph.driveItem
+73260	lastShared
+73316	sharedBy
+73336	resourceVisualization
+73382	Folder
+73398	title
+73504	nextLink
+73606	top=20
+73622	/me/drive/root
+73654	/Forms/All.aspx
+73688	{      "requests": [          {              "fields": ["id", "name", "file", "folder", "parentReference", "createdDateTime", "lastModifiedDateTime", "size", "webUrl", "mimeType", "fileType","parentLink","description"],              "entityTypes": ["driveItem"],                "query": {                  "queryString": "parentLink:
+74358	 AND (mimeType='Document') AND (size=0)"              },              "from": 0,              "size": 500          }      ]  }
+74726	/me/drive/root/search(q='')
+74802	/me/drive/list/items
+74846	$expand=driveItem&$select=driveItem
+75010	503
+75192	Accounts
+75212	Please restart the application to apply the new settings
+76084	|
+76090	User-Agent
+76114	Prefer
+76130	Include-Feature=AddToOneDrive
+76192	respond-async
+76222	OneDriveForBusiness.ShowOthersDrives
+76298	OneDriveForBusiness.ShowOthersRoots
+76372	OneDriveForBusiness.ShowOthersDrivesNames
+76458	OneDriveForBusiness.DrivesEmails
+76526	RESTARTSETTINGS
+76560	OneDrive for Business
+76744	license.xml
+76770	 Pro is required to use OneDrive for Business accounts
+76882	/common/oauth2/token
+76950	OneDriveForBusiness.AccessToken
+77016	OneDriveForBusiness.ExpireTime
+77080	OneDriveForBusiness.RefreshToken
+77148	OneDriveForBusiness.serviceEndpointUri
+77228	OneDriveForBusiness.serviceResourceId
+77306	/common/oauth2/v2.0/token
+77360	OneDriveForBusinessV2.AccessToken
+77430	OneDriveForBusinessV2.ExpireTime
+77498	OneDriveForBusinessV2.RefreshToken
+77570	/v1.0
+77934	serviceEndpointUri
+77974	serviceResourceId
+78012	/users/
+78030	 can not access 
+78066	 drive
+78082	top=500&$filter=resourceReference/type eq 'microsoft.graph.driveItem'
+78638	/invite
+78946	activityLimitReached
+79036	favicon_48_sharepoint
+79082	favicon_sharepoint
+79160	https://files.cloud.naver.com/
+79316	resourceno
+79340	getlastmodified
+79374	creationdate
+79402	getcontentlength
+79438	thumbnailpath
+79468	Y
+79474	mediaType
+79496	type=f200_200
+79552	_thumbnail.png
+79584	NDriveSvcType=NHN%2FND-WEB+Ver
+79648	dummy=38404&overwrite=T&bShareFireCopy=true&orgresource=
+79764	&dstresource=
+79794	DoMove.ndrive
+79824	DoCopy.ndrive
+79854	_callback=window.__jindo_callback._8920&resourceno=
+79960	/api/files/createFileLink.nhn
+80022	Already Exist File Link
+80098	resultvalue
+80124	short_url
+80146	dummy=56184&orgresource=
+80198	GetProperty.ndrive
+80238	Naver
+80252	shorturl
+80272	resourcetype
+80468	GetList.ndrive
+80584	dummy=40841&dstresource=
+80636	MakeDirectory.ndrive
+80852	&path=
+80868	api/share/shareUrl.nhn
+80916	Naver.Aut
+80938	Naver.Ses
+80960	Naver.Login
+80986	https://nid.naver.com/nidlogin.login
+81062	login_chk
+81084	keep
+81096	NID_AUT
+81114	files.cloud.naver.com
+81160	NID_SES
+81398	Invalidation Cookie
+81440	useridx
+81458	GetDiskSpace.ndrive
+81500	dummy=40841
+81550	unusedspace
+81676	userid
+81692	charset
+81724	Origin
+81792	userid=
+81810	&useridx=
+81832	cloud.naver.com
+81866	thumb1.photo.cloud.naver.com
+82004	https://cloud.naver.com/
+82056	userid not exist
+82576	DoSearch.ndrive
+82610	overwrite=T&uploadsize=
+82660	&dstresource=/
+82692	CheckUpload.ndrive
+82778	X-Requested-With
+82814	XMLHttpRequest
+82846	NDriveSvcType
+82876	NHN/DRAGDROP Ver
+82912	OVERWRITE
+82934	application/octet-binary
+82986	MODIFYDATE
+83010	yyyy-MM-ddTHH:mm:sszzz
+83058	favicon_32_naver
+83094	favicon_48_naver
+83130	favicon_naver
+83160	faviconnaver
+83456	Overflow in ++.
+83490	Underflow in --.
+83526	Multiplication overflow.
+83578	Overflow in negation. 
+83626	Radix must be >= 2 and <= 36
+83686	ABCDEFGHIJKLMNOPQRSTUVWXYZ
+83742	X8
+83750	Positive exponents only.
+83802	Number of required bits > maxLength.
+83878	Jacobi defined only for odd integers.
+83956	No inverse!
+83982	Argument k must be odd.
+84054	 
+84060	a932b948feed4fb2b692609bd22164fc9edb59fae7880cc1eaff7b3c9626b7e5b241c27a974833b2622ebe09beb451917663d47232488f23a117fc97720f1e7
+84318	4adf2f7a89da93248509347d2ae506d683dd3a16357e859a980c4f77a4e2f7a01fae289f13a851df6e9db5adaa60bfd2b162bbbe31f7c8f828261a6839311929d2cef4f864dde65e556ce43c89bbbf9f1ac5511315847ce9cc8dc92470a747b8792d6a83b0092d2e5ebaf852c85cacf34278efa99160f2f8aa7ee7214de07b7
+85346	e = 
+85358	 d = 
+85372	 n = 
+85386	Round = 
+85406	 Error at round 
+85442	 <PASSED>.
+85480	Mozilla/5.0 (Windows; U; Windows NT 5.1; es-ES; rv:1.9.0.6) Gecko/2009011913 Firefox/3.0.6
+85754	[{"a":"g","g":"1","ssl":1,"n":"
+85820	[-
+85828	"g"\s*?:\s*?"(https?.*?)"
+85882	"c":\s*"([^"]+)"(}|,)
+85928	h
+85934	ts
+85942	k
+85948	u
+85954	"n":\s*"([^"]+)"(}|,)
+86000	No masterkey
+86028	fa
+86036	MEGA{"n": "
+86158	Mega.DeleteToThrash
+86200	[{"a":"d","n":"
+86404	}]
+86412	(?<id>\d+):(?<type>\d+)\*(?<handle>[a-zA-Z0-9-_]+)
+86516	handle
+86532	[{"a":"ufa","r":1,"fah":"
+86586	/0
+86594	[{"a":"ufa","s":
+86630	"p"\s*?:\s*?"(https?.*?)"
+86750	http://mega.nz/
+86784	[{"a":"l","n":"
+86864	+
+86870	_
+86962	Mega
+87082	[{"a":"f","c":1,"r":1}]
+87132	Mega.Timeout
+87334	[["
+87356	],[
+87366	0,
+87374	",
+87524	https://mega.nz/folder/
+87574	[{"a":"u","s":
+87606	Error starting chunks
+87760	Create node failed
+87864	X-Hashcash
+87888	https://g.api.mega.co.nz/cs?id=
+87954	&sid=
+88126	[{"a":"us0","user":"
+88232	,"mfa":"
+88312	Mega login error: 
+88352	privk
+88366	csid
+88378	Mega.Login
+88402	Mega.Password
+88432	Mega.Ses
+88452	Mega.Mkey
+88474	402
+88484	 Invalid user/password, or you might need to logout and login again using your web browser with the same account before using it again in this application.
+88856	ok
+88864	[{"a":"uq","strg":1,"xfer":1,"pro":1}]
+88944	mstrg
+88972	Unsupported X-Hashcash format.
+89036	Unsupported Mega X-Hashcash token length.
+89226	1:
+89286	 ms
+89296	Hashcash challenge cannot be empty
+89368	challenge
+89390	Unable to parse Mega Hashcash easiness.
+89472	==
+89510	Error uploading: 
+89548	Invalid value
+89610	MINUTES
+89628	checkBoxMoveThrash
+89772	Connection Time out
+89814	numericUpDownTimeout
+89858	labelMinutes
+89886	minutes
+89904	FormConfigMega
+89976	Stream must be fully read to obtain computed FileMac
+90208	Seek is not supported
+90274	favicon_48_mega
+90308	faviconmega
+90362	_32_mediafire
+90392	favicon_48_mediafire
+90436	favicon_mediafire
+90536	Description
+90562	filetype
+90582	owner_name
+90606	hash
+90618	mimetype
+90638	downloads
+90660	privacy
+90678	password_protected
+90718	filename
+90738	quickkey
+90758	parent_folderkey
+90794	Central Standard Time
+90896	&response_format=xml
+90940	&quick_key=
+90966	https://www.mediafire.com/api/1.1/file/update.php
+91068	<result>Success</result>
+91120	session_token=
+91278	&folder_key=
+91306	https://www.mediafire.com/api/1.1/file/move.php
+91404	https://www.mediafire.com/api/1.1/file/copy.php
+91502	<new_quickkey>(.*?)</new_quickkey>
+91574	&response_format=json
+91620	https://www.mediafire.com/api/1.1/file/get_info.php?
+91728	response
+91748	file_info
+91770	https://www.mediafire.com/
+91912	https://www.mediafire.com/api/1.1/file/get_links.php
+92190	<normal_download>(.*?)</normal_download>
+92274	folderkey
+92296	folder_key
+92320	https://www.mediafire.com/api/1.1/folder/get_info.php
+92430	folder_info
+92456	myfiles
+92524	https://www.mediafire.com/api/1.1/folder/get_content.php?
+92642	folder_content
+92772	https://www.mediafire.com/api/1.1/folder/update.php
+92948	https://www.mediafire.com/api/1.1/folder/move.php
+93194	https://www.mediafire.com/api/1.1/folder/create.php
+93300	Success
+93318	https://www.mediafire.com/api/1.1/folder/delete.php
+93424	https://www.mediafire.com/api/1.1/folder/copy.php
+93526	MediaFire
+93548	X2
+93834	session_token
+93864	MediaFire.Login
+93898	MediaFire.Password
+93938	https://www.mediafire.com/api/user/get_info.php?
+94038	user_info
+94090	used_storage_size
+94156	http://www.mediafire.com/api/1.1/folder/search.php?
+94262	results
+94280	42289
+94294	cyejie6uy1yhche5aycfc0v328yy8was0aa9sbo4
+94378	yyyy/MM/ddTHH:mm:ss
+94420	https://www.mediafire.com/api/1.1/upload/instant.php
+94660	https://www.mediafire.com/api/1.1/upload/poll_upload.php
+94790	doupload
+94810	fileerror
+94840	words
+94854	https://www.mediafire.com/api/1.5/upload/check.php
+95084	storage_limit_exceeded
+95132	yes
+95142	hash_exists
+95168	upload_url
+95192	Not enough space on Mediafire
+95254	in_account
+95278	in_folder
+95300	file_exists
+95358	no
+95366	resumable_upload
+95402	number_of_units
+95436	unit_size
+95458	bitmap
+95588	X-Filename
+95612	X-Filehash
+95636	X-Filesize
+95660	X-Unit-id
+95682	X-Unit-size
+95734	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36
+95968	Error
+95982	Can not start new upload chunk
+96046	simple
+96352	http://www.mediafire.com/api/1.5/file/create.php
+96554	fileinfo
+96716	GetSyntax
+96756	get
+96766	{0}{1}
+96782	./
+96790	home
+96802	mtime
+96816	home={0}&api={1}&email={2}&x-email={2}&conflict=rename&name={3}
+96946	{0}/api/v2/file/rename
+96994	https://cloud.mail.ru
+97040	"status":200
+97068	home={0}&api={1}&email={2}&x-email={2}
+97196	home={0}&api={1}&email={2}&x-email={2}&conflict=rename&folder={3}
+97330	{0}/api/v2/file/{1}
+97372	move
+97384	w6/
+97394	.jpg
+97406	Mozilla / 5.0(Windows; U; Windows NT 5.1; en - US; rv: 1.9.0.1) Gecko / 2008070208 Firefox / 3.0.1
+97606	Request error
+97636	{4}={0}&api={1}&email={2}&x-email={3}
+97714	publish
+97732	https://cloud.mail.ru/public/
+97794	https://cloud.mail.ru/home
+97850	Cloud.Mail.ru
+98090	home={0}&conflict=strict&api={1}
+98158	{0}/api/v2/{1}/add
+98198	@mail.ru
+98218	Mail.ru
+98236	Mail.ru.Login
+98266	Mail.ru.Password
+98302	Mail.ru.AccessToken
+98344	Mail.ru.ExpireTime
+98384	Mail.ru.RefreshToken
+98944	https://o2.mail.ru/token
+98996	client_id=cloud-win&grant_type=refresh_token&refresh_token=
+99220	error_description
+99392	bytes_total
+99442	403
+99452	{0}/home{1}
+99478	{0}/api/v2/dispatcher?{2}={1}
+99540	AuthToken
+99562	token
+99648	{0}?client_id={1}&token={2}
+99706	cloud-win
+99728	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.125 Safari/537.36 Edg/84.0.522.59
+99994	home={0}&conflict=rename&api={1}&email={2}&x-email={2}
+100106	&hash={0}&size={1}
+100194	favicon_48_cloudmailru
+100242	favicon_cloudmailru
+100284	faviconcloudmailru
+100324	SRP: invalid server-supplied B, must be 1..N-1
+100420	SRP: calculated u is zero
+100474	s2k
+100484	s2k_fo
+100556	x2
+100564	AC6BDB41324A9A9BF166DE5E1389582FAF72B6651987EE07FC3192943DB56050A37329CBB4A099ED8193E0757767A13DD52312AB4B03310DCD7F48A9DA04FD50E8083969EDB767B0CF6095179A163AB3661A05FBD5FAAAE82918A9962F0B93B855F97993EC975EEAA80D740ADBF4FF747359D041D5C33EA71D281E446B14773BCA97B43A23FB801676BD207A436C6481F1D2B9078717461A5B9D32E688F87748544523B524B0D57D5EA77A2775D2ECFA032CFBDBF52FB3786160279004E57AE6AF874E7303CE53299CCC041C7BC308D82A5698F3A8D0C38271AE35F8E9DBFBB694B5C803D89F7AE435DE236D525F54759B65E372FCD68EF20FA7111F9E4AFF73
+101734	pcsRequired
+101760	scnt
+101772	account_country
+101806	trust_token
+101832	client_id
+101854	auth_attributes
+101888	frame_id
+101908	account_email
+101938	hsa_version
+101964	hsa_challenge_required
+102012	webservices
+102038	cookies
+102056	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3.1 Safari/605.1.15
+102298	Referer
+102316	serviceErrors
+102346	iCloud: 
+102410	iCloud: HTTP error 
+102452	Set-Cookie
+102476	X-Apple-ID-Account-Country
+102532	X-Apple-ID-Session-Id
+102578	X-Apple-Session-Token
+102624	X-Apple-TwoSV-Trust-Token
+102678	X-Apple-Auth-Attributes
+102742	https://idmsa.apple.com
+102792	X-Apple-Widget-Key
+102832	X-Apple-OAuth-Client-Id
+102936	firstPartyAuth
+103024	https://www.icloud.com
+103140	X-Apple-OAuth-Response-Mode
+103224	X-Apple-OAuth-Response-Type
+103282	X-Apple-OAuth-State
+103324	X-Apple-Frame-Id
+103360	X-Apple-Mandate-Security-Upgrade
+103472	X-Apple-I-FD-Client-Info
+103524	{"U":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3.1 Safari/605.1.15","L":"en-US","Z":"GMT-05:00","V":"1.1","F":""}
+103872	https://www.icloud.com/
+103922	Cookie
+103938	b
+103944	salt
+103978	protocol
+104360	accountName
+104386	rememberMe
+104410	https://idmsa.apple.com/appleauth/auth/federate?isRememberMeEnabled=true
+104558	protocols
+104580	https://idmsa.apple.com/appleauth/auth/signin/init
+104692	m2
+104700	trustTokens
+104888	https://idmsa.apple.com/appleauth/auth/repair/complete
+105000	{}
+105008	iCloud sign in failed: incorrect Apple ID or password
+105118	https://idmsa.apple.com/appleauth/auth/verify/trusteddevice/securitycode
+105266	securityCode
+105294	https://idmsa.apple.com/appleauth/auth
+105374	authenticationType
+105464	noTrustedDevices
+105500	trustedPhoneNumbers
+105542	trustedPhoneNumber
+105582	obfuscatedNumber
+105618	pushMode
+105638	phoneNumber
+105664	mode
+105676	https://idmsa.apple.com/appleauth/auth/verify/phone
+105782	https://idmsa.apple.com/appleauth/auth/verify/phone/securitycode
+105914	https://idmsa.apple.com/appleauth/auth/2sv/trust
+106014	accountCountryCode
+106054	dsWebAuthToken
+106086	extended_login
+106118	trustToken
+106142	https://setup.icloud.com/setup/ws/1/accountLogin
+106334	hsaChallengeRequired
+106378	dsInfo
+106394	hsaVersion
+106464	drivews
+106482	X-APPLE-WEBAUTH-PCS-Documents
+106544	appName
+106562	iclouddrive
+106588	derivedFromUserAction
+106634	https://setup.icloud.com/setup/ws/1/requestPCS
+106774	ICloud.Login
+106802	ICloud.Password
+106836	ICloud.TrustToken
+106874	ICloud.Session
+107076	Apple ID:
+107686	Enter the verification code sent by SMS to 
+107918	This account has Advanced Data Protection enabled, connect it again to approve the access from your Apple device
+108786	Timed out waiting for the approval from the Apple device
+108988	docws
+109002	iCloud: docws service url not available
+109138	), reauthenticating
+109180	drivewsid
+109202	partialData
+109228	includeHierarchy
+109264	/retrieveItemDetailsInFolders
+109326	iCloud: unexpected response for 
+109394	ETAG_CONFLICT
+109424	etag
+109436	 failed with status 
+109480	/renameItems
+109508	/moveItems
+109570	destinationDrivewsId
+109614	folders
+109632	clientId
+109652	FOLDER::UNKNOWN_ZONE::TempId-
+109714	/createFolders
+109746	iCloud: createFolders failed with status 
+109832	iCloud: unexpected createFolders response
+109918	com.apple.CloudDocs
+109968	/ws/
+109980	/download/by_id?document_id=
+110094	iCloud: no download url in the response
+110176	FILE
+110188	content_type
+110216	/ws/com.apple.CloudDocs/upload/web
+110288	document_id
+110314	iCloud: unexpected upload/web response
+110394	receipt
+110412	referenceChecksum
+110450	reference_signature
+110492	fileChecksum
+110520	signature
+110542	wrappingKey
+110568	wrapping_key
+110596	allow_conflict
+110628	btime
+110642	command
+110660	add_file
+110680	create_short_guid
+110718	file_flags
+110772	is_hidden
+110794	is_writable
+110820	starting_document_id
+110864	/ws/com.apple.CloudDocs/update/documents
+110948	document
+110968	iCloud: unexpected update/documents response
+111060	Could not start the upload for the copy
+111142	Copy operation timed out
+111194	https://setup.icloud.com/setup/ws/1/storageUsageInfo
+111302	storageUsageInfo
+111338	totalStorageInBytes
+111380	usedStorageInBytes
+111490	docwsid
+111508	item_id
+111526	dateModified
+111646	FOLDER
+111662	APP_CONTAINER
+111692	APP_LIBRARY
+111718	extension
+111740	singleFile
+111764	bin
+111774	mime
+111786	parentId
+111834	workspaceId
+111860	/s3/multipart/create
+111904	uploadId
+111924	Drime: could not create the multipart upload
+112016	partNumbers
+112042	/s3/multipart/batch-sign-part-urls
+112114	urls
+112226	ETag
+112238	PartNumber
+112262	parts
+112324	clientMime
+112406	lastModified
+112460	fileEntry
+112482	Drime: error creating the file entry after the upload
+112612	checkBoxMoveTrash
+112650	Move the files to the trash when they are deleted
+112752	FormConfigDrime
+112786	Drime Configuration
+112828	file_size
+112850	updated_at
+112874	created_at
+113010	/folders
+113030	/drive/file-entries?perPage=1000&page=
+113110	&folderId=
+113134	last_page
+113220	Drime.AccessToken
+113272	Drime.Login
+113298	Drime.Password
+113330	Email:
+113800	https://app.drime.cloud/account-settings#developers
+113906	^\d+\|\S+$
+113930	Could not login. If your account has two-factor authentication, enter an API access token created at https://app.drime.cloud/account-settings#developers
+114238	Invalid access token
+114282	token_name
+114306	https://app.drime.cloud/api/v1/auth/login
+114392	no access token in login response
+114518	https://app.drime.cloud/api/v1/user/space-usage
+114616	available
+114638	https://app.drime.cloud/api/v1
+114702	AirExplorer/
+114764	X-HTTP-Method-Override
+114812	entryIds
+114832	deleteForever
+114862	/file-entries/delete
+114906	destinationId
+114936	/file-entries/move?workspaceId=0
+115004	/file-entries/duplicate?workspaceId=0
+115082	entries
+115100	already exists
+115132	initialName
+115158	/file-entries/
+115190	_tmprename
+115214	Could not create the temporal folder for the rename
+115320	allow_download
+115352	/shareable-link
+115386	https://app.drime.cloud/drive/shares/
+115464	Drime.DeleteToTrash
+115506	/user/space-usage
+115684	https://app.drime.cloud/api/v1/uploads
+115976	/api/v2/mounts/
+116112	" }
+116122	/files/copy?path=
+116160	/files/remove?path=
+116202	{"path": "
+116226	/links
+116242	shortUrl
+116346	/files/move?path=
+116384	/files/rename?path=
+116426	/files/folder?path=
+116468	/files/list?path=
+116570	Koofr.AccessToken
+116608	Koofr.ExpireTime
+116644	Koofr
+116658	Koofr.RefreshToken
+116698	/oauth2/token
+116804	/api/v2/user
+116832	/api/v2/mounts
+116864	mounts
+116904	spaceUsed
+116938	6YTTEQULLEWKITH4BHTX5XOF2T34ZDH6
+117138	http://127.0.0.1:
+117176	https://app.koofr.net
+117370	Can not create backup folder, use the backup client
+117476	The Device can not be deleted
+117538	The Device can not be moved
+117596	*/mountPoints/*
+117630	The Device can not be renamed
+117692	?mode=bin
+117748	cp=/
+117778	mode=enableShare
+117814	*/publicSharePath
+117852	?mode=thumb&ts=WL
+117890	mv=/
+117902	mkDir=true
+117926	dlDir=true
+117950	mvDir=/
+117986	mountPoint
+118010	*/folders/*
+118036	deleted
+118054	*/files/*
+118076	latestRevision/state
+118120	INCOMPLETE
+118144	CORRUPT
+118162	yyyy'-'MM'-'dd-'T'HH':'mm':'ssK
+118228	Jottacloud.AccessToken
+118276	Jottacloud.ExpireTime
+118558	Jottacloud.RefreshToken
+118608	Jottacloud.LoginToken
+118918	 personal login token
+118964	Jottacloud.TokenEndPoint
+119016	https://id.jottacloud.com/auth/realms/jottacloud/protocol/openid-connect/token
+119176	, Error logging in with refresh token: 
+119258	well_known_link
+119292	token_endpoint
+119448	username
+119468	auth_token
+119492	/Jotta/Sync
+119518	Sync
+119530	/Jotta/Archive
+119562	Archive
+119610	Shared
+119740	account/v1/customer
+119848	https://up.jottacloud.com/jfs
+120048	_Temp_Jottacloud
+120084	?umode=nomultipart
+120124	JSize
+120138	JCreated
+120158	JModified
+120180	JMd5
+120192	/drive/v1/files/
+120228	?form=content
+120258	fileName
+120278	createdTime
+120304	editedTime
+120360	sha256
+120376	{"parentFolder": ["
+120430	drive/v1/files/
+120464	/copy?fields=*
+120496	/drive/v1/thumbnails/
+120688	{"fileName": "
+120720	?fields=*
+120742	{"editedTime": "
+120936	drive/v1/files?fields=*
+120986	recycled
+121006	mimeType
+121098	queryParam='
+121182	&cursor=
+121202	drive/v1/files
+121234	nextCursor
+121430	Huawei.AccessToken
+121470	Huawei.ExpireTime
+121508	https://oauth-login.cloud.huawei.com/oauth2/v3/token
+121734	Huawei.RefreshToken
+122244	drive/v1/about
+122296	storageQuota
+122352	usedSpace
+122374	domain
+122390	104825557
+122412	8a501d7a80ca87eab0517af0ab0c26cc20fae0da709c1f2a39ef40ba9bc54533
+122590	openid+https://www.huawei.com/auth/drive
+122674	bytes */
+122694	"kind": "drive#file"
+122738	Range
+122752	Can not upload zero size files to Huawei Cloud
+122848	X-Upload-Content-Length
+122898	X-Upload-Content-Type
+122944	application/json; charset=UTF-8
+123098	?uploadType=resume
+123138	/upload/drive/v1/files?uploadType=resume&autoRename=false
+123256	bytes 0-
+123276	favicon_32_hidrive
+123316	favicon_48_hidrive
+123390	faviconhidrive
+123422	.part
+123436	https://api.hidrive.strato.com/2.1/file?dir_id=
+123534	https://api.hidrive.strato.com/2.1/file?pid=
+123626	https://api.hidrive.strato.com/2.1/file/?pid=
+123720	https://api.hidrive.strato.com/2.1/meta?fields=ctime,has_dirs,mtime,readable,size,type,writable,image.exif&pid=
+123946	ctime
+123960	pid=
+124014	https://api.hidrive.strato.com/2.1/file/rename
+124110	https://api.hidrive.strato.com/2.1/meta
+124364	https://api.hidrive.strato.com/2.1/file/move
+124456	https://api.hidrive.strato.com/2.1/file/copy
+124548	https://api.hidrive.strato.com/2.1/file/thumbnail?width=300&height=300&pid=
+124702	https://api.hidrive.strato.com/2.1/file/url?pid=
+124802	?pid=
+124816	&fields=rshare
+124848	rshare
+124878	share_type
+124902	sharelink
+124924	https://api.hidrive.strato.com/2.1/sharelink?id=
+125024	uri
+125066	https://api.hidrive.strato.com/2.1/sharelink
+125488	?path=/
+125506	https://api.hidrive.strato.com/2.1/dir
+125586	members
+125672	. Error: 
+125842	https://api.hidrive.strato.com/2.1/dir/move
+125932	&recursive=true
+125966	https://api.hidrive.strato.com/2.1/dir/copy
+126056	sharedir
+126076	ttl
+126086	https://api.hidrive.strato.com/2.1/share?id=
+126178	https://api.hidrive.strato.com/2.1/share
+126262	HiDrive.AccessToken
+126304	HiDrive.ExpireTime
+126344	HiDrive
+126362	https://www.hidrive.strato.com/oauth2/token
+126452	HiDrive.RefreshToken
+126646	https://api.hidrive.strato.com/2.1/user/me?fields=account,alias,home,home_id
+126802	alias
+126834	https://api.hidrive.strato.com/2.1/zone
+127098	"code": "([^"]+)
+127134	"msg": "([^"]+)
+127168	#code/
+127184	#code/(\w+)
+127290	webBrowser1
+127316	FormLoginHiDrive
+127352	HiDrive Login
+127456	checkBox1
+127478	Show others people drives shared with me
+127602	Allow downloading abusive, spam, or malware files
+127750	Google Drive configuration
+127806	_32_Google_Drive
+127842	favicon__google_drive_16x16
+127900	favicon_48_Google_Drive
+127950	favicongoogledrive
+127990	malware or spam
+128024	GoogleDrive.AllowAbuse
+128072	acknowledgeAbuse
+128108	acknowledgeAbuse=true
+128154	?supportsAllDrives=true
+128204	lastModifyingUserName
+128292	ownerNames
+128332	md5Checksum
+128358	MD5
+128368	imageMediaMetadata
+128408	videoMediaMetadata
+128448	durationMillis
+128480	HH:mm:ss
+128500	alternateLink
+128560	webContentLink
+128592	／
+128598	fileSize
+128618	downloadUrl
+128644	https://www.googleapis.comhttps:
+128712	https://www.googleapis.com
+128768	exportLinks
+128794	application/vnd.openxmlformats-officedocument.wordprocessingml.document
+128940	.docx
+128954	application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+129202	.odt
+129214	application/vnd.oasis.opendocument.text
+129296	application/vnd.openxmlformats-officedocument.presentationml.presentation
+129446	.pptx
+129460	application/vnd.oasis.opendocument.presentation
+129558	.odp
+129570	application/rtf
+129604	.rtf
+129616	application/pdf
+129650	.pdf
+129662	text/html
+129696	text/plain
+129720	parents
+129738	createdDate
+129764	modifiedDate
+129792	Modified by: 
+129822	Owner: 
+129840	{"title": "
+129866	{"modifiedDate": "
+129906	https://www.googleapis.com/drive/v2/files/
+129994	?setModifiedDate=true&supportsAllDrives=true&access_token=
+130114	GoogleDrive.DeleteToThrash
+130170	/trash?supportsAllDrives=true
+130324	?supportsAllDrives=true&setModifiedDate=true
+130492	/copy?supportsAllDrives=true
+130552	user-agent
+130576	airexplorer
+130602	/permissions?supportsAllDrives=true
+130676	anyone
+130692	role
+130704	reader
+130720	{"role": "reader", "type": "anyone", "withLink": true }
+130834	/revisions?maxResults=1000
+130890	?fields=title,id,parents,createdDate,modifiedDate,fileSize,shared,alternateLink,webContentLink&supportsAllDrives=true
+131128	application/vnd.google-apps.folder
+131200	application/vnd.google-apps.shortcut
+131276	&corpora=allDrives&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=nextLink,items(ownerNames,title,id,downloadUrl,thumbnailLink,md5Checksum,exportLinks,parents,mimeType,labels,createdDate,modifiedDate,fileSize,shared,alternateLink,webContentLink,shortcutDetails,lastModifyingUserName,teamDriveId)
+131898	files?q=sharedWithMe and trashed=false
+131978	&fields=nextLink,items(ownerNames,title,id,downloadUrl,thumbnailLink,md5Checksum,exportLinks,parents,mimeType,labels,createdDate,modifiedDate,fileSize,shared,alternateLink,webContentLink,shortcutDetails,lastModifyingUserName)
+132432	teamDriveId
+132564	-Friend-
+132584	&fields=nextLink,items(title,id,downloadUrl,thumbnailLink,md5Checksum,exportLinks,parents,mimeType,labels,createdDate,modifiedDate,fileSize,shared,alternateLink,webContentLink,shortcutDetails,lastModifyingUserName,ownerNames)
+133658	(
+133664	+or+
+133676	'+in+parents
+133704	&fields=nextLink,items(title,id,downloadUrl,thumbnailLink,md5Checksum,exportLinks,parents,mimeType,labels,createdDate,modifiedDate,fileSize,shared,alternateLink,webContentLink)
+134320	GoogleDrive
+134616	GoogleDrive.ShowOthersDrives
+134676	https://accounts.google.com/o/oauth2/token
+134764	&grant_type=refresh_token
+134818	GoogleDrive.AccessToken
+134868	GoogleDrive.ExpireTime
+135056	GoogleDrive.RefreshToken
+135306	files?maxResults=1000&corpora=allDrives&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=nextLink,items(ownerNames,teamDriveId, title)&q=sharedWithMe and trashed=false
+136188	 (gzip)
+136206	https://www.googleapis.com/drive/v
+136278	Rate Limit Exceeded
+136320	502
+136450	GDrive generic error
+136536	drives
+136552	&pageToken=
+136578	nextPageToken
+136608	Drive [
+136750	about?fields=name,quotaBytesTotal,quotaBytesUsedAggregate,rootFolderId,user
+136904	quotaBytesTotal
+136938	quotaBytesUsedAggregate
+136988	rootFolderId
+137016	emailAddress
+137044	+and+modifiedDate>='
+137088	+and+modifiedDate<'
+137130	+and+mimeType+contains+'audio'
+137194	+and+mimeType+contains+'image'
+137258	+and+mimeType+contains+'video'
+137398	+and+mimeType='application/vnd.google-apps.folder'
+137788	{"role": "
+138072	https://www.airexplorer.net/link/gdrivecustomid.php
+138178	Custom Google Drive Client Id
+138240	How to create a Google Drive client ID
+138320	GoogleDrive.CustomClientId
+138376	GoogleDrive.CustomClientSecret
+138440	shortcutDetails
+138474	targetId
+138494	targetMimeType
+138566	https://www.googleapis.com/upload/drive/v2/files/
+138668	?uploadType=resumable&supportsAllDrives=true&setModifiedDate=true&fileId=
+138858	https://www.googleapis.com/upload/drive/v2/files?uploadType=resumable&supportsAllDrives=true
+139046	"reason": "([^"]+)
+139086	"message": "([^"]+)
+139128	organizer
+139150	ORGANIZER
+139172	writer
+139188	commenter
+139210	COMMENTER
+139270	No accounts were added to the group
+139416	The Group does not contain any valid accounts
+139696	https://oauth2.googleapis.com/token
+139770	grant_type
+139794	urn:ietf:params:oauth:grant-type:jwt-bearer
+139992	private_key
+140018	JSONKEYNOTFOUND
+140052	ERRORREADINGKEY
+140086	GoogleDriveService.Privkey
+140142	GoogleDriveService.ClientEmail
+140206	GoogleDriveService.Impersonation
+140274	PLEASEENTERPARAMETERS
+140320	Operation cancelled
+140362	SERVICEMISSING
+140394	https://www.googleapis.com/auth/drive
+140472	Failed to obtain access token.
+140536	Error during authentication: 
+140598	files?q=trashed=true&maxResults=1000&supportsAllDrives=true&includeItemsFromAllDrives=true
+140808	/untrash?supportsAllDrives=true
+140874	application/octetstream
+141066	propertyValues
+141098	Ticks
+141112	Invalid property entry.
+141162	attributes
+141276	-[d'.']hh':'mm':'ss['.'fffffff]
+141342	arg
+141352	cgGfxj
+141368	(?:;(?<z>[ A-Za-z0-9,:\(\)]+))?\s*$
+141442	z
+141448	DAY
+141458	HOURS
+141472	HOUR
+141484	MINUTE
+141500	OPT
+141510	F
+141524	'P'[d'D']['T'[h'H'][m'M'][p3'S']];PT0S
+141604	Invalid format specified.
+141674	vd
+141682	vh
+141690	vm
+141698	vs
+141706	vk
+141714	vt
+141722	TimeSpanDayStrings
+141762	TimeSpanHourStrings
+141804	TimeSpanMinuteStrings
+141850	\b(?{1}:{0})\b
+141882	fs
+141890	ws
+141898	ds
+141928	\s*$
+141940	)?
+141948	(?<n>
+141962	(?<
+141972	>\d+)
+142038	\s+
+142048	\s*
+142058	w
+142064	m
+142070	^\s*(?<n>-)?
+142098	(?:(?>(?<LEVEL>)\[|\](?<OPT-LEVEL>)|(?! \[ | \] )'(?<q>[^']*)'|\\(?<e>.)|(?<w>%w|w+)|(?<r>%r|r+)|(?<d>%d|d+)|(?<h>%h|h+)|(?<m>%m|m+)|(?<s>%s|s+)|(?<k>%k|k+)|(?<t>%t|t+)|(?<D>%D|D\d*)|(?<H>%H|H\d*)|(?<M>%M|M\d*)|(?<S>%S|S\d*)|(?<K>%K|K\d*)|(?<p>p\d*)|(?<vd>@[dD])|(?<vh>@[hH])|(?<vm>@[mM])|(?<vs>@[sS])|(?<vk>@[kK])|(?<vt>@[tT])|(?<f>%f|f{2,7})|(?<F>%F|F{2,7})|(?<fs>,)|(?<ws>_)|(?<ts>:)|(?<ds>\.))+(?(LEVEL)(?!)))*
+142930	cgGfjx
+142946	Unable to confirm credentials. Error: 0x{0:X}
+143040	Unknown error in CredentialsDialog. Error: 0x{0:X}
+143144	dklen
+143158	SYST
+143618	No connection to the server has been established.
+143792	{0} 
+143804	There is stale data on the socket, maybe our connection timed out. Re-connecting.
+143970	The data was: 
+144002	QUIT
+144014	Not sending QUIT because the connection has already been closed.
+144146	200
+144156	Connection already closed.
+144212	PASS
+144256	This FtpClient object has been disposed. It is no longer accessible.
+144396	No host has been specified
+144452	The connection was terminated before a greeting could be read.
+144580	AUTH TLS
+144600	AUTH TLS command failed.
+144668	PROT P
+144684	FEAT
+144696	Text encoding: 
+144730	OPTS UTF8 ON
+144758	USER {0}
+144778	PASS {0}
+144810	MLSD
+144822	MDTM
+144834	REST STREAM
+144860	SIZE
+144872	UTF8
+144896	MFMT
+144908	MFCT
+144920	MFF
+144942	XCRC
+144954	XSHA1
+144968	XSHA256
+145004	HASH
+145016	^HASH\s+(?<types>.*)$
+145062	types
+145076	SHA-1
+145090	SHA-1*
+145106	SHA-256
+145124	SHA-512
+145142	SHA-256*
+145162	SHA-512*
+145182	CRC
+145192	MD5*
+145204	CRC*
+145216	FtpClient.Disconnect(): SocketException caught and discarded while closing control connection: {0}
+145416	FtpClient.Disconnect(): IOException caught and discarded while closing control connection: {0}
+145608	FtpClient.Disconnect(): FtpCommandException caught and discarded while closing control connection: {0}
+145816	FtpClient.Disconnect(): FtpException caught and discarded while closing control connection: {0}
+146010	The control connection stream is null! Generally this means there is no connection to the server. Cannot open a passive data stream.
+146278	EPSV
+146290	\(\|\|\|(?<port>\d+)\|\)
+146414	port
+146426	Only IPv4 is supported by the PASV command. Use EPSV instead.
+146552	PASV
+146564	(?<quad1>\d+),(?<quad2>\d+),(?<quad3>\d+),(?<quad4>\d+),(?<port1>\d+),(?<port2>\d+)
+146842	quad2
+146856	quad3
+146870	quad4
+146884	port1
+146898	port2
+146912	REST {0}
+146932	The control connection stream is null! Generally this means there is no connection to the server. Cannot open an active data stream.
+147200	The IP protocol being used is not supported.
+147332	Only IPv4 is supported by the PORT command. Use EPRT instead.
+147458	PORT {0},{1},{2}
+147638	Changed data connection type to EPRT because we are connected with IPv6.
+147786	Changed data connection type to EPSV because we are connected with IPv6.
+147934	The specified data channel type is not implemented.
+148112	RETR {0}
+148132	STOR {0}
+148152	APPE {0}
+148172	You can only derefernce a symbolic link. Please verify the item type is Link.
+148330	The link target was null. Please check this before trying to dereference the link.
+148498	The GetObjectInfo method only works on servers that support machine listings. Please check the Capabilities flags for FtpCapability.MLSD before calling this method.
+148830	MLST {0}
+148960	{0}/{1}
+148978	LS
+148986	NLST
+148998	LIST
+149010	R
+149016	 -
+149024	TYPE I
+149040	 
+149110	Trying to retrieve modification time of a directory, some servers don't like this...
+149282	NLST {0}
+149302	TYPE A
+149318	Unsupported data type: 
+149368	CWD {0}
+149386	PWD
+149396	"(?<pwd>.*)"
+149424	pwd
+149434	PWD = (?<pwd>.*)
+149470	Failed to parse working directory from: 
+149554	SIZE {0}
+149574	MDTM {0}
+149694	RMD {0}
+149834	CreateDirectory("{0}", {1}): Create non-existent parent: {2}
+149958	CreateDirectory("{0}", {1})
+150016	MKD {0}
+150034	RNFR {0}
+150054	RNTO {0}
+150096	The hash algorithm {0} was not advertised by the server.
+150212	OPTS HASH {0}
+150242	GetHash(path) argument can't be null
+150338	(?<algorithm>.+)\s(?<bytestart>\d+)-(?<byteend>\d+)\s(?<hash>.+)\s(?<filename>.+)
+150504	(?<algorithm>.+)\s(?<hash>.+)\s
+150570	algorithm
+150644	Failed to parse hash from: {0}
+150738	Disposing FtpClient object...
+150800	FtpClient.Dispose(): Caught and discarded an exception while disconnecting from host: {0}
+150982	FtpClient.Dispose(): Caught and discarded an exception while disposing FtpStream object: {0}
+151170	Invalid URI object
+151210	ftp
+151220	ftps
+151232	The specified URI scheme is not supported. Please use ftp:// or ftps://
+151378	The user info portion of the URI contains more than 1 colon. The username and password portion of the URI should be URL encoded.
+151638	The supplied URI does not contain a valid path.
+151736	The supplied URI points at a directory.
+151818	You cannot modify the position of a FtpDataStream. This property is updated as data is read or written to the stream.
+152136	[Finalizer] Caught and discarded an exception while disposing the FtpDataStream: {0}
+152392	[/]+
+152588	There is no built in support for computing CRC hashes.
+152700	{0}: {1}
+152730	Couldn't determine the full path of this object:{0}{1}
+152894	cdir
+152906	device
+152922	; (?<name>.*)$
+152954	modify=(?<modify>.+?);
+153002	modify
+153018	created?=(?<create>.+?);
+153126	unix.mode=(?<mode>\d+);
+153176	(?<permissions>.+)\s+(?<objectcount>\d+)\s+(?<user>.+)\s+(?<group>.+)\s+(?<size>\d+)\s+(?<modify>\w+\s+\d+\s+\d+:\d+|\w+\s+\d+\s+\d+)\s(?<name>.*)$
+153474	permissions
+153500	 -> 
+153512	-> 
+153522	GetFtpDate() failed on {0}
+153578	RegEx failed to parse modified date from {0}.
+153804	Ignoring modified date because MDTM feature is present. If you aren't already, pass FtpListOption.Modify or FtpListOption.SizeModify to GetListing() to retrieve the modification time.
+154174	[\w-]{1}(?<owner>[\w-]{3})(?<group>[\w-]{3})(?<others>[\w-]{3})
+154304	group
+154318	others
+154414	(?<modify>\d+-\d+-\d+\s+\d+:\d+\w+)\s+<DIR>\s+(?<name>.*)$
+154534	(?<modify>\d+-\d+-\d+\s+\d+:\d+\w+)\s+(?<size>\d+)\s+(?<name>.*)$
+154668	(?<name>.+)\.(?<extension>.+);(?<version>\d+)\s+(?<size>\d+)\s+(?<modify>\d+-\w+-\d+\s+\d+:\d+)
+154862	{0}.{1};{2}
+154888	version
+154906	DIR
+154916	^[0-9]{3}-
+154940	{0}; 
+154954	Testing connectivity using Socket.Poll()...
+155044	FtpSocketStream.IsConnected: Caught and discarded SocketException while testing for connectivity: {0}
+155250	FtpSocketStream.IsConnected: Caught and discarded IOException while testing for connectivity: {0}
+155540	The base stream of the FtpSocketStream object is null.
+155652	Timed out trying to read data from the socket stream!
+155762	{0}  
+155776	Disposing FtpSocketStream...
+155984	Caught and discarded an IOException while cleaning up the NetworkStream: {0}
+156140	Caught and discarded an IOException while cleaning up the SslStream: {0}
+156288	The underlying socket is null. Have you established a connection?
+156422	The ipVersions parameter must contain at least 1 flag.
+156534	Timed out trying to connect!
+156594	Failed to connect to host.
+156718	SSL Encryption has already been enabled on this stream.
+156832	Time to activate encryption: {0}h {1}m {2}s, Total Seconds: {3}.
+156964	The specified IAsyncResult was not found in the collection.
+157086	MD5 {0}
+157104	XCRC {0}
+157124	XMD5 {0}
+157144	XSHA1 {0}
+157192	XSHA512 {0}
+157218	The FtpControlConnection object is null!
+157330	yyyMMddHHmmss
+157360	Copy operation no supported
+157488	.ReadTimeout
+157516	21
+157524	.SSL
+157536	.Passive
+157556	.Encoding
+157578	ftp://
+157898	labelPort
+157920	Port
+157932	User
+157944	Password
+157964	checkBoxPassive
+157998	Passive mode
+158026	checkBoxSSL
+158052	Use SSL/TLS
+158078	numericUpDownPort
+158116	Character Encoding
+158156	radioButtonAutodetect
+158202	Autodetect
+158226	radioButtonForceUTF8
+158296	radioButtonLocalCharset
+158346	Local Charset
+158376	FormLoginFTP
+158404	FTP Credentials
+158470	favicon_48_ftp
+158530	_32_Dropbo
+158554	favicon_48_Dropbox
+158594	favicondropbox
+158626	favicondropbox1
+158690	]}
+158698	/files/upload_session/finish_batch
+158770	async_job_id
+158882	{"async_job_id": "
+158922	.tag
+158934	in_progress
+158960	{"path": 
+158982	rev:
+158994	https://content.dropboxapi.com/2/files/download
+159092	https://content.dropboxapi.com/2/files/export
+159186	Dropbox-API-Arg
+159220	Dropbox-API-Path-Root
+159266	{".tag": "namespace_id", "namespace_id": "
+159762	files/get_metadata
+159802	content_hash
+159830	path_display
+159858	client_modified
+159892	server_modified
+159926	is_downloadable
+159960	export_info
+159986	export_as
+160236	files/move
+160260	files/delete
+160288	path_lookup/not_found/
+160336	files/copy
+160360	https://content.dropboxapi.com/2/files/get_thumbnail
+160468	,"format": "jpeg","size": "w128h128"}
+160782	shared_link_already_exists
+160838	sharing/list_shared_links
+160892	links
+160968	files/list_revisions
+161034	files/restore
+161064	Dropbox
+161082	shared_folder_id
+161118	 ]
+161126	DropBox.ShowOtherDrives
+161378	{"cursor": "
+161406	files/list_folder/continue
+161462	,"recursive": false,"limit": 2000,"include_media_info": false,"include_deleted": false,"include_has_explicit_shared_members": false}
+161768	has_more
+161788	cursor
+161872	,"autorename": false}
+161918	files/create_folder
+161960	{"autorename": false,"force_async": false,"paths": [
+162122	files/create_folder_batch/check
+162208	Error creating folders
+162256	DropBox
+162274	DropBox.EnableBatchUploads
+162330	DropBox.ShowTeamDrives
+162378	DropBox.EnableBatchFolders
+162546	https://api.dropboxapi.com/oauth2/token
+162628	DropBox.AccessTokenEnc
+162676	DropBox.ExpireTime
+162716	DropBox.RefreshToken
+163202	root_namespace_id
+163240	home_path
+163262	home_namespace_id
+163300	{"features":[{".tag":"team_shared_dropbox"},{".tag":"distinct_member_home"}]}
+163512	values
+163528	team_shared_dropbox
+163570	enabled
+163588	team
+163600	https://api.dropbox.com/2/users/get_current_account
+163706	root_info
+163728	https://api.dropboxapi.com/2/users/get_space_usage
+163832	allocation
+163856	allocated
+163878	files/search/continue_v2
+163930	,"file_extensions": ["
+163978	", "
+164258	files/search_v2
+164292	matches
+164310	\"
+164318	\b
+164326	\f
+164334	\n
+164342	\r
+164350	\t
+164358	\u{0:X04}
+164380	https://api.dropbox.com/2/
+164546	The account doesn't have permission to access the resource
+164666	user_message
+164694	text
+164706	error_summary
+164736	sharing/list_file_members
+164790	sharing/list_folder_members
+164930	users
+164944	invitees
+164964	{"shared_folder_id": "
+165138	sharing/update_folder_member
+165404	","acl_update_policy": "editors","force_async": false,"member_policy": "anyone","shared_link_policy": "anyone"}
+165630	sharing/share_folder
+165814	sharing/add_folder_member
+166102	sharing/remove_folder_member
+166218	","leave_a_copy": false}
+166270	sharing/unshare_folder
+166318	gyvkvuj0s0vrgug
+166352	http://127.0.0.1:35831/
+166402	https://content.dropboxapi.com/2/files/upload_session/start
+166524	{"close": true}
+166558	Server Response error
+166890	yyyy'-'MM'-'ddTHH':'mm':'ss'Z'
+167012	"error_summary": "([^"]+)
+167066	{"close": false}
+167102	https://content.dropboxapi.com/2/files/upload_session/finish
+167226	https://content.dropboxapi.com/2/files/upload_session/append_v2
+167394	offset
+167504	too_many_write_operations
+167558	too_many_requests
+167640	editor
+167656	EDITOR
+167672	viewer
+167688	VIEWER
+167704	Could not remove collaborator, error: 
+167796	Operation not supported
+167876	mynamespace-
+168070	emailSubject
+168098	envelopeId
+168122	completedDateTime
+168160	statusChangedDateTime
+168206	sentDateTime
+168234	/restapi/v2.1/accounts/
+168284	documentsCombinedUri
+168328	/combined
+168370	Operation not allowed for DocuSign
+168528	/restapi/v2.1/accounts/{accountId}/folders/recyclebin
+168638	/restapi/v2.1/accounts/{accountId}/folders/
+168728	/restapi/v2.1/accounts/{accountId}/envelopes/
+168822	/documents?include_metadata=true
+168890	envelopeDocuments
+168928	Envelope documents
+168968	folderId
+168988	/restapi/v2.1/accounts/{accountId}/folders
+169076	?folder_ids=
+169196	envelopes
+169218	nextUri
+169256	account_id
+169280	account_name
+169308	inbox
+169322	Inbox
+169336	sentitems
+169358	Sent
+169448	VERSIONS
+169504	/oauth/token
+169564	DocuSign.AccessToken
+169608	DocuSign.ExpireTime
+169650	DocuSign.RefreshToken
+169774	{accountId}
+169800	/oauth/userinfo
+169834	accounts
+169854	DocuSign.ZipDownloads
+169900	d0b2ce49-878e-4d1e-9453-84bb4027a0ce
+170052	https://account-d.docusign.com
+170224	Download Envelopes as:
+170272	radioButtonZip
+170304	Zip files
+170326	radioButtonPDF
+170358	Single combined PDF document
+170458	DocuSign configuration
+170548	favicon_48_docusign
+170590	favicon_docusign
+170660	Can not upload large files to this folder: dir_seq not found for this folder
+170816	upload_
+170834	N
+170840	file_key
+170860	dir_seq
+170878	upload_size
+170904	part_size
+170926	v2/files/multipart/init
+170976	Upload failed: 
+171010	total_part_count
+171046	part_numbers
+171074	v2/files/multipart/presigned-url
+171142	part_number
+171182	v2/files/multipart/complete
+171240	Error finishing upload
+171288	file_seq
+171308	datetime
+171328	yyyy-MM-dd HH:mm:ss
+171370	This cloud does not allow internal copy operations
+171474	v1/files/delete/
+171510	all
+171520	v1/files/download/
+171586	download_url
+171614	v1/links/create
+171648	target_type
+171674	target_seq
+171698	view_option
+171724	download
+171744	thumbnail
+171766	v1/files/move/
+171810	v1/files/rename/
+171846	parent_node
+171952	v1/folders/move/
+171988	nodes
+172040	lists
+172054	v1/files/index/
+172226	v1/folders/rename/
+172266	v2/thumbnail/folders
+172310	node=
+172424	jauth/token?lang=eng
+172468	service
+172486	service_key
+172552	access_key
+172576	--------------DMBr
+172616	expire
+172632	v2/
+172642	multipart/form-data; boundary=--------------DMBr
+172780	1{9
+172790	Document Mgmt
+172820	1{A
+172830	Warm Storage
+172858	v1/folders/quota/1
+172898	  ----------------DMBr  
+173006	https://api.directcloud.jp/openapp/
+173080	v1/files/upload/
+173136	parent_folder_id
+173172	file_name
+173194	actual_created_time
+173236	file_creation_date
+173356	"], XX_TOKEN_XX, XX_TPIDENTIFIER_XX}
+173432	v1/modifyassets/dgb_copy_file_fn/
+173502	no status
+173524	no error message specified
+173838	v1/modifyassets/dgb_move_file_folder_fn/
+173922	{"file_id":
+173948	, XX_TOKEN_XX, XX_TPIDENTIFIER_XX}
+174020	v1/trash/dgb_delete_file/
+174074	{"file_id":"
+174102	", XX_TOKEN_XX, XX_TPIDENTIFIER_XX}
+174176	v1/fileinfo/dgb_file_details/
+174464	v1/modifyassets/dgb_copy_link_file_folder_fn/
+174558	https://app.digiboxx.com/share/
+174804	v1/modifyassets/dgb_rename_file/
+174872	folder_id
+174894	folder_name
+175308	v1/upload/dgb_create_foldertree_fn/
+175382	{"folder_id":
+175412	v1/trash/dgb_delete_folder/
+175470	{"folder_array":["
+175510	"], "file_array":[], "action":1, "resource":0, XX_TOKEN_XX, XX_TPIDENTIFIER_XX}
+175868	XX_TOKEN_XX
+175894	XX_TPIDENTIFIER_XX
+175934	v1/assets/asset_list/
+175980	fail
+175992	file_count
+176016	_data
+176076	v1/modifyassets/dgb_rename_folder/
+176148	DigiBoxx.AccessToken
+176192	DigiBoxx.ExpireTime
+176360	"userToken":"
+176456	Could not connect to Digiboxx
+176518	Digiboxx.Login
+176550	Digiboxx.Password
+176588	Digiboxx.Digispace
+176628	Digiboxx.AccessToken
+176672	Digiboxx.ExpireTime
+176714	,"digispace":"
+176746	v1/login/user_login/
+176860	status_code
+176886	no status code
+176918	OTP Send
+176960	ENTERTWOFACTOR
+177070	pass workspace
+177102	Please enter the Digispace name
+177344	overall_storage
+177378	consumed_data
+177408	{{"action":"get_url", "file_title":"{0}", "file_size":"{1}", "replace_file":{2}, "folder_session":"{3}", {4}, {5}}}
+177862	ID
+177870	LastModificationTime
+177942	URL
+178698	setMoveFile":true
+178736	{"operationName":"SetDeleteFile5","variables":{"IDs":[{"FileID":"
+178870	"}],"IsInRecycleBin":false,"Token":"%TOKEN%"},"query":"mutation SetDeleteFile5(\n    $Token: String!\n    $IsInRecycleBin: Boolean!\n    $IDs: [IDType]!\n  ) {\n    setDeleteFile5(Token: $Token, IsInRecycleBin: $IsInRecycleBin, IDs: $IDs)\n  }"}
+179364	setDeleteFile5":true
+179408	{"operationName":"GetOverlay4","variables":{"Token":"%TOKEN%","ID":{"FileID":"
+179568	"}},"query":"query GetOverlay4($Token: String!, $ID: IDType!) {\n    getOverlay4(Token: $Token, ID: $ID) {\n      ID\n      MetadataID\n      UserID\n      DeviceID\n      MetadataKey\n      Name\n      FilePath\n      LocalPath\n      LastUploadTime\n      LastModificationTime\n      ParentID\n      Category\n      Size\n      Platform\n      URL\n      ThumbnailURL\n      CreationTime\n      IsSelfLiked\n      Likes\n      Comments\n      IsHidden\n      IsInRecycleBin\n      Description\n      Location {\n        Country\n        Province\n        Place\n        GeoLocation {\n          Latitude\n          Longitude\n        }\n      }\n      Location2 {\n        Country\n        Region\n        SubRegion\n        Municipality\n        Neighborhood\n        GeoLocation {\n          Latitude\n          Longitude\n        }\n      }\n      Data\n      DataBlock\n      CompressionParameters\n      Shareinfo {\n        Status\n        ShareTime\n      }\n      ShareInfo {\n        Status\n        ShareTime\n      }\n      HasViewed\n      QualityScore\n    }\n  }"}
+181732	getOverlay4
+182834	setRenameFile":true
+183494	Category
+183514	{"operationName":"GetOverlay4","variables":{"Token":"%TOKEN%","ID":{"FileID":"-1"}},"query":"query GetOverlay4($Token: String!, $ID: IDType!) {\n    getOverlay4(Token: $Token, ID: $ID) {\n      ID\n      MetadataID\n      UserID\n      DeviceID\n      MetadataKey\n      Name\n      FilePath\n      LocalPath\n      LastUploadTime\n      LastModificationTime\n      ParentID\n      Category\n      Size\n      Platform\n      URL\n      ThumbnailURL\n      CreationTime\n      IsSelfLiked\n      Likes\n      Comments\n      IsHidden\n      IsInRecycleBin\n      Description\n      Location {\n        Country\n        Province\n        Place\n        GeoLocation {\n          Latitude\n          Longitude\n        }\n      }\n      Location2 {\n        Country\n        Region\n        SubRegion\n        Municipality\n        Neighborhood\n        GeoLocation {\n          Latitude\n          Longitude\n        }\n      }\n      Data\n      DataBlock\n      CompressionParameters\n      Shareinfo {\n        Status\n        ShareTime\n      }\n      ShareInfo {\n        Status\n        ShareTime\n      }\n      HasViewed\n      QualityScore\n    }\n  }"}
+188910	getFileChildren5
+188946	NextToken
+188968	,"NextToken":
+188998	Items
+189090	Degoo.RefreshToken
+189130	Degoo.Login
+189156	https://degoo.com/me/login
+189212	Too Many Requests
+189318	%TOKEN%
+189336	x-api-key
+189358	da2-vs6twz5vnjdavpqndtbzg3prra
+189422	https://production-appsync.degoo.com/graphql
+189514	errorType":"Unauthorized
+189566	Request not completed
+189612	https://rest-api.degoo.com/access-token/v2
+189700	{"refreshtoken":"
+189738	AccessToken
+189764	{"operationName":"GetUserInfo3","variables":{"Token":"%TOKEN%"},"query":"query GetUserInfo3($Token: String!) {\n    getUserInfo3(Token: $Token) {\n      ID\n      FirstName\n      LastName\n      Email\n      AvatarURL\n      CountryCode\n      LanguageCode\n      Phone\n      AccountType\n      UsedQuota\n      TotalQuota\n      OAuth2Provider\n      GPMigrationStatus\n      FeatureNoAds\n      FeatureTopSecret\n      FeatureDownsampling\n      FeatureAutomaticVideoUploads\n      FileSizeLimit\n    }\n  }"}
+190822	TotalQuota
+190846	UsedQuota
+190910	{"operationName":"GetFileChildren5","variables":{"Token":"%TOKEN%","ParentID":"-1","Limit":50,"Order":1},"query":"query GetFileChildren5(\n    $Token: String!\n    $ParentID: String\n    $AllParentIDs: [String]\n    $Limit: Int!\n    $Order: Int!\n    $NextToken: String\n  ) {\n    getFileChildren5(\n      Token: $Token\n      ParentID: $ParentID\n      AllParentIDs: $AllParentIDs\n      Limit: $Limit\n      Order: $Order\n      NextToken: $NextToken\n    ) {\n      Items {\n        ID\n        MetadataID\n        UserID\n        DeviceID\n        MetadataKey\n        Name\n        FilePath\n        LocalPath\n        LastUploadTime\n        LastModificationTime\n        ParentID\n        Category\n        Size\n        Platform\n        URL\n        ThumbnailURL\n        CreationTime\n        IsSelfLiked\n        Likes\n        IsHidden\n        IsInRecycleBin\n        Description\n        Location2 {\n          Country\n          Province\n          Place\n          GeoLocation {\n            Latitude\n            Longitude\n          }\n        }\n        Data\n        DataBlock\n        CompressionParameters\n        Shareinfo {\n          Status\n          ShareTime\n        }\n        ShareInfo {\n          Status\n          ShareTime\n        }\n        Distance\n        OptimizedURL\n        Country\n        Province\n        Place\n        GeoLocation {\n          Latitude\n          Longitude\n        }\n        Location\n        IsShared\n        ShareTime\n      }\n      NextToken\n    }\n  }"}
+193976	{"operationName":"SetShareFile","variables":{"Token":"%TOKEN%","FileIDs":["
+194130	"],"SetActive":true,"ReadOnly":true,"Usernames":[]},"query":"mutation SetShareFile(\n    $Token: String!\n    $FileIDs: [String]!\n    $SetActive: Boolean!\n    $ReadOnly: Boolean\n    $Usernames: [String]\n  ) {\n    setShareFile(\n      Token: $Token\n      FileIDs: $FileIDs\n      SetActive: $SetActive\n      ReadOnly: $ReadOnly\n      Usernames: $Usernames\n    )\n  }"}
+194886	setShareFile
+194914	Degoo does not support zero size files
+196592	"Already exist!"
+196628	getBucketWriteAuth4
+196690	Not authorized
+196722	BaseURL
+196762	PolicyBase64
+196854	acl
+196864	policy
+196880	Cache-control
+196910	ngsw-bypass
+197732	Box
+197786	Box.EnableChunkedUploads
+197870	Box.ParallelChunks
+197938	Box.ChunkRetries
+198010	Box.RefreshIfChanged
+198096	Box.ShowColoredFolders
+198238	Digest
+198254	sha=
+198316	https://api.box.com/2.0/files/
+198380	?version=
+198402	shared_link
+198428	parent
+198444	content_created_at
+198484	content_modified_at
+198526	lock
+198538	tags
+198550	is_download_prevented
+198596	expires_at
+198620	created_by
+198644	LOCKEDBY
+198664	DOWNLOADLOCKED
+198696	LOCKEDUNTIL
+198722	LOCKEDINDEFINITELY
+198840	'file' with value '
+198882	' not found
+198908	{"parent": { "id": 
+198950	} }
+198960	{"parent": {"id" : 
+199002	fields=id,name,content_created_at,parent,content_modified_at,size,shared_link,sha1,lock,has_collaborations,is_externally_owned,tags
+199268	","
+199278	{"tags":[
+199390	https://app.box.com/file/
+199444	/content?access_token=
+199492	open
+199504	company
+199522	collaborators
+199552	{"shared_link": {"access": "
+199612	, "password": "
+199646	, "password": null
+199752	 }
+199760	, "unshared_at": "
+199800	, "unshared_at": null
+199846	access
+199862	{"shared_link": {"access": "open"}}
+199936	,"expires_at": "
+200074	{"lock":null}
+200104	METADATA
+200124	TAGS
+200136	{"type": "file_version", "id" : "
+200206	/versions/current
+200394	has_collaborations
+200434	is_externally_owned
+200476	https://api.box.com/2.0/folders/
+200544	?fields=id,name,content_created_at,parent,content_modified_at,size,shared_link,sha1,lock,has_collaborations,is_externally_owned,tags
+200904	fields=id,name,content_created_at,parent,content_modified_at,size,shared_link,sha1
+201072	/items?
+201286	&usemarker=true
+201320	&marker=
+201340	next_marker
+201366	Cannot move a collaborated subfolder to a private folder
+201576	https://api.box.com/2.0/folders
+201676	'item' with value 'd_
+201722	https://app.box.com/folder/
+201780	COLLABORATORS
+201810	https://api.box.com/2.0/folder_locks?folder_id=
+202060	"},"locked_operations":{"move":true,"delete":true}}
+202166	https://api.box.com/2.0/folder_locks
+202242	Error locking folder: 
+202290	https://api.box.com/2.0/folder_locks/
+202368	Error unlocking folder: 
+202446	LOCK
+202604	FOLDERISUNLOCKED
+202678	tag16x16.png
+202722	enum
+202734	options
+202842	properties
+203024	{"op": "remove", "path":
+203076	[]
+203218	https://api.box.com/2.0/files/content
+203324	OPTIONS
+203342	https://upload.box.com/api/2.0/files/upload_sessions
+203450	https://upload.box.com/api/2.0/files/
+203528	/upload_sessions
+203564	{"file_name": 
+203596	"folder_id": "
+203628	", 
+203638	 "file_size": 
+203670	num_parts_processed
+203712	session_endpoints
+203750	upload_part
+203776	https://upload.box.com/api/2.0/files/upload_sessions/
+203886	?limit=
+203904	/parts
+203920	/commit
+203938	Can not complete file - timeout
+204004	Box.AccessToken
+204038	Box.ExpireTime
+204394	405
+204404	412
+204414	415
+204438	, retrying ...
+204538	Box generic error
+204576	context_info
+204604	errors
+204620	https://api.box.com/oauth2/token
+204688	Box.TokenTime
+204718	Box.RefreshToken
+205442	space_amount
+205470	space_used
+205618	&size_range=
+205674	&file_extensions=
+205830	https://api.box.com/2.0/metadata_templates/enterprise?limit=1000
+206230	https://api.box.com/2.0/groups?limit=1000&filter_term=
+206406	/memberships
+206492	?notify=false
+206854	https://api.box.com/2.0/collaborations
+206992	https://api.box.com/2.0/collaborations/
+207208	11l7k71yyv8nnuclslvkuug18h32n92w
+207276	hSKJpR4cH7sMproMmb2i86ZbSw1A3cH3
+207344	https://www.airexplorer.net/thanks/
+207568	found
+207582	 not found
+207932	https://upload.box.com/api/2.0/files/content
+208024	{"name":
+208044	, "parent":{"id":"
+208084	, "content_created_at": "
+208138	, "content_modified_at": "
+208252	co-owner
+208272	COOWNER
+208290	viewer uploader
+208356	previewer uploader
+208396	PREVIEWERUPLOADER
+208434	previewer
+208456	PREVIEWER
+208478	uploader
+208498	UPLOADER
+208536	accepted
+208556	PENDING
+208574	ACCEPTED
+208646	SHAREDLINKOPTIONS
+208710	OPENED
+208726	COMPANY
+208744	ALLOWDOWNLOAD
+208774	LINKWILLEXPIRE
+208806	PASSWORDPROTECTED
+208844	PASSWORDREQUIRED
+208880	effective_access
+208916	is_password_enabled
+208958	unshared_at
+208984	can_download
+209012	labelAccessLevel
+209048	Access level:
+209078	comboBoxAccessLevel
+209120	checkBoxPassword
+209156	Password protected
+209196	checkBoxExpire
+209228	Link will expire on
+209270	dateTimePickerExpire
+209314	checkBoxAllowDownload
+209360	Allow the users with the link to download this element
+209472	FormShareLink
+209502	Shared link options
+209580	origin
+209596	fields=id,name,content_created_at,parent,content_modified_at,size
+209730	&usemarker=true&limit=
+209890	{"parent": { "id": 0} }
+210044	"file_size": 
+210074	{"parts": [
+210174	,"sha1":"
+210196	], "attributes": {"content_modified_at":"
+210282	"} }
+210312	part
+210324	favicon_32_baidu
+210360	favicon_48_baidu
+210426	faviconbaidu
+210454	https://pcs.baidu.com/rest/2.0/pcs/file?method=download&path=
+210630	https://pcs.baidu.com/rest/2.0/pcs/file?
+210714	method=delete&path=
+210848	https://pcs.baidu.com/rest/2.0/pcs/thumbnail?method=generate&quality=100&width=200&height=200&path=
+211050	http://pan.baidu.com/disk/home#path=
+211126	/apps/AirExplorer
+211164	https://pcs.baidu.com/rest/2.0/pcs/file?method=meta&access_token=
+211298	method=list&access_token=
+211416	method=mkdir&path=
+211456	Baidu.AccessTokenEnc
+211500	Baidu.ExpireTime
+211790	Baidu.RefreshTokenEnc
+211836	, Login with refresh token failed: 
+212192	https://openapi.baidu.com/rest/2.0/passport/users/getLoggedInUser?access_token=
+212354	uname
+212680	U5b90ZyIeLTA7v1Od3YKMn3t
+212732	mtQARHxdjHli2Bmk
+212768	AjznD76slxTb0vnG
+212888	https://c.pcs.baidu.com/rest/2.0/pcs/file?
+212976	application/x-msdownload
+213178	{0}:\{1}
+213434	Destination for CopyTo operation does not exist.
+213534	newLoc
+213550	{0}\{1}
+213568	Source for CopyFrom operation does not exist.
+213662	Destination for MoveTo operation does not exist.
+213762	Source for MoveFrom operation does not exist.
+214226	Destination file can not be the same as the source file when doing a replace.
+214384	destFile
+214860	The stream does not support seeking
+214934	Can not seek to specified location
+215006	Stream does not support reading
+215072	Stream does not support writing
+215204	Attempting to seek to a restricted section
+217272	.EndPoint
+217294	.Bucket
+217392	Access Key ID
+217422	Secret Access Key
+218526	.StorageClass
+218556	STANDARD
+219208	.PathAddress
+219236	.SignatureVersion
+219274	V4
+219282	.Region
+219300	V2
+219308	ERRORADDINGACCOUNT
+219662	s3.synologyc2.net
+219700	.c2.synology.com
+219736	object.
+219754	.object.
+220740	referer
+220758	https://www.aliyundrive.com/
+220818	parent_file_id
+220850	content_hash_name
+221050	/v2/file/copy
+221140	/v2/recyclebin/trash
+221272	yyyy-MM-dd'T'HH:mm:ss.fffzzz
+221486	/adrive/v2/share_link/create
+221546	/v2/file/move
+221638	/v3/file/update
+222344	%MARKER%
+222364	/adrive/v3/file/list
+222408	, "marker":"
+222606	/adrive/v2/file/createWithFolders
+222760	Aliyundrive.AccessToken
+222810	Aliyundrive.ExpireTime
+222922	https://auth.aliyundrive.com/v2/account/token
+223016	{"refresh_token":"
+223056	", "grant_type":"refresh_token"}
+223124	default_drive_id
+223160	user_name
+223182	user_id
+223200	Aliyundrive.DriveId
+223242	Aliyundrive.UserID
+223282	Aliyundrive.RefreshToken
+224180	Aliyundrive.DeviceId
+224518	https://www.aliyundrive.com/sign/in
+224756	https://aliyundrive.com
+224806	https://aliyundrive.com/
+224858	x-device-id
+224910	x-canary
+224930	client=web,app=adrive,version=v3.17.0
+225008	/v2/drive/get
+225038	total_size
+225062	used_size
+225118	{{"drive_id":"{0}","part_info_list":[{1}],"parent_file_id":"{2}","name":"{3}","type":"file","check_name_mode":"overwrite","size":{4},"create_scene":"","device_name":"","content_hash":"","content_hash_name":"none","proof_version":"v1"}}
+225614	part_info_list
+225718	favicon_32_4shared
+225758	favicon_48_4shared
+225830	favicon4shared16
+225866	https://upload.4shared.com/v1_2/upload
+225946	folderId=
+226050	308
+226060	https://api.4shared.com/v1_2/files/
+226134	/download
+226156	?addFields=exif%2Cid3
+226216	/move
+226230	/thumbnails/s
+226260	downloadPage
+226288	ddd MMM dd HH:mm:ss UTC yyyy
+226348	https://api.4shared.com/v1_2/folders/
+226510	parentId=
+226532	https://api.4shared.com/v1_2/folders
+226608	folderLink
+226632	4Shared
+226650	4Shared.AccessTokenEnc
+226698	4Shared.AccessTokenSecretEnc
+226758	4Shared.LastLoginWeb
+226802	4Shared.ExpireTime
+226842	https://api.4shared.com/v1_2/oauth/initiate
+226932	oauth_token=([^&]+)
+226974	oauth_token_secret=([^&]+)
+227148	oauth_token
+227174	oauth_token_secret
+227214	https://api.4shared.com/v1_2/user
+227296	FREE
+227308	freeSpace
+227330	firstName
+227352	lastName
+227372	https://api.4shared.com/v1_2/user/files?limit=100&query=
+227488	f09499bf17f08c5cf673026e5c5469aa
+227640	https://upload.4shared.com/v1_2/files?folderId=
+227738	&fileName=
+227866	oauth_callback
+227898	oauth_consumer_key
+227938	oauth_nonce
+227964	oauth_signature
+227998	oauth_signature_method
+228046	HMAC-SHA1
+228068	oauth_timestamp
+228102	oauth_verifier
+228134	oauth_version
+228164	1.0
+228174	https://api.4shared.com/v1_2/oauth/token
+228258	{0}="{1}", 
+228284	{0}://{1}
+228306	https
+228320	path0
+228334	{0}={1}&
+228354	{0}&{1}
+228378	oauth_
+228394	fn
+228402	fid
+228412	pid
+228422	upt
+228432	uet
+228442	thumb
+228456	pc
+228464	/open/ufile/copy
+228500	file_id=
+228534	/open/ufile/delete
+228574	file_ids=
+228596	&parent_id=
+228622	/open/ufile/downurl
+228664	pick_code=
+228688	/open/ufile/move
+228724	&to_cid=
+228744	/open/ufile/update
+228784	&file_name=
+228810	/open/folder/add
+228846	?cid={0}&limit=50&offset={1}&show_dir=1&cur=1
+228940	/open/ufile/files
+229440	state
+229454	Unknown error
+229554	115.RefreshToken
+229740	115.ExpireTime
+229772	application/json, text/javascript, */*; q=0.01
+229868	&code_challenge_method=sha256&code_challenge=
+229962	qrcode
+229978	time
+229990	uid
+230000	sign
+230012	https://www.airexplorer.net/link/115login.html?url=
+230118	115.AccessToken
+230152	Error getting the access token. 
+230220	115.TokenTime
+230414	Refresh Token is not defined, requesting user and password
+230534	/open/user/info
+230568	rt_space_info
+230598	all_total
+230700	ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
+231110	pick_code
+231198	7
+231650	_Temp_115
+231782	/open/rb/list
+231812	/open/rb/del
+231840	dtime
+231854	/open/rb/revert
+231888	tid=
+232068	.LoginType
+232092	.SAS
+232104	.ConnectionString
+232196	DoubleBuffered
+232228	Global\{{{0}}}
+232614	Microsoft Account
+232652	email.accesstoken
+232690	email.refreshtoken
+232730	email.oauthexpire
+232768	OAuth flow did not return tokens.
+232838	client_id=8c83506a-e72d-4ca4-bfde-bb7de1e08463&redirect_uri=
+233320	AesManaged
+233344	buffer
+233360	CircularBufferStream
+233404	CPU >> 
+233444	 BASE >> 
+233466	UUID >> 
+233486	Win32_Processor
+233566	Manufacturer
+233594	MaxClockSpeed
+233648	SMBIOSBIOSVersion
+233686	IdentificationCode
+233726	SerialNumber
+233780	Win32_DiskDrive
+233814	Model
+233828	TotalHeads
+233852	Win32_BaseBoard
+233886	Win32_ComputerSystemProduct
+233944	UUID
+233956	Win32_VideoController
+234002	DriverVersion
+234032	Win32_NetworkAdapterConfiguration
+234102	MACAddress
+234126	IPEnabled
+234212	CloudAccounts
+234332	categories
+234614	AccountsDBxml
+234644	. Retrying...
+234674	account
+234754	category
+234774	property/@Provider
+234846	property/@Account
+234884	property/@DisplayName
+234930	Bookmark
+234950	property
+234970	Provider
+234990	Account
+235060	bookmarks
+235082	.backup
+235100	.cloudencoded
+235130	.cloudencoded2
+235192	INVALIDPASSWORD
+235226	-vrfy-
+235328	Invalid response
+235424	http://dmb.junglejapan.com/
+235482	elementHost1
+235510	FormAccountsManager
+235552	FormInfo
+235642	Progress
+235778	rename16x16.png
+235994	ScheduledTasksList
+236034	PROGRESS
+236054	REFRESH
+236072	NEWTASK
+236090	RUNNOW
+236106	STOP
+236118	ProgressInfo
+236146	.json
+236240	ERRORSCHEDULED
+236272	toolStrip1
+236296	toolStripButtonAdd
+236336	Add Task
+236356	toolStripButtonRefresh
+236404	Refresh
+236422	contextMenuStripTasks
+236518	Run now
+236536	editToolStripMenuItem
+236582	deleteToolStripMenuItem.Image
+236644	deleteToolStripMenuItem
+236694	Delete
+236710	listViewTasks
+236740	Next run
+236780	stopToolStripMenuItem
+236826	Stop
+236838	FormSchedule
+236866	FormSyncsManager
+236902	0123456789abcdef
+236958	Starting real time sync
+237134	Destination folder not found 
+237248	Starting initial sync task, comparing folders
+237342	Initial sync task: 
+237384	SYNCTASKS
+237406	SYNCENEDOK
+237430	SYNCENEDERROR
+237494	Upload error 
+237524	Uploaded 
+237640	Deleted 
+237660	Renamed 
+237680	 => 
+237692	Moved 
+237708	Move operation error 
+237754	~$
+237762	.~
+237770	~
+237776	.tmp
+237788	~RF
+237798	desktop.ini
+237824	thumbs.db
+237846	.ds_store
+238020	Parent folder not found
+238118	Folder already exists
+238164	Destination folder not found
+238224	ERRORCONNECTING
+238258	explorer
+238278	ItemsView
+238348	1.1
+238358	bytes=(\d+)
+238422	Accept-Ranges
+238452	bytes
+238466	Host
+238478	Content-Length
+238510	Transfer-Encoding
+238548	Keep-Alive
+238572	Copied {0} bytes
+238608	Connection
+238632	Date
+238734	AddWithoutValidate
+238774	keep-alive
+238798	ACCOUNTSEXPORTED
+238860	IMPORTINVALIDPASSWORD
+238966	skills
+238982	air-explorer-cli.zip
+239026	.claude
+239044	air-explorer-cli
+239080	.codex
+239096	.agents
+239148	SKILL.md
+239168	Skill package not found: 
+239222	.md
+239232	{{APP_DIR}}
+239594	ColumnWidth-
+239622	ColumnPosition-
+239656	FileGroupDescriptorW
+239700	FileContents
+239728	Performed DropEffect
+239772	cloudfiles
+239796	Preferred DropEffect
+239882	PASSWORDLOST
+239910	TYPEPASSAGAIN
+239976	ENCRYPTFOLDERNAMES
+240016	SAVEPASSWORD
+240044	PASSVERIFICATIONFAIL
+240088	textBoxPass
+240114	labelInfo
+240136	Encrypt all uploads to your account in this session with the following password:
+240300	labelInfo2
+240324	If you lost this password you won't be able to unencrypt the files
+240460	labelTypeAgain
+240492	Please type the password again:
+240558	textBoxPass2
+240586	checkBoxEncryptFileNames
+240638	Encrypt file names
+240678	checkBoxEncryptFolder
+240724	Encrypt folder names
+240768	checkBoxSavePassword
+240878	FormActivateCipher
+240918	Encrypt uploads
+240952	ENTERPASSWORD
+240982	PLEASEPASSWORD
+241014	labelInfo1
+241038	Please write the password to unencrypt the file:
+241138	FormGetPassword
+241172	Enter password
+242422	INSTALLINCLAUDECODE
+242532	INSTALLINCHATGPT
+242604	INSTALLINANTIGRAVITY
+242776	HELP
+242948	TOOLS
+242962	EXPLORE
+242980	ACCOUNTS
+243000	SEARCH
+243016	VIEW
+243028	COMMANDLINE
+243074	TWOPANELS
+243096	NEWWINDOW
+243118	SENDERROR
+243140	ABOUT
+243154	CHECKVERSION
+243182	TWITTERFOLLOW
+243212	FACEBOOKPAGE
+243240	LOADSYNC
+243292	GETPROVERSION
+243380	LOGS
+243392	SCHEDULER
+243414	MOUNTCLOUDDRIVES
+243450	airexplorer-BCB6EDAA-1696-4801-80A1-67E0A04A69C5
+243550	OnePanel
+243570	FourPanel
+243592	WindowWidth
+243618	WindowHeight
+243646	Startup: setting size
+243692	WindowLocationX
+243726	WindowLocationY
+243760	Startup: setting location
+243814	StartMaximized
+243846	Theme
+243860	LastExpiredMsg
+243892	LICENSEEXPIRED
+243938	LastVersioncheck
+243974	NEWVERSION
+243998	http://www.airexplorer.net
+244054	https://www.airexplorer.net
+244112	http://download.airexplorer.net
+244178	http://www.junglejapan.com
+244234	RESTARTTOINSTALL
+244270	NONEWVERSION
+244298	https://www.airexplorer.net/contactform/
+244382	https://www.airexplorer.net/help/
+244616	Cmd
+244626	/U /K "
+244660	Claude Code
+244686	ChatGPT
+244730	SKILLUNINSTALLED
+244766	EnableCommandLine
+244804	SKILLENABLECMDLINE
+244844	SKILLINSTALLED
+244876	explorer.exe
+244904	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AirLiveDrive.exe
+245082	INSTALLAIRLIVEDRIVE
+245124	https://www.airlivedrive.com/
+245186	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AirCloudAnalyzer.exe
+245372	INSTALLAIRCLOUDANALYZER
+245422	https://www.aircloudanalyzer.com/
+245492	MinimizeToTray
+245524	toolStripContainer1
+245566	statusStrip1
+245644	toolStripStatusLabelTotal
+245714	toolStripProgressBar1
+245760	toolStripStatusSpeedDown
+245812	KB/s
+245882	toolStripButtonExplore
+245930	Explore
+246044	Search
+246060	toolStripButtonSync
+246102	Synchronize
+246128	toolStripButtonScheduler
+246180	Scheduler
+246202	toolStripSeparator1
+246244	toolStripDropDownButtonSyncMenu
+246310	currentFoldersToolStripMenuItem
+246376	Current folders
+246410	toolStripMenuItem4
+246450	loadSavedSynchronizationToolStripMenuItem
+246536	Load Saved Synchronization
+246640	Options
+246658	toolStripDropDownButtonView
+246716	View
+246728	onePanelToolStripMenuItem
+246782	One panel
+246860	Two panels
+246884	toolStripMenuItem1
+246924	newWindowToolStripMenuItem
+247004	toolStripMenuItem5
+247044	logsToolStripMenuItem
+247090	Logs
+247190	toolStripMenuItemSeparatorExternaltools
+247272	mountCloudDriveToolStripMenuItem
+247340	Mount cloud drive
+247378	toolStripDropDownButtonPro
+247434	Pro version
+247460	buyProVersionToolStripMenuItem
+247524	Get Pro Version
+247558	enterActivationCodeToolStripMenuItem
+247680	toolStripDropDownButtonHelp
+247738	Help
+247750	sendUsBugsAndRequestsToolStripMenuItem
+247830	Send us bugs and requests
+247884	checkUpdatesToolStripMenuItem
+247976	helpWebToolStripMenuItem
+248028	Help - Web
+248052	toolStripMenuItem3
+248164	Follow us in Twitter
+248208	facebookPageToolStripMenuItem
+248380	WinLep Image Compressor
+248430	toolStripMenuItem2
+248518	About...
+248538	notifyIcon1.Icon
+248594	UNINSTALLINCLAUDECODE
+248640	UNINSTALLINCHATGPT
+248680	UNINSTALLINANTIGRAVITY
+248728	 Pro
+248740	LICENSEABOUTEXPIRE
+248780	LICENSEDTO
+248934	GENERAL
+248952	LOGSETTINGS
+248978	PROXYSETTINGS
+249036	LANGUAGE
+249056	RETRIES
+249074	SIMULTANEOUSDOWNLOADS
+249162	SIMULTANEOUSLARGEUPLOADS
+249214	SIMULTANEOUSLARGEDOWNLOADS
+249270	GETMORELANGUAGES
+249306	REQUESTPASSWORD
+249340	SHOWHIDDENFILES
+249374	CLEARCOMPLETED
+249432	LIMITDOWNLOADSPEED
+249508	DETAILEDLOG
+249534	ENABLECOMMANDLINE
+249572	COMMANDLINEPASSWORD
+249614	DELETENOBIN
+249640	ENABLEPARALLELDOWNLOADS
+249690	ENABLEBANDWIDTHSCHEDULER
+249742	MINIMIZETRAY
+249794	PROXYLABEL
+249916	MAILINFO
+249936	EMAILADDRESS
+249964	EMAIL
+249978	SMTPSERVER
+250002	ENABLESSL
+250024	DESTINATIONADDRESS
+250104	SENDTESTEMAIL
+250148	USEOAUTH
+250168	OAUTHPROVIDER
+250198	OAUTHCONNECT
+250226	LOGNEWFILE
+250250	THEME
+250264	SHOWCONTEXTNEWTAB
+250302	ATTACHMENTSIZELIMIT
+250344	CHECKFILEUPLOAD
+250378	CHECKFILEDOWNLOAD
+250466	Language
+250620	_(?<lang>.*)\.xml
+250658	${lang}
+250676	bn-IN
+250690	Bengali
+250708	ca-VA
+250722	Valenciano
+250746	mfe
+250792	CultureInfo
+250818	NativeLanguage
+250850	SimultaneousDownloads
+250896	SimultaneousUploads
+250938	SimultaneousUploadsLarge
+250990	SimultaneousDownloadsLarge
+251046	Retries
+251064	EnablePassword
+251096	ShowHiddenFiles
+251130	ClearCompleted
+251162	StartupPassword
+251196	*********
+251218	EnableDownloadSpeedLimit
+251270	EnableUploadSpeedLimit
+251318	EnableBandwidthScheduller
+251372	DownloadSpeedLimit
+251412	UploadSpeedLimit
+251448	DetailedLog
+251474	SaveLogs
+251494	LogFolder
+251516	CommandLinePassword
+251558	DeleteNoBin
+251584	EnableParallelChunks
+251628	DefailtProxyAuth
+251664	ProxyUser
+251686	ProxyPass
+251708	email.server
+251736	email.from
+251760	email.fromname
+251792	email.destination
+251830	email.prefixenable
+251870	email.prefix
+251906	email.port
+251930	465
+251940	email.user
+251964	email.password
+251996	email.enablessl
+252030	LogToNewFile
+252058	email.useoauth
+252090	email.oauthprovider
+252132	LogFileSize
+252158	ShowContextOnNewTab
+252200	AttachmentLimit
+252234	CheckDownloads
+252266	CheckUploads
+252294	NotLogComparing
+252328	Dark
+252340	Dark theme requires Windows 10 Build 1903 or newer
+252444	https://www.airexplorer.net/en/language/
+252756	bandwidth.xml
+252786	ENTERREQUIRED
+252816	NOTVALIDEMAIL
+252938	Test eMail
+252962	This a test email sent from 
+253022	EMAILNOTSENT
+253050	: OAuth token not available. Please use the Connect button first.
+253184	EMAILSENT
+253206	toolStripButtonGeneral.Image
+253266	toolStripButtonGeneral
+253314	General
+253332	toolStripButtonLogs.Image
+253386	toolStripButtonLogs
+253428	toolStripButtonProxy.Image
+253484	toolStripButtonProxy
+253528	Proxy
+253598	toolStripButtoneMail
+253642	eMail
+253656	tabControl1
+253682	tabPageGeneral
+253714	tableLayoutPanel28
+253754	labelLargeFilesDownloads
+253806	Simultaneous downloads for large files
+253944	tableLayoutPanel27
+254032	Simultaneous uploads for large files
+254108	numericUpDownLargeUploads
+254162	tableLayoutPanel26
+254202	checkBoxCheckDownlaodsHash
+254342	checkBoxCheckUploadsHash
+254474	tableLayoutPanel24
+254556	Show context menu to open a new tab
+254630	numericUpDownDownloads
+254678	labelSimultaneousDownloads
+254782	labelSimultaneousUploads
+254922	checkBoxClearCompleted
+254970	Clear completed
+255004	labelRetries
+255076	checkBoxHidden
+255108	Show Hidden Files
+255146	checkBoxProtect
+255180	Request password on start up
+255240	tableLayoutPanel16
+255280	checkBoxMinimizeToTray
+255328	Minimize to Tray
+255364	tableLayoutPanel15
+255404	checkBoxParallelChunks
+255452	Download large files in parallel segments to increase the speed
+255652	checkBoxBandwidthScheduller
+255710	Enable bandwidth scheduller
+255768	checkBoxDownloadSpeedLimit
+255824	Limit Download Speed
+255868	numericUpDownDownloadSpeed
+256068	tableLayoutPanel14
+256108	checkBoxRecycleBin
+256148	Don't move local files to the recycle bin, remove the files immediately when deleted.
+256362	labelCommandLine
+256446	textBoxCommandLine
+256486	checkBoxCommandLine
+256528	Enable Command Line Support
+256586	tableLayoutPanel22
+256626	Auto
+256638	Light
+256652	comboBoxTheme
+256682	labelTheme
+256706	comboBoxLanguage
+256742	labelLanguage
+256826	Get More languages...
+256872	tabPageLogs
+256898	tableLayoutPanel23
+257058	numericUpDownLogFileSize
+257110	label3
+257126	MB
+257170	Detailed Log level
+257210	checkBoxLogToFile
+257248	Log to file
+257274	textBoxLogPath
+257306	tabPageProxy
+257334	proxy
+257388	tableLayoutPanel17
+257428	labelProxyUser
+257460	textBoxProxyUser
+257496	labelProxyPassword
+257536	textBoxProxyPassword
+257634	Specify user and password for proxy authentication
+257738	radioButtonProxyUseDefault
+257794	Use default Windows user for proxy authentication or no authentication required
+257956	buttonProxy
+257982	Change proxy settings
+258028	labelProxy
+258052	Air Explorer uses your computer proxy configuration to connect to the network
+258210	tabPageeMail
+258238	groupBoxOAuth
+258304	Use OAuth
+258326	labelOAuthProvider
+258366	Provider:
+258388	comboBoxOAuthProvider
+258434	buttonOAuthConnect
+258474	Connect
+258492	groupBoxEmail
+258562	labelAttachmentLimit
+258606	Attachment size limit
+258652	numericUpDownAttachmentLimit
+258712	label4
+258768	textBoxDestination
+258808	labelDestinationAddress
+258914	tableLayoutPanel19
+258984	checkBoxPrefix
+259016	Add a prefix to the subject
+259074	groupBoxServer
+259172	checkBoxEnableSSL
+259210	Enable SSL
+259234	textBoxPassEmail
+259270	25
+259316	Port:
+259330	groupBoxFrom
+259358	Email Address
+259388	tableLayoutPanel21
+259428	textBoxFrom
+259516	labelFromName
+259546	From Name:
+259570	textBoxFromName
+259604	buttonTest
+259874	checkBoxLogComparing
+259980	FormOptions
+260036	WRONGPASSWORD
+260066	The software is locked with password, please enter the password to continue:
+260222	textBox1
+260242	FormPasswordInitial
+260284	Software - Password
+260326	ALL
+260402	entry
+260416	*.
+260454	plusBlue16x16.png
+260492	local
+260506	all16x16.png
+260534	CATEGORY
+261942	    
+261954	POST .*?\?(?<query>.*?) HTTP/1.1
+262022	${query}
+262042	GET .*?\?(?<query>.*?) HTTP/1.1
+262120	%AUTHCOMPLETED%
+262154	AUTHCOMPLETED
+262184	%CANCLOSE%
+262208	CLOSEANDCONTINUE
+264036	Error connecting to 
+264080	 : 
+264090	UPLOADSLIMITED
+264240	.cl2
+264312	 folders
+264360	.xml
+264372	LocalTreeVisible
+264488	ConcurrentUploadsPerSite
+264540	ConcurrentDownloadsPerSite
+264596	CacheSearchs
+264704	byte
+264716	uint
+264728	bool
+264740	long
+264752	int
+264762	short
+264776	float
+264790	ulong
+264804	ushort
+264820	double
+264836	string
+264852	byte[]
+264868	string[]
+264934	bytes .*/(\d+)
+264966	bytes (?<start>\d+)-(?<end>\d+)/(?<length>\d+)
+265062	${start}
+265082	${end}
+265112	copiar16x16.png
+265146	cortar16x16.png
+265318	DATE
+265330	CLOUD
+265344	TYPE
+265356	PASTE
+265370	CUT
+265380	RENAME
+265396	OPEN
+265408	OPENINBROWSER
+265438	OPENLOCATION
+265466	PLAY
+265478	PROPERTIES
+265502	Error getting full path
+265552	DELETESURE
+265576	DELETESUREITEMS
+265610	Files could not be cut
+265658	Files could not be coiped
+265712	.FOLDER
+265730	VIEWFOLDER
+265754	folderPending
+265784	.avi.mkv.mp4.flv.mpeg.mpg.mov.3gp.mp3.wma.ogg.flac.wav.ts.m2ts.m4v.m3u.m2v.mpeg1.mpeg2.mts.ogm.a52.aac.m1v.mpeg4.oma.vob.m4a.wmv.ac3.asf.mp2.mka.m4p
+266084	--network-caching 10000 --started-from-file "
+266178	%1
+266186	%L
+266194	--started-from-file 
+266238	Could not open default player, we recommend to install VideoLAN player
+266382	contextMenuListItem
+266424	toolStripMenuItemOpen
+266482	toolStripMenuItemOpenLocation
+266544	Open file location
+266584	toolStripSeparator3
+266626	toolStripMenuItemCut
+266670	Cut
+266680	toolStripMenuItemCopy
+266726	Copy
+266738	toolStripMenuItemPaste
+266786	Paste
+266800	toolStripMenuItemRename
+266850	Rename
+266866	toolStripMenuItemDelete.Image
+266928	toolStripMenuItemDelete
+266978	toolStripSeparator2
+267020	toolStripMenuItemOpenWebBrowser
+267086	Open with Web Browser
+267132	toolStripMenuItemPlay
+267178	Play Video
+267202	toolStripMenuItemProperties
+267260	Properties
+267462	Synchronization 
+267498	bytes={0}-
+267522	bytes={0}-{1}
+267552	Segment not eneded correcly
+267610	close
+267624	 
+267630	AIREXPLORERLINK
+267664	.DRIVE
+267704	(\.DRIVE\w)$
+267732	46EB5926-582E-4017-9FDF-E8998DAA0950
+267808	.MYDOCUMENTS
+267836	.MYMUSIC
+267902	.NETWORK
+267922	.DOWNLOADS
+267946	Special folder not found
+268192	The filename, directory name, or volume label syntax is incorrect
+268326	invalid path
+268354	Invalid character on {3} '{0}' (0x{1:X2}) in file name: '{2}'
+268480	Invalid character on {3} '{0}' (0x{1:X2}) in path: '{2}'
+268596	.part.segments
+268628	File hash does not match
+268680	Can not unencrypt file
+268728	Encryption password not specified, the file can not be decrypted. Please save the encryption password in the account with the user interface
+269012	(416
+269024	range specified is invalid
+269080	Task
+269092	Download
+269112	State
+269126	Local
+269140	cadenarota16x16.png
+269262	sync16x16.png
+269292	CHOOSESERVICE
+269322	COPYTOLEFT
+269346	COPYTORIGHT
+269372	LINKBROWSING
+269400	SYNCCURRENTFOLDERS
+269440	BOOKMARKS
+269530	EDITBOOKMARKS
+269560	INVALIDBOOKMARK
+269594	MIIBKjCB4wYHKoZIzj0CATCB1wIBATAsBgcqhkjOPQEBAiEA/////wAAAAEAAAAAAAAAAAAAAAD///////////////8wWwQg/////wAAAAEAAAAAAAAAAAAAAAD///////////////wEIFrGNdiqOpPns+u9VXaYhrxlHQawzFOw9jvOPD4n0mBLAxUAxJ02CIbnBJNqZnjhE50mt4GffpAEIQNrF9Hy4SxCR/i85uVjpEDydwN9gS3rM6D0oTlF2JjClgIhAP////8AAAAA//////////+85vqtpxeehPO5ysL8YyVRAgEBA0IABN57je36nCXXbQJsj/oNMqLU0wVnhw2prFtEImm8btBfmUZUbJDflR7Hul/V5oeJBqP27UAG91VnsDIjrp0LJKc=
+270406	uhid
+270418	right
+270432	left
+270444	down
+270456	PanelPages-accounts
+270498	PanelPages-providers
+270576	PanelPages-aliases
+270616	PanelPages-ids
+270648	link16x16.png
+270678	SYNC2FOLDERS
+270706	CANNOTSYNCFOLDER
+270742	splitContainer1
+271090	flatskin
+272248	 "
+272256	   at 
+272272	   en 
+272288	   em 
+272304	   à 
+272318	 inner: 
+272338	Please reinstall Air Explorer
+272400	Application Error
+272438	Task: 
+272454	 State: 
+272492	 Source: 
+272514	 Destination: 
+272546	 Size: 
+272588	CALCULATING
+272614	DownloadFolder
+272646	Subtasks
+272666	<?xml version="1.0"?> <CloudTasks version = "1.0" />
+272774	tasks.xml
+272852	//Tasks/*
+272874	Upload
+272890	UploadFolder
+272918	Transfer
+272938	TransferFolder
+273166	DestAccount
+273192	DestProvider
+273220	SourceAccount
+273250	SourceProvider
+273282	Task cancelled
+273436	CREATINGFOLDER
+274060	Hash check failed
+274108	Ciphered
+274128	EncryptFileNames
+274404	AppsUseLightTheme
+274598	^\\\\[^\\]+$
+274626	\w:\\$
+274642	(\w):\\$
+274662	.jpg.bmp.png.jpeg.tif.gif.avi.mp4.mov
+274740	AirExplorer
+274766	5.11.0
+274782	https://www.airexplorer.net/proversion.php
+274870	https://www.airexplorer.net/
+274930	AirExplorer_temp
+274966	0 bytes
+274984	 B
+274992	 KB
+275002	###0.##
+275020	 MB
+275030	 GB
+275040	##0.##
+275056	 / 
+275066	##0.###
+275106	CONNECTING
+275130	ERROR
+275144	RUNNING
+275184	STOPPED
+275202	QUEUED
+275218	COMPRESSING
+275268	CHECKINGHASH
+275296	DOWNLOAD
+275316	TRANSFER
+275336	UPLOAD
+275352	 Zip
+275364	RESTORE
+275382	COPYRIGHT
+275404	DELETELEFT
+275428	DELETERIGHT
+275454	NOACTION
+275474	Undetermined
+275502	d 
+275526	0 KB/s
+275556	 KB/s
+275570	 MB/s
+275584	fromPath
+275620	file://HOST/
+275648	Windows
+275666	NONAME
+275682	^con$|^prn$|(^lpt[0-9]$)|(^com[0-9]$)|(^con\.)|(^prn\.)|(^lpt[0-9]\.)|(^com[0-9]\.)
+275852	SOFTWARE\Wow6432Node\VideoLAN\VLC
+275922	SOFTWARE\VideoLAN\VLC
+275968	\shell\open\command
+276010	SOFTWARE\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION
+276178	SOFTWARE\Microsoft\Internet Explorer\Main\FeatureControl
+276466	useUnsafeHeaderParsing
+276514	KB
+276542	^SkyDrive
+276564	SetStyle
+276764	READY
+276778	Unknown
+276796	: email settings are not configured, check the Air Explorer preferences
+276942	: OAuth token not available. Please reconnect in the email options.
+277080	<br><br>
+277100	ATTACHMENTNOTINCLUDED
+277162	THISMONTH
+277184	THISYEAR
+277204	https://www.airexplorer.net/checkversion/?ad=1&sv=1
+277310	https://www.airexplorer.net/store/activate.php?hd=
+277414	https://www.airexplorer.net/store/checklic.php?hd=
+277518	https://www.airexplorer.net/bugReport/sendbug.php
+277620	Shell IDList Array
+277660	374DE290-123F-4565-9164-39C4925E467B
+277748	\\{0}\{1}
+277826	Unknown return value: {0}
+277880	WinNT:
+277896	openas
+277972	actualizaciones16x16
+278016	add16x16
+278036	addschedule16x16
+278072	again16x16
+278096	airexplorer_acercade
+278140	all16x16
+278160	allclouds32x32
+278214	arbol16x16
+278238	arrow_down_line
+278272	arrow_down16x16
+278306	arrow_up_line
+278336	arrow_up16x16
+278366	ayuda16x16
+278414	borrar16x16
+278440	borrarcompletados16x16
+278488	borrarderecha
+278518	borrarfallados16x16
+278560	borrarizquierda
+278594	buscar32x32
+278620	business32x32
+278650	cadenarota16x16
+278684	cancel16x16
+278710	cargarsincronizacion16x16
+278764	cloud16
+278802	collaborators16x16
+278842	collapsed16x16
+278902	compartir16x16
+278934	config16x16
+278960	continuar16x16
+278992	copiar16x16
+279018	copiarderecha
+279048	copiarizquierda
+279082	cortar16x16
+279108	crearcarpeta16x16
+279146	cuentas32x32
+279202	detalles16x16
+279232	detras16x16
+279258	dosventanas16x16
+279318	emptytrash16x16
+279352	encriptado16x16
+279386	expanded16x16
+279416	explorar16x16
+279446	explorar32x32
+279476	favicon_115com
+279546	favicon_32_alibabacloud
+279686	favicon_32_azure
+279722	favicon_32_backblaze
+279810	favicon_32_degoo
+279846	favicon_32_digiboxx
+279888	favicon_32_directcloud
+279988	favicon_32_flexibleengine
+280042	favicon_32_Google_Drive_group
+280104	favicon_32_Google_Drive_service
+280170	favicon_32_huawei
+280208	favicon_32_idrivee2
+280250	favicon_32_infinicloud
+280298	favicon_32_jottacloud
+280380	favicon_32_nextcloud
+280424	favicon_32_nutstore
+280520	favicon_32_onlime
+280558	favicon_32_opendrive
+280602	favicon_32_owncloud
+280682	favicon_32_s3
+280712	favicon_32_sharepoint_group
+280770	favicon_32_terabox
+280848	favicon_48_115com
+280886	favicon_48_alibabacloud
+280936	favicon_48_aliyundrive
+280984	favicon_48_amazonaw
+281026	favicon_48_azure
+281062	favicon_48_backblaze
+281106	favicon_48_box_group
+281150	favicon_48_degoo
+281186	favicon_48_digiboxx
+281228	favicon_48_directcloud
+281276	favicon_48_dropbox_group
+281382	favicon_48_Google_Drive_group
+281444	favicon_48_Google_Drive_service
+281510	favicon_48_huawei
+281590	favicon_48_infinicloud
+281638	favicon_48_jottacloud
+281684	favicon_48_koofr
+281720	favicon_48_nextcloud
+281764	favicon_48_nutstore
+281806	favicon_48_onedrive_group
+281860	favicon_48_onlime
+281942	favicon_48_owncloud
+281984	favicon_48_pikpak
+282052	favicon_48_sharepoint_group
+282150	favicon_48_wasabi
+282232	favicon_aliyundrive
+282274	favicon_amazonaws
+282312	favicon_amazons3
+282378	favicon_backblaze
+282416	favicon_box_group
+282454	favicon_degoo
+282484	favicon_digiboxx
+282520	favicon_directcloud
+282562	favicon_dropbox_group
+282608	favicon_flexibleengine
+282656	favicon_Google_Drive_group
+282712	favicon_Google_Drive_service
+282804	favicon_idrivee2
+282840	favicon_infinicloud
+282882	favicon_jottacloud
+282922	favicon_koofr
+282952	favicon_drime
+282982	favicon_icloud
+283014	favicon_32_icloud
+283052	favicon_48_icloud
+283090	favicon_32_drime
+283162	favicon_nextcloud
+283200	favicon_nutstore
+283284	favicon_onlime
+283354	favicon_owncloud
+283446	favicon_sharepoint_group
+283498	favicon_terabox
+283532	favicon_terabox1
+283568	favicon_wasabi
+283600	faviconaliyundrive
+283640	faviconbackblaze
+283778	faviconfacebook
+283876	faviconpikpak
+283906	favicons3
+283990	favoritos16x16
+284022	fileencript
+284048	flechaderecha
+284078	flechaizquierda
+284142	general20x20
+284170	group32x32
+284236	iconos_medianos16x16
+284280	iconos_muygrandes16x16
+284328	interface32x32
+284412	link16x16
+284434	lista16x16
+284458	lockfile
+284478	lockfile16x16
+284508	log16x16
+284528	logs20x20
+284550	lupa16x16
+284572	matomete_acercade
+284688	mover16x16
+284712	multfiles32x32
+284768	multiventana16x16
+284826	nulo16x16
+284848	opciones32x32
+284878	openinbrowser 
+284910	openwith16x16
+284964	pause16x16
+284988	personal32x32
+285018	play16x16
+285040	plus16x16
+285092	premium16x16
+285120	pro32x32
+285140	progress16x16
+285170	propiedades16x16
+285206	propierties16x16
+285242	propietario16x16
+285302	realtime16x16
+285332	refresh16x16
+285360	registrar_cuenta32x32
+285406	rename16x16
+285432	restore16x16
+285460	revisons16x16
+285490	schedule32x32
+285520	searchdate16x16
+285554	searchsize16x16
+285588	searchtype16x16
+285622	sharefolderBlue
+285690	sharefolderYellow
+285800	star_16
+285818	star_border_16
+285850	statusamarillo16x16
+285892	statusrojo16x16
+285926	statusverde16x16
+285984	sugerencias16x16
+286020	sync16x16
+286042	syncHeader
+286066	syncSummary
+286092	tag16x16
+286112	tick16x16
+286134	tool16x16
+286156	transfer16x16
+286186	transferfolder16x16
+286262	upzip16x16
+286286	viewencripted16x16
+286326	winlep_16
+286348	wintrash16x16
+286378	zip16x16
+286398	pause16x16.png
+287040	ESTIMATED
+287062	SPEED
+287076	RESUME
+287092	RUNAGAIN
+287112	SCHEDULETHISTASK
+287174	MOVEUP
+287190	MOVEDOWN
+287210	FILES
+287224	imageListTasks.ImageStream
+287280	imageListExpand.ImageStream
+287512	Resume
+287578	runAgainToolStripMenuItem
+287632	Run again
+287654	clearCompletedToolStripMenuItem
+287720	clearFailedToolStripMenuItem
+287780	Clear failed
+287808	moveUpToolStripMenuItem
+287858	Move up
+287876	Ctrl +
+287892	moveDownToolStripMenuItem
+287946	Ctrl -
+287962	Move down
+287984	scheduleThisTaskToolStripMenuItem
+288094	Speed
+288108	Estimated
+288130	PanelTasks
+288612	VERYLARGEICONS
+288644	LARGEICONS
+288668	MEDIUMICONS
+288694	DETAILS
+288712	SHOWHIDETREE
+288740	NEWFOLDER
+288762	CLICKTOREFRESH
+288794	VIEWORIGINALNAMES
+288832	CLOUDOPTIONS
+288860	CONNECT
+288878	TreeVisible
+288904	CONNECTINGTO
+288976	listview
+288996	details
+289014	veryLarge
+289036	REFRESHERROR
+289064	local://host/
+289094	ITEMS
+289108	ITEMSSELECTED
+289138	folderTree1
+289164	filesListView1
+289196	toolStripSplitButtonSizes.Image
+289262	toolStripSplitButtonSizes
+289362	veryBigIconsToolStripMenuItem
+289424	Very Large Icons
+289460	bigIconsToolStripMenuItem
+289514	Large Icons
+289540	mediumIconsToolStripMenuItem
+289600	Medium Icons
+289628	listToolStripMenuItem
+289674	List
+289686	detailsToolStripMenuItem
+289738	Details
+289756	toolStripButtonTreeView
+289806	toolStripButton1
+289842	toolStripButtonNewFolder
+289894	toolStripButtonEncrypt
+289942	Encrypt  uploads
+289978	toolStripButtonViewEncryptedNames
+290140	toolStripButtonZipUploads.Image
+290206	toolStripButtonZipUploads
+290260	Zip Uploads
+290286	toolStripSeparator4
+290328	toolStripDropDownButtonBookmark
+290394	toolStripDropDownButton1
+290446	toolStripButtonCloudOptions.Image
+290516	toolStripButtonCloudOptions
+290574	Cloud Options
+290604	toolStripStatusLabelLeft
+290656	toolStripStatusLabelSize
+290708	Click to refresh
+290744	toolStripDropDownButtonSize.Image
+290814	toolStripDropDownButtonSize
+290872	panelConnecting
+290906	buttonConnect
+290936	progressBarConnecting
+291054	PanelExplorer
+291146	EXPAND
+291162	OPERATIONNOTALLOWED
+291204	TARGETISSUBFOLDER
+291242	CREATESUBFOLDERFOR
+291282	NEWFOLDERNAME
+291354	VIRT
+291366	TEST
+291378	Loading...
+291402	contextMenu
+291428	toolStripMenuItemExpand
+291478	Expand
+291494	toolStripMenuItemNewFolder
+291550	New Folder
+291660	toolStripMenuItemSearch
+291710	toolStripSeparator5
+291872	FilesList
+291894	SHARELINK
+291940	OPENWITH
+292040	Error locking file: 
+292140	Share Link ...
+292172	Play
+292240	New Folder...
+292270	toolStripSeparatorSearch
+292382	toolStripMenuItemRestore
+292452	toolStripMenuItemEmptyTrash
+292510	Empty Recycle Bin
+292548	toolStripMenuItemOpenWith
+292602	Open With...
+292630	TimeSpanJiraFormat
+292712	TimeSpanManyDayFormat
+292758	TimeSpanManyHourFormat
+292806	TimeSpanManyMillisecondFormat
+292868	TimeSpanManyMinuteFormat
+292920	TimeSpanManySecondFormat
+293020	TimeSpanMillisecondStrings
+293076	TimeSpanOneDayFormat
+293120	TimeSpanOneHourFormat
+293166	TimeSpanOneMillisecondFormat
+293276	TimeSpanOneSecondFormat
+293372	TimeSpanSecondStrings
+293418	TimeSpanSeparator
+293456	TimeSpanTickStrings
+293498	TimeSpanWordFormat
+293538	TimeSpanWordPattern
+293580	TimeSpanWordPatternIgnoreCase
+293642	REMOVE
+293708	listBox1
+293728	labelChoose
+293842	groupBoxLeft
+293870	Left
+293882	labelServerLeft
+293916	labelPathLeft
+293976	Right
+293990	labelServerRight
+294026	labelPathRight
+294058	buttonRemove
+294086	Remove
+294102	buttonRename
+294130	buttonDown
+294154	buttonUp
+294174	FormLoadSync
+294202	Load synchronization
+294546	FILTERTHISFOLDER
+294582	[^
+294590	(/|$)]
+294606	FILTERTHISFILE
+294638	FILTEREXTENSION
+294672	FILTERPARENTFOLDER
+294712	EDITFILTER
+294736	SyncWindowWidth
+294770	SyncWindowHeight
+294806	SyncStartMaximized
+294846	PATH
+294858	CLOSE
+294872	READINGFOLDERS
+294904	SAVE
+294916	SAVESYNC
+294936	STARTAFTERCOMPARE
+294974	FILTERED
+295012	ADDFOLDERS
+295036	CLEARFILTER
+295086	ACTIONFILTER
+295140	PAUSE
+295228	copiarizquierda.png
+295270	copiarderecha.png
+295308	borrarizquierda.png
+295350	borrarderecha.png
+295388	nulo16x16.png
+295418	SOMEREFRESHFAILED
+295456	StateStr
+295476	SyncAction
+295500	Folder not found 
+295538	Saved hoster or account not found: 
+295612	 in 
+295624	Error loading synchronization configuration
+295714	SYNCSTOP
+295734	SYNCCHANGED
+295760	COMPAREWARNING
+295792	COMPARING
+295814	SyncCol
+295832	Width
+295846	Microsoft Sans Serif
+295890	dataGridView1
+295920	ColumnPathLeft
+295952	ColumnSizeLeft
+295984	ColumnDateLeft
+296050	ColumnPathRight
+296084	ColumnSizeRight
+296118	ColumnDateRight
+296152	Equal
+296166	ColumnEqual
+296192	ColumnState
+296218	buttonClose
+296244	Close
+296286	checkBoxStartAfterCompare
+296340	Start the synchronization automatically when the comparison finishes
+296480	labelLog
+296542	progressBarCompare
+296648	Reading Folders...
+296688	labelSyncInfo
+296718	progressBarTasks
+296754	labelEstimated
+296786	buttonViewReport
+296822	View Report
+296848	toolStrip2
+296872	toolStripButtonAddFolders
+296926	Add Folders
+296952	buttonConfig
+296980	Mirror
+297032	buttonSave
+297068	SearchButton
+297096	toolStripButton2
+297132	textBoxSearch
+297162	stateFilterButton.Image
+297212	stateFilterButton
+297278	completedFilter
+297312	Completed
+297334	errorFilter
+297360	queuedFilter
+297388	Queued
+297456	clearStateFilter
+297492	Clear Filter
+297520	actionFilterButton.Image
+297572	actionFilterButton
+297612	Action Filter
+297696	copyToLeftFilter
+297732	Copy to Left
+297760	copyToRightFilter
+297890	deleteRightFilter
+297928	Delete Right
+297994	buttonAutoscroll.Image
+298042	buttonAutoscroll
+298102	buttonRefresh
+298132	Compare
+298150	buttonStart
+298176	Start
+298190	toolStripContainer2
+298232	FormSync
+298252	ONLYLEFT
+298272	ONLYRIGHT
+298294	LEFTNEWER
+298316	RIGHTNEWER
+298340	MIRROR
+298356	MIRRORUPDATE
+298384	UPDATE
+298400	BIDIRECTIONAL
+298430	CUSTOM
+298446	HASHCOMPAREOPTION
+298484	FILTER
+298500	https://www.airexplorer.net/helphash.php
+298584	labelDescription
+298694	The right side file is newer
+298824	The left side file is newer
+298920	labelOnlyRight
+298952	The element only exists on the right side:
+299076	labelOnlyLeft
+299192	radioButtonMirror
+299230	radioButtonMirrorUpdate
+299310	radioButtonUpdate
+299348	Update
+299364	radioButtonBidirectional
+299416	Bidirectional
+299446	radioButtonCustomized
+299492	Customized
+299516	checkBoxCompare
+299550	Compare the files content to check if the files are equal when it is possible (Hash comparison)
+299744	linkLabelHelpHash
+299782	flowLayoutPanel1
+299818	buttonFilter
+299846	button1
+299864	labelFilter
+299890	buttonEncryptConfig
+299964	Configurate
+299990	syncFilterControl1
+300030	FormSyncFilter
+300062	Filter
+300124	SynchronizationReport-
+300228	The report could not be saved, error: 
+300308	Save...
+300326	FormSyncSummary
+300360	Synchronization Summary
+300410	Sync_
+300452	UseHalfCoresForSync
+300494	Service is temporarily unavailable
+300586	<%=LBL_(?<variable>.[^%]+)%>
+300646	variable
+300666	<%=LBL_
+300692	fa fa-laptop
+300720	fa fa-cloud
+300746	<%=Source%>
+300772	<%=SourceAccount%>
+300812	<%=DestinationAccount%>
+300862	<%=Destination%>
+300898	<%=SourcePath%>
+300932	<%=DestinationPath%>
+300976	<%=SourceIcon%>
+301054	<%=Title%>
+301078	<%=Header%>
+301134	<%=HashEnabled%>
+301170	<%=Filter%>
+301196	<%=Started%>
+301224	<%=TransferStarted%>
+301298	<%=TransferDuration%>
+301344	<%=ComparisonDuration%>
+301394	<%=TotalTasks%>
+301428	<%=TotalSize%>
+301460	<%=TransferSize%>
+301498	<%=TotalErrors%>
+301534	<%=TotalFolders%>
+301572	<%=IgnoredFolders%>
+301614	<%=ToRightFolders%>
+301696	<%=DeletedFolders%>
+301738	<%=FailedFolders%>
+301778	<%=TotalFiles%>
+301812	<%=UploadedFiles%>
+301852	<%=DownloadedFiles%>
+301896	<%=IgnoredFiles%>
+301934	<%=DeletedFiles%>
+301972	<%=FailedFiles%>
+302150	<%=IgnoredFilesSize%>
+302196	<%=DeletedFilesSize%>
+302324	<%=NOERRORS%>
+302354	none
+302366	<%=ERRORS%>
+302392	block
+302406	                  <div class='row' style='background:<%=BACKCOLOR%>; display:table-row'>                      <div class='cell' style='display:table-cell; margin-bottom:10px; padding:6px 12px; white-space: pre-wrap;'><%=Operation%></div>                      <div class='cell_large' style='-moz-hyphens:auto; -ms-hyphens:auto; -ms-word-break:break-all; -webkit-hyphens:auto; display:table-cell; hyphens:auto; margin-bottom:10px; padding:6px 12px; width:300px; word-break:break-word; white-space: pre-wrap;' width='300'><%=Path%></div>                      <div class='cell_large' style='-moz-hyphens:auto; -ms-hyphens:auto; -ms-word-break:break-all; -webkit-hyphens:auto; display:table-cell; hyphens:auto; margin-bottom:10px; padding:6px 12px; width:300px; word-break:break-word; white-space: pre-wrap;' width='300'><%=ErrorMessage%></div>                      <div class='cell' style='display:table-cell; margin-bottom:10px; padding:6px 12px; white-space: pre-wrap;'><%=ErrorDate%></div>                      <div class='cell' style='display:table-cell; margin-bottom:10px; padding:6px 12px; white-space: pre-wrap;'><%=ErrorSize%></div>                  </div>;  
+304770	<%=Path%>
+304830	<%=ErrorDate%>
+304862	<%=ErrorSize%>
+304926	#becfe0
+304944	#fff
+304970	<%=ErrorsList%>
+305004	SyncConf
+305024	OnlyExistsOnLeft
+305060	OnlyExistsOnRight
+305098	LeftIsNewer
+305124	RightIsNewer
+305212	EncryptionPassword
+305252	MirrorUpdate
+305280	property/@OnlyExistsOnLeft
+305394	property/@LeftIsNewer
+305440	property/@RightIsNewer
+305488	property/@CompareHash
+305534	property/@EncryptionLevel
+305588	property/@EncryptionPassword
+305810	Filtered-RootOnly
+305848	Filtered-Name-Include
+305894	Filtered-Name-Exclude
+305940	Filtered-Size
+305970	Filtered-OldFile
+306006	Filtered-NewFile
+306042	DontSyncOldFiles
+306078	OldFilesValue
+306108	OldFilesUnit
+306136	IncludeFilter
+306166	excludeSmallerThan
+306206	excludeLargerThan
+306244	lowerSizeLimit
+306276	upperSizeLimit
+306308	lowerSizeUnits
+306340	upperSizeUnits
+306372	excludeOlderThanDate
+306416	excludeNewerThanDate
+306460	OlderDatePeriodType
+306502	NewerDatePeriodType
+306544	NewFilesUnit
+306572	NewFilesValue
+306602	OldFilesDateTime
+306638	NewFilesDateTime
+306674	SyncOnlyRoot
+306702	FilterWhileComparing
+306770	100
+306780	Exclude: 
+306860	Date < 
+306878	Date > 
+306896	EXCLUDEOLDER
+306924	EXCLUDEMATCHING
+306958	ONECONDITIONLINE
+306994	EXAMPLES
+307096	MOREEXAMPLES
+307172	SIZEFILTER
+307196	EXCLUDELARGERTHAN
+307234	EXCLUDENEWERTHAN
+307310	SYNCONLYROOT
+307364	FILTERWHILECOMPARE
+307404	FILTERWHILECOMPAREHELP
+307452	http://www.airexplorer.net/helpfilter.php
+307578	Date Filter
+307604	comboBoxNewerDatePeriodType
+307782	comboBoxNewFilesUnit
+307826	checkBoxExcludeNewFiles
+307928	checkBoxExcludeOldFiles
+307978	Exclude files older than
+308030	comboBoxOlderDatePeriodType
+308088	dateTimePickerOldFilesDateTime
+308292	Size Filter
+308318	comboBoxUpperSizeUnits
+308366	checkBoxExcludeSmallerThan
+308422	Exclude files smaller than
+308478	checkBoxExcludeLargerThan
+308532	Exclude files larger than
+308644	numericUpDownUpperSizeLimit
+308702	comboBoxLowerSizeUnits
+308790	Name filter
+308816	labelInclude
+308940	Exclude the files matching:
+308998	textBoxInclude
+309030	textBoxExclude
+309062	linkLabelMoreInfo
+309100	More examples and help
+309148	labelOneCondition
+309186	Enter one condition per line
+309276	Examples: *.ini; */thumbs.db; /subfolder/*.txt
+309372	checkBoxOnlyRoot
+309522	checkBoxFilterWhileComparing
+309582	Do not read and compare folders that are filtered
+309684	It allows faster folder comparison, but the filtered folders will not be shown in the  synchronization list
+309902	SyncFilterControl
+309940	FILESARESAME
+309968	HashCompared
+309996	File is locked or the server didn't provide a hash, hash could not be calculated
+310160	different
+310202	RefreshError
+310230	SameDate
+310250	SameDateDifferentSize
+310296	FolderAlreadyExists
+310448	The 
+310606	synctasks.xml
+310636	<?xml version="1.0"?> <CloudSyncTasks version = "1.0" />
+310752	SyncTasks
+311104	 was imported correctly
+311588	LeftPath
+311608	RightPath
+311630	LeftAccount
+311684	LeftAlias
+311706	RightAccount
+311734	RightProvider
+311804	RightId
+311958	IsRealTime
+311982	RealTimeDoInitialSync
+312028	AutoStart
+312072	syncpair
+312092	//property[@EncryptionPassword]
+312204	The text is not a valid Windows path.
+312282	Invalid Path
+312310	EXCHANGELEFTRIGHT
+312348	labelLeftCloud
+312380	textBoxLeft
+312406	toolStripDropDownButtonBrowseLeft
+312476	ButtonExchange.Image
+312552	labelRightCloud
+312586	textBoxRight
+312614	toolStripDropDownButtonBrowseRight
+312686	toolStripSeparatorDelete
+312738	toolStripButtonRemoveToolbar
+312798	SyncToolbar
+312860	DECRYPT
+312922	contextMenuStrip1
+312960	local://
+312980	localListViewMode
+313018	verylarge
+313084	localFileListView1
+313124	toolStripButtonShowTree
+313210	New folder...
+313240	toolStripDropDownButtonBookmarks
+313308	PanelLocalExplorer
+313448	 interface
+313472	Login via 
+313496	 required
+313688	start
+313702	Starting byte cannot be less than 0.
+313778	utf-8
+313916	net
+313926	use
+313936	/user:
+313982	 "/user:
+314002	labelNetworkPath
+314038	Network path:
+314068	labelDriveLetter
+314104	Drive Letter:
+314134	textBoxNetworkPath
+314174	textBoxDriveLetter
+314214	radioButtonSystemCommand
+314266	Execute a system command
+314318	textBoxCommand
+314350	radioButtonNetWorkDrive
+314450	FormCustomCommand
+314560	schedulledTaskControl1
+314608	FormTaskEditor
+314640	Edit Scheduled Task
+314682	runscheduledtask
+314718	/logfile=
+314740	/reportfile=
+314768	/pre=
+314782	/emailresult
+314810	/encrypt=
+314832	/encryptName=
+314862	/encryptContent=
+314898	/speedlimit=
+314926	/zippassword=
+314956	/compressionlevel=
+314996	runsavedsync
+315024	upload
+315040	zipupload
+315062	transfer
+315082	/R
+315090	/S
+315128	Invalid task
+315256	 /emailresult
+315286	 /S
+315296	meW$i39Bs0o%3ls(903k3)9dk3=MQ9.?/3
+315424	SAVESCHEDULEDTASK
+315462	ENTERWINDOWSUSER
+315498	Error saving task: 
+315540	E_ACCESSDENIED
+315572	RUNASADMIN
+315596	ScrollInternal
+315820	CHECKGROUP
+315994	Check group
+316020	progressBar1
+316048	labelSelectedAccounts
+316094	Selected accounts
+316168	Common Team Drives found:
+316222	labelHelp
+316244	labelHelp.Text
+316308	Accounts group name
+316350	textBoxGroupName
+316386	buttonAdd
+316418	-->
+316428	listViewSelected
+316464	listViewAvailable
+316502	labelAvailableAccounts
+316550	Available accounts
+316630	FormAccountGroup
+316858	radioButtonConnectionString
+316916	Use connection string
+316962	textBoxConnectionString
+317012	radioButtonAccountAndPassword
+317074	Use account name and key
+317126	Key:
+317138	Storage Account Name:
+317184	radioButtonSAS
+317302	textBoxSAS
+317326	FormAzureLogin
+317358	Azure Login
+317384	textBoxClientSecret
+317426	Client Secret
+317456	labelClientId
+317486	Client ID
+317508	textBoxClientId
+317542	linkLabelHelp
+317572	How to create a client Id and a client secret
+317694	Custom Client Id
+317850	JSON files (*.json)|*.json|All files (*.*)|*.*
+317946	SELECTSERVICEACCOUNTJSONFILE
+318006	textBoxEmail
+318034	labelemail
+318146	buttonBrowse
+318174	textBoxServiceAccountFile
+318228	labelServiceAccountFileFile
+318286	Service Account JSON credentials file
+318404	Gogole Service Account
+318624	PEM private key file
+318668	PEM files (*.pem)|*.pem
+318718	textBoxPrivateKeyFile
+318764	labelPrivateKeyFile
+318806	Private Key file
+318842	textBoxPrivateKeyPassword
+318896	labelPrivateKeyPassword
+318990	textBoxRootFolder
+319028	labelRootFolder
+319088	FormSFTPLogin
+319118	SFTP Login
+319142	textBox2fa
+319166	label2fa
+319186	2 Factor Pin:
+319216	FormSimpleLogin
+319296	Unable to open default browser to show the login window
+319410	.323
+319422	text/h323
+319444	.3g2
+319456	video/3gpp2
+319494	video/3gpp
+319532	.3gpp
+319546	application/x-7z-compressed
+319604	.aa
+319614	audio/audible
+319644	.AAC
+319656	audio/aac
+319678	.aaf
+319690	.aax
+319702	audio/vnd.audible.aax
+319748	.ac3
+319760	audio/ac3
+319782	.aca
+319794	.accda
+319810	application/msaccess.addin
+319866	.accdb
+319882	application/msaccess
+319926	.accdc
+319994	.accde
+320010	.accdr
+320026	application/msaccess.runtime
+320086	.accdt
+320102	.accdw
+320118	application/msaccess.webapplication
+320192	.accft
+320208	application/msaccess.ftemplate
+320272	.acx
+320284	application/internet-property-stream
+320376	.ade
+320468	.adp
+320480	.ADT
+320492	audio/vnd.dlna.adts
+320548	.afm
+320560	.ai
+320570	application/postscript
+320618	.aif
+320630	audio/x-aiff
+320658	.aifc
+320672	audio/aiff
+320696	.aiff
+320844	.amc
+320856	application/x-mpeg
+320896	.application
+320924	application/x-ms-application
+320984	.art
+320996	image/x-jg
+321020	.asa
+321032	application/xml
+321106	.asf
+321118	video/x-ms-asf
+321150	.ashx
+321164	.asi
+321176	.asm
+321202	.aspx
+321216	.asr
+321228	.asx
+321254	application/atom+xml
+321298	.au
+321308	audio/basic
+321426	.bas
+321438	.bcpio
+321454	application/x-bcpio
+321496	.bin
+321508	.bmp
+321542	.c
+321550	.cab
+321562	.caf
+321574	audio/x-caf
+321600	.calx
+321678	.cat
+321752	.cc
+321762	.cd
+321772	.cdda
+321786	.cdf
+321798	application/x-cdf
+321836	.cer
+321848	application/x-x509-ca-cert
+321916	.class
+321932	application/x-java-applet
+321986	.clp
+321998	application/x-msclip
+322042	.cmx
+322080	.cnf
+322092	.cod
+322152	.contact
+322172	text/x-ms-contact
+322210	.coverage
+322232	.cpio
+322246	application/x-cpio
+322286	.cpp
+322310	application/x-mscardfile
+322362	.crl
+322374	application/pkix-crl
+322430	.cs
+322440	.csdproj
+322460	.csh
+322472	application/x-csh
+322510	.csproj
+322528	.css
+322540	text/css
+322572	text/csv
+322592	.cur
+322604	.cxx
+322628	.datasource
+322654	.dbproj
+322672	.dcr
+322684	application/x-director
+322744	.deploy
+322762	.der
+322774	.dgml
+322788	.dib
+322800	.dif
+322812	video/x-dv
+322836	.dir
+322864	.dll
+322876	.dll.config
+322902	.dlm
+322934	.doc
+322946	application/msword
+323112	.dotm
+323126	application/vnd.ms-word.template.macroEnabled.12
+323226	.dotx
+323240	application/vnd.openxmlformats-officedocument.wordprocessingml.template
+323386	.dsp
+323410	.dtd
+323422	.dtsConfig
+323446	.dv
+323506	.dwf
+323518	drawing/x-dwf
+323548	.dwp
+323560	.dxr
+323584	message/rfc822
+323616	.emz
+323628	.eot
+323640	.eps
+323652	.etl
+323664	application/etl
+323740	.evy
+323752	application/envoy
+323790	.exe
+323828	.fdf
+323840	application/vnd.fdf
+323882	.fif
+323894	application/fractals
+323958	Application/xml
+324004	.flr
+324016	x-world/x-vrml
+324048	.flv
+324060	video/x-flv
+324086	.fsscript
+324108	application/fsharp-script
+324162	.fsx
+324174	.generictest
+324202	.gif
+324214	image/gif
+324236	.group
+324252	text/x-ms-group
+324286	.gsm
+324324	.gtar
+324338	application/x-gtar
+324378	.gz
+324388	application/x-gzip
+324428	.h
+324436	.hdf
+324448	application/x-hdf
+324486	.hdml
+324526	.hhc
+324612	.hlp
+324624	application/winhlp
+324676	.hqx
+324688	application/mac-binhex40
+324740	.hta
+324752	application/hta
+324786	.htc
+324798	text/x-component
+324834	.htt
+324882	.hxa
+324906	.hxd
+324918	.hxe
+324942	.hxh
+324954	.hxi
+324978	.hxq
+324990	.hxr
+325014	.hxt
+325026	.hxv
+325050	.hxx
+325062	.i
+325082	image/x-icon
+325110	.ics
+325122	.idl
+325134	.ief
+325168	.iii
+325180	application/x-iphone
+325248	.inl
+325260	.ins
+325272	application/x-internet-signup
+325334	.ipa
+325398	.ipg
+325410	application/x-itunes-ipg
+325462	.ipproj
+325480	.ipsw
+325494	application/x-itunes-ipsw
+325548	.iqy
+325560	text/x-ms-iqy
+325590	.isp
+325602	.ite
+325614	application/x-itunes-ite
+325680	application/x-itunes-itlp
+325734	.itms
+325748	application/x-itunes-itms
+325802	.itpc
+325816	application/x-itunes-itpc
+325908	.jar
+325972	.java
+325998	application/liquidmotion
+326102	.jnlp
+326116	application/x-java-jnlp-file
+326176	.jpb
+326188	.jpe
+326200	image/jpeg
+326224	.jpeg
+326248	application/x-javascript
+326300	.jsx
+326312	text/jscript
+326340	.jsxbin
+326358	.latex
+326416	.library-ms
+326442	application/windows-library+xml
+326592	.lpk
+326604	.lsf
+326616	video/x-la-asf
+326648	.lst
+326660	.lsx
+326672	.lzh
+326684	.m13
+326696	application/x-msmediaview
+326750	.m14
+326762	.m1v
+326774	video/mpeg
+326810	video/vnd.dlna.mpeg-tts
+326860	.m2ts
+326874	.m2v
+326898	audio/x-mpegurl
+326932	.m3u8
+326958	audio/m4a
+326980	.m4b
+326992	audio/m4b
+327026	audio/m4p
+327060	audio/x-m4r
+327086	.m4v
+327098	video/x-m4v
+327124	.mac
+327136	image/x-macpaint
+327172	.mak
+327184	.man
+327196	application/x-troff-man
+327246	.manifest
+327322	.map
+327352	.mda
+327364	.mdb
+327376	application/x-msaccess
+327458	application/x-troff-me
+327506	.mfp
+327518	application/x-shockwave-flash
+327580	.mht
+327592	.mhtml
+327608	.mid
+327620	audio/mid
+327668	.mk
+327678	.mmf
+327690	application/x-smaf
+327730	.mno
+327754	application/x-msmoney
+327800	.mod
+327812	.mov
+327824	video/quicktime
+327858	.movie
+327874	video/x-sgi-movie
+327912	.mp2
+327950	audio/mpeg
+327974	video/mp4
+328010	.mpa
+328022	.mpe
+328034	.mpf
+328046	application/vnd.ms-mediapackage
+328112	.mpp
+328124	application/vnd.ms-project
+328180	.mpv2
+328194	.mqv
+328216	application/x-troff-ms
+328264	.msi
+328276	.mso
+328288	.mts
+328312	.mvb
+328324	.mvc
+328336	application/x-miva-compiled
+328394	.mxp
+328446	.nc
+328456	application/x-netcdf
+328524	.ocx
+328536	.oda
+328548	application/oda
+328582	.odc
+328594	text/x-ms-odc
+328624	.odh
+328660	application/oleobject
+328706	.one
+328718	application/onenote
+328760	.onea
+328774	.onepkg
+328792	.onetmp
+328810	.onetoc
+328828	.onetoc2
+328848	.orderedtest
+328890	application/opensearchdescription+xml
+329032	application/x-pkcs12
+329076	.p7b
+329088	application/x-pkcs7-certificates
+329156	.p7c
+329168	application/pkcs7-mime
+329216	.p7m
+329228	.p7r
+329240	application/x-pkcs7-certreqresp
+329306	.p7s
+329318	application/pkcs7-signature
+329376	.pbm
+329388	image/x-portable-bitmap
+329454	application/x-podcast
+329500	.pct
+329536	.pcx
+329548	.pcz
+329560	.pfb
+329572	.pfm
+329584	.pfx
+329596	.pgm
+329608	image/x-portable-graymap
+329660	.pic
+329672	.pict
+329726	.pko
+329738	application/vnd.ms-pki.pko
+329794	.pls
+329806	audio/scpls
+329832	.pma
+329844	application/x-perfmon
+329902	.pml
+329914	.pmr
+329926	.pmw
+329950	image/png
+329972	.pnm
+329984	image/x-portable-anymap
+330034	.pnt
+330046	.pntg
+330060	.pnz
+330084	application/vnd.ms-powerpoint
+330272	.potx
+330286	application/vnd.openxmlformats-officedocument.presentationml.template
+330428	.ppa
+330454	application/vnd.ms-powerpoint.addin.macroEnabled.12
+330560	.ppm
+330572	image/x-portable-pixmap
+330622	.pps
+330634	.ppsm
+330762	.ppsx
+330776	application/vnd.openxmlformats-officedocument.presentationml.slideshow
+330920	.ppt
+330932	.pptm
+330946	application/vnd.ms-powerpoint.presentation.macroEnabled.12
+331066	.prf
+331078	application/pics-rules
+331138	.prx
+331150	.ps
+331160	.psc1
+331174	application/PowerShell
+331222	.psd
+331234	.psess
+331250	.psm
+331262	.psp
+331274	.pub
+331364	text/x-html-insertion
+331410	.qhtm
+331424	.qt
+331434	.qti
+331446	image/x-quicktime
+331572	.qxd
+331584	.ra
+331594	audio/x-pn-realaudio
+331650	.ras
+331702	.rat
+331714	application/rat-file
+331758	.rc
+331768	.rc2
+331792	.rdlc
+331806	.resx
+331820	.rf
+331830	image/vnd.rn-realflash
+331890	image/x-rgb
+331916	.rgs
+331928	.rm
+331938	application/vnd.rn-realmedia
+331998	.rmi
+332010	.rmp
+332022	application/vnd.rn-rn_music_package
+332096	.roff
+332110	application/x-troff
+332152	.rpm
+332164	audio/x-pn-realaudio-plugin
+332222	.rqy
+332234	text/x-ms-rqy
+332264	.rtx
+332276	text/richtext
+332306	.ruleset
+332360	application/x-safari-safariextz
+332426	.scd
+332438	application/x-msschedule
+332502	text/scriptlet
+332546	audio/x-sd2
+332572	.sdp
+332584	application/sdp
+332672	application/windows-search-connector+xml
+332774	application/set-payment-initiation
+332864	application/set-registration-initiation
+332946	.settings
+332968	.sgimb
+333026	.sgml
+333040	text/sgml
+333062	.sh
+333108	.shar
+333122	application/x-shar
+333162	.shtml
+333178	.sit
+333190	application/x-stuffit
+333236	.sitemap
+333256	.skin
+333270	.sldm
+333284	application/vnd.ms-powerpoint.slide.macroEnabled.12
+333390	.sldx
+333540	.slk
+333552	application/vnd.ms-excel
+333604	.sln
+333692	.smd
+333704	audio/x-smd
+333730	.smi
+333742	.smx
+333766	.snd
+333778	.snippet
+333798	.snp
+333822	.sor
+333858	application/futuresplash
+333910	.src
+333922	application/x-wais-source
+334038	.ssm
+334050	application/streamingmedia
+334106	.sst
+334118	application/vnd.ms-pki.certstore
+334254	.sv4cpio
+334274	application/x-sv4cpio
+334338	application/x-sv4crc
+334382	.svc
+334394	.swf
+334414	.tar
+334426	application/x-tar
+334476	application/x-tcl
+334546	.testsettings
+334576	.tex
+334626	.texi
+334640	application/x-texinfo
+334686	.texinfo
+334770	.thmx
+334784	application/vnd.ms-officetheme
+334848	.thn
+334872	image/tiff
+334896	.tiff
+334910	.tlh
+334922	.tli
+334956	.trm
+334968	application/x-msterminal
+335020	.trx
+335054	text/tab-separated-values
+335132	.u32
+335156	text/iuls
+335250	.vb
+335292	.vbproj
+335364	text/x-vcard
+335392	.vcproj
+335410	.vcs
+335422	.vcxproj
+335442	.vddproj
+335462	.vdp
+335474	.vdproj
+335492	.vdx
+335504	application/vnd.ms-visio.viewer
+335570	.vml
+335582	.vscontent
+335606	.vsct
+335620	.vsd
+335632	application/vnd.visio
+335678	.vsi
+335744	application/vsix
+335780	.vsixlangpack
+335810	.vsixmanifest
+335840	.vsmdi
+335856	.vspscc
+335874	.vss
+335886	.vsscc
+335902	.vssettings
+335928	.vssscc
+335946	.vst
+335958	.vstemplate
+335984	.vsto
+336056	.vsx
+336080	.wav
+336128	.wax
+336140	audio/x-ms-wax
+336172	.wbk
+336184	.wbmp
+336198	image/vnd.wap.wbmp
+336250	application/vnd.ms-works
+336302	.wdb
+336314	.wdp
+336326	image/vnd.ms-photo
+336366	.webarchive
+336392	application/x-safari-webarchive
+336458	.webtest
+336478	.wiq
+336502	.wks
+336514	.WLMP
+336528	application/wlmoviemaker
+336580	.wlpginstall
+336608	application/x-wlpg-detect
+336692	application/x-wlpg3-detect
+336758	video/x-ms-wm
+336788	.wma
+336800	audio/x-ms-wma
+336832	.wmd
+336844	application/x-ms-wmd
+336900	application/x-msmetafile
+336964	text/vnd.wap.wml
+337000	.wmlc
+337014	application/vnd.wap.wmlc
+337080	text/vnd.wap.wmlscript
+337128	.wmlsc
+337144	application/vnd.wap.wmlscriptc
+337208	.wmp
+337220	video/x-ms-wmp
+337252	.wmv
+337264	video/x-ms-wmv
+337296	.wmx
+337308	video/x-ms-wmx
+337340	.wmz
+337396	.wpl
+337408	application/vnd.ms-wpl
+337456	.wps
+337468	.wri
+337550	.wsc
+337562	.wsdl
+337588	video/x-ms-wvx
+337620	.x
+337670	.xaf
+337682	.xaml
+337696	application/xaml+xml
+337740	.xap
+337752	application/x-silverlight-app
+337814	.xbap
+337828	application/x-ms-xbap
+337886	image/x-xbitmap
+337920	.xdr
+337932	.xht
+337944	application/xhtml+xml
+337990	.xhtml
+338006	.xla
+338018	.xlam
+338032	application/vnd.ms-excel.addin.macroEnabled.12
+338128	.xlc
+338140	.xld
+338152	.xlk
+338176	.xlm
+338214	application/vnd.ms-excel.sheet.binary.macroEnabled.12
+338338	application/vnd.ms-excel.sheet.macroEnabled.12
+338434	.xlt
+338460	application/vnd.ms-excel.template.macroEnabled.12
+338562	.xltx
+338576	application/vnd.openxmlformats-officedocument.spreadsheetml.template
+338754	.XOML
+338768	.xpm
+338780	image/x-xpixmap
+338890	.xrm-ms
+338908	.xsc
+338920	.xsd
+338932	.xsf
+338944	.xsl
+338956	.xslt
+338970	.xsn
+338994	.xtp
+339018	image/x-xwindowdump
+339060	.z
+339068	application/x-compress
+339116	application/x-zip-compressed
+339176	video/x-matroska
+339212	.webp
+339262	application/vnd.android.package-archive
+339344	Content Type
+339400	SELECTFILEORFOLDER
+339478	CREATENEWSYNCHRONIZATION
+339530	NEWREALTIME
+339556	EXPORT
+339572	IMPORT
+339588	ItemContextMenu
+339622	contextMenuRemove
+339660	colors
+339676	colorsblack
+339702	pack://application:,,,/PanelAccountsManager/
+339826	syncs.aesync
+339854	 (*.aesync)| *.aesync| 
+339904	 (*.*)|*.*
+339928	/AirExplorer;component/panelsyncmanager/panelsynccontrol.xaml
+340086	ENCRYPT
+340104	REALTIMELOGS
+340132	SYNCHRONIZEONSTART
+340172	AUTOSTART
+340194	/AirExplorer;component/panelsyncmanager/syncdetailscontrol.xaml
+340382	realtime16x16.png
+340474	dateTimePickerStart
+340516	dateTimePickerEnd
+340554	checkBoxFrom
+340582	checkBoxTo
+340606	FormDateRangeSelect
+340764	Example: jpg png avi
+340808	Limit the search to these file extensions. Separate with an space each extension
+340972	FormExtensionsRangeSelect
+341026	Select file extensions
+341160	GB
+341168	comboBoxMaxUnit
+341202	textBoxMaxValue
+341236	Maximum size
+341264	Minimum size
+341292	textBoxMinValue
+341326	comboBoxMinUnit
+341576	SMALLERTHAN
+341626	BEFORE
+341642	AFTER
+341656	CANCELLING
+341680	toolStripLabelFolder
+341786	All
+341824	toolStripButtonCancelSearch
+341882	toolStripDropDownButtonDate.Image
+341952	toolStripDropDownButtonDate
+342010	toolStripDropDownButtonType.Image
+342080	toolStripDropDownButtonType
+342350	ADDACCOUNT
+342374	IsConnected
+342400	IsBusy
+342416	NO
+342424	YES
+342434	NOTSCHEDULED
+342488	ALIAS
+342502	ImageButtonWithBorder
+342548	col1
+342560	ActualWidth
+342586	label
+342622	/AirExplorer;component/panelaccountsmanager/accountdetailscontrol.xaml
+342796	ADDCATEGORY
+342822	SPACEFREE
+342844	OPENONLEFT
+342868	OPENONRIGHT
+342894	contextMenuOpenOnLeft
+342940	contextMenuOpenOnRoght
+342988	contextMenuExport
+343026	contextMenuClearCache
+343072	CLEARFILESCACHE
+343256	/AirExplorer;component/panelaccountsmanager/panelaccountscontrol.xaml
+343398	REGISTERACCOUNT
+343432	/AirExplorer;component/panelaccountsmanager/panelselectaccountcontrol.xaml
+343694	_tmp
+343706	DateTime
+343726	stringdec
+343868	PERMISSIONS
+343894	ADD
+343904	ADDCOLLABORATOR
+343938	Could not change collaborator role, error: 
+344028	Could not add collaborator, error: 
+344102	listViewCollaboratos
+344146	groupBoxAdd
+344172	Add collaborator
+344230	Role
+344242	labelEmail
+344266	comboBoxRoles
+344296	CollaboratorsPage
+344334	${length}
+344404	filenium.com
+344502	THISWEEK
+344522	LASTMONTH
+344544	LASTYEAR
+344564	LAST30DAYS
+344588	DOCUMENT
+344622	VIDEO
+344636	AUDIO
+344650	TINY
+344662	 (0 - 16 KB)
+344690	SMALL
+344738	MEDIUM
+344754	 (1 - 128 MB)
+344798	 (128 MB - 1 GB)
+344834	HUGE
+344878	GIGANTIC
+344918	.3gp.aa.aac.aax.act.aiff.alac.amr.ape.dvf.flac.m4a.m4b.m4p.mmf.mp3.mpc.msv.ogg.oga.mogg.opus.ra.rm.tta.wav.wma.webm
+345152	doc.docx.ebook.log.md.msg.odt.org.pages.pdf.rtf.rst.tex.txt.wpd.wps.ods.xls.xlsx.csv.ics.vcf.ppt.odp.mobi.epub.azw1.azw3.azw4.azw6.azw.cbr.cbz
+345440	.ase.art.bmp.blp.cd5.cit.cpt.cr2.cut.dds.dib.djvu.egt.exif.gif.gpl.grf.icns.ico.iff.jng.jpeg.jpg.jfif.jp2.jps.lbm.max.miff.mng.msp.nitf.ota.pbm.pc1.pc2.pc3.pcf.pcx.pdn.pgm.PI1.PI2.PI3.pict.pct.pnm.pns.ppm.psb.psd.pdd.psp.px.pxm.pxr.qfx.raw.rle.sct.sgi.rgb.int.bw.tga.tiff.tif.vtf.xbm.xcf.xpm.3dv.amf.ai.awg.cgm.cdr.cmx.dxf.e2d.egt.eps.fs.gbr.odg.svg.stl.vrml.x3d.sxd.v2d.vnd.wmf.emf.art.xar.png.webp.jxr.hdp.wdp.cur.ecw.iff.lbm.liff.nrrd.pam.pcx.pgf.sgi.rgb.rgba.bw.int.inta.sid.ras.sun.tga
+346424	.avi.mkv.mp4.flv.mpeg.mpg.mov.3gp.mpeg1.mpeg2.mts.ogm.a52.aac.m1v.mpeg4.oma.vob.m4a.wmv.ac3.asf.mp2.mka.m4p
+346642	.3gp.aa.aac.aax.act.aiff.alac.amr.ape.dvf.flac.m4a.m4b.m4p.mmf.mp3.mpc.msv.ogg.oga.mogg.opus.ra.rm.tta.wav.wma.webm.
+346878	doc.docx.ebook.log.md.msg.odt.org.pages.pdf.rtf.rst.tex.txt.wpd.wps.ods.xls.xlsx.csv.ics.vcf.ppt.odp.mobi.epub.azw1.azw3.azw4.azw6.azw.cbr.cbz.
+347200	ERRORRESTORINGVERSION
+347246	VersionsPage
+347274	not supported
+347304	.cache
+347550	AccountsCache
+347648	: File in use
+348228	^\\\\([^\\]+)
+348258	^\\\\([^\\]+)\\([^\\]+)
+348368	https://www.airexplorer.net/checkversion/getMoreSpace.php?cloud=
+348900	labelSelect
+348926	Select file or folder
+348972	textBoxSelection
+349120	degoo.com
+349142	input
+349156	color: black !important;
+349208	color: white !important;
+349260	button
+349276	FormCookiesLogin
+349312	ACCOUNT
+349362	labelDisplayName
+349398	Display name:
+349428	textBoxDisplayName
+349468	labelCloud
+349492	Cloud:
+349508	textBoxCloud
+349536	textBoxAccount
+349568	labelAccount
+349596	Account:
+349642	labelPath
+349664	Path:
+349678	Delete bookmark
+349802	radioButtonExportAll
+349846	Export all the accounts
+349896	radioButtonExportSelected
+349950	Export the selected accounts
+350010	FormExportSelection
+350104	MODIFIED
+350124	PROPERTY
+350144	VALUE
+350158	duration
+350178	N0
+350186	 bytes)
+350204	Hash (
+350220	):
+350228	Error saving properties: 
+350358	tabPage1
+350378	pictureBoxIcon
+350410	textBoxFileName
+350444	Description:
+350472	textBoxType
+350498	labelType
+350520	Type of file:
+350550	textBoxDescription
+350590	labelSize
+350612	Size:
+350626	textBoxLocation
+350660	labelLocation
+350690	Location:
+350712	textBoxSize
+350738	labelHash
+350774	labelModified
+350804	Modified:
+350858	labelCreated
+350906	textBoxModified
+350940	textBoxHash
+350966	tabPage2
+350986	listView1
+351008	Property
+351028	contextMenuDetailsList
+351076	copyToolStripMenuItem
+351122	FormFileProperties
+351196	CONTAINS
+351216	FOLDERS
+351274	Multiple types
+351306	labelContains
+351336	Contains:
+351358	textBoxContains
+351392	pictureBox2
+351418	pictureBox1
+351444	FormMultiFolderProperties
+351498	FormFolderProperties
+351542	button2
+351560	FormLogs
+351580	customListView1
+351692	FormOauth
+351790	labelOpening
+351818	Opening 
+351838	labelProgress
+351868	0%
+351910	Opening file
+351938	RenameAllOccurences
+351980	RenameRegularExpressions
+352032	RenameCaseInsensitive
+352202	SEARCHFOR
+352224	REPLACEWITH
+352250	NEWNAME
+352268	REPLACEALL
+352292	CASEINSENSITIVE
+352326	USEREGULAREXPRESSIONS
+352372	ENUMERATEELEMENTS
+352430	APPLYTO
+352448	$$
+352456	^(.*)\s\((\d+)\)$
+352494	{0} ({1}){2}
+352538	Enter the criteria below to rename the items
+352630	checkBoxCaseInsensitive
+352680	Case Sensitive
+352712	checkBoxRegularExpressions
+352768	Use regular expressions
+352818	checkBoxAllOccurences
+352864	Replace all occurences
+352912	labelSearch
+352964	labelReplace
+352992	Replace with:
+353022	textBox2
+353042	checkBoxMatchAny
+353078	Any name
+353098	labelApplyTo
+353126	Apply to:
+353148	comboBoxApplyTo
+353182	checkBoxEnumerate
+353220	Enumerate Items
+353254	Original
+353274	Renamed
+353350	FormProgress
+353378	REALTIMESYNC
+353406	SYNCHRONIZATIONTYPE
+353448	AUTOSTARTSYNC
+353478	textBoxSource
+353508	checkBoxAutoStart
+353546	Start the synchronization when the application starts
+353656	labelSyncType
+353686	Synchronization Type:
+353732	checkBoxSynchronizeOnStart
+353788	Synchronize on start
+353868	FormRealTimeSync
+353904	Real Time Sync
+353956	updates/
+354054	Downloading the latest version...
+354124	FormUpdate
+354148	Downloading update
+354388	If you lost this password you won't be able to unzip the files
+354516	Encrypt the zip files with the following password:
+354644	Compression Level
+354712	FormZipConfiguration
+354756	Zip Configuration
+354988	linkLabel1
+355012	MessageBoxAutoLink
+355132	labelValidUntil
+355166	Pro version valid until 12/12/2015
+355238	labelLicense
+355266	Licensed to Pepe (paosd@ospoidid.com)
+355344	Version 5.11.0
+355426	richTextBoxTransparent1.Text
+355486	FormAbout
+355508	About
+355606	labelPlease
+355826	labelActivating
+355860	Activating License. Please Wait ...
+355934	Buy the Pro version
+355976	email:
+355992	FormActivation
+356068	Adrive Premium
+356100	Naver MYBOX
+356356	Amazon
+356392	 MYBOX
+356408	BottomToolStripPanel
+356452	TopToolStripPanel
+356490	RightToolStripPanel
+356532	LeftToolStripPanel
+356572	toolStripButtonAll
+356612	toolStripButtonPersonal
+356662	Personal
+356682	toolStripButtonBusiness
+356792	NAS
+356802	toolStripButtonGroup
+356846	Group
+356860	FormAddAccount
+357014	OSversion
+357036	lang
+357048	Thanks for reporting the error
+357138	ERRDETAILS
+357180	ERRCOPY
+357198	button4
+357216	Copy error to clipboard
+357294	button3
+357312	Send error 
+357370	The software detected an error.
+357436	Sending error report to lphant.com, please wait ...
+357542	FormBugReport
+357572	Error detected
+357684	buttonNo
+357712	buttonYes
+357734	Yes
+357744	There are pending transfers. Are you sure you want to close the software?
+357932	Save the tasks list to continue the transfers on the next start up
+358068	FormClosingApp
+358128	buttonParameters
+358194	FormEditAccount
+358256	Error opening file: 
+358300	FormOpenRemote
+358420	This feature is only available for the Pro version.
+358526	Upgrade to Pro Version
+358574	FormPro
+358666	SHAREINFO
+358688	COPYCLIPBOARD
+358718	SENDBYEMAIL
+358744	Shared link could not be created
+358812	IHAVESHARED
+358884	CLICKONLINK
+358910	SHAREDUSING
+358936	 , 
+358966	%0D%0A
+358982	mailto:?subject=
+359018	&body=
+359034	Email could not be sent
+359110	Share this link  with other people. Anyone with this link will be able to download the file.
+359298	buttonCopy
+359322	Copy to Clipboard
+359360	panelWait
+359382	labelGenerating
+359416	Getting public link for 
+359502	Send by email
+359556	show
+359616	Unknown parameter {0}
+359662	Lists all the accounts defined in 
+359734	Success, some files were up to date
+359808	Success, no copy was done, files were up to date
+359908	Error, check the task log file for details
+359996	Error, some files were copied but other files failed, check the task log file for details
+360178	/password=
+360202	Applying bandwidth config file settings: 
+360288	/compareonlydiff
+360324	/compareonly
+360352	/donotreadfiltered
+360392	/syncrootonly
+360422	help
+360434	Command line support is disabled. To execute command line commands you must enable it in the 
+360624	 preferences.
+360654	Please include the configured command line password using the argument /password=[password]
+360840	Please enter a password for the command line interface in the 
+360968	Invalid password.
+361006	Invalid scheduled task definition, please check it in 
+361118	 command line
+361148	delete
+361164	mkdir
+361178	search
+361194	multicmd
+361214	startsync
+361236	/enablehash
+361262	/filter
+361280	/reportfile
+361306	Unknown command {0}
+361348	Run 
+361360	 help to get a list of commands
+361426	Command 
+361446	 executed
+361488	You can check the details in the log file.
+361576	 task executed - 
+361614	" 
+361622	Connecting 
+361648	 to 
+361702	Could not execute command: 
+361760	/D
+361768	Account alias {0} not found, run "accounts" command so see a list of all the defined accounts
+361958	There are several cloud accounts with the same alias {0} defined, please rename them to be unique
+362214	yyyMMdd-HHmm
+362242	{DATETIME}
+362266	yyyMMdd-HHmmss
+362298	{DATETIMESECONDS}
+362458	 GUI, check "accounts" command to get a list of configured clouds
+362624	 copy cloud path destinationPath [/O | /R | /S | /D]
+362732	 cloud 
+362750	 path Path to the source file or folder to copy, it is possible to use wildcards to specify several files (ex: *.txt)
+362988	 destinationPath Folder where the file or folder will be copied
+363118	 /O  overwrite if the file exists, default
+363206	 /R  rename if the file exists
+363270	 /S  skip if the file exists
+363330	 /D  copy only if the source file is newer than the destination file
+363470	The renanme option (/R) is not available for local files, only for cloud files
+363630	 not copied to 
+363664	. File already exists
+363710	. File already exists and is newer or same date
+363808	 not found.
+363834	Source folder not found {0}
+363892	\..*
+363904	(?:\..*)?
+363926	No files match pattern '{0}' in folder '{1}'
+364018	 copied to 
+364096	Could not find or create the destination folder {0}
+364202	File already exists, skipping {0}
+364272	The file {0} already exists in the target folder, file renamed to {1}
+364414	Source file is newer ({0} vs {1}), overwriting {2}
+364518	File already exists and is newer or equal, skipping {0}
+364632	Error copying {0}: {1}
+364680	Path not found {0}
+364720	Found {0} matching files in {1}
+364786	Copies a file or a folder to another location in a cloud server.
+364918	 delete cloud path
+365200	Found {0} matching items in {1}
+365266	Deletes a file or a folder in a cloud server.
+365360	H:
+365368	HH:
+365478	 path Full path of the folder that will be listed. If omitted, all roots will be listed
+365706	 /id Show files and folders Id
+365770	 /d List directories only
+365824	 /a List files only (exclude directories)
+365910	 /b Use simple output (names only, with /s shows full paths)
+366034	 /t Use the <tab> character as the fields separator
+366140	No roots found
+366186	Path {0} not found
+366226	Folder is empty
+366260	Folder could not be refreshed, error: {0}
+366346	Lists all the files and folders in a cloud server folder.
+366464	 command line client help.
+366538	Cmd <command> [parameters] /password=<password>
+366636	Available commands:
+366678	/password=<password> Password for the command line configured in the 
+366820	/logfile=<logFileName> Write the log lines to a file. It can include the macros {DATE} or {DATETIME} or {DATETIMESECONDS} to include the current date (and time) in the log file name, for example: /logfile="C:\MyLogFolder\MyLogFile-{DATE}.txt"
+367308	/emailresult Sends an email with the result of the operation
+367432	The command exit codes are listed in www.airexplorer.net/help 
+367560	Type 
+367574	Cmd <command> to get more help about each command specific parameters.
+367832	Folder created
+367864	Folder could not be created
+368102	 path Path to the source file or folder to move, it is possible to use wildcards to specify several files (ex: *.txt)
+368468	Error moving {0}: {1}
+368514	Moves a file or a folder to another location in a cloud server.
+368644	 file
+368658	 file Path to the text file with the commands to run
+369034	The command waitTasks will wait for all previous commands to finish before continuing
+369208	waitTasks /logfile=<file> changes the log file for the next commands
+369348	Commands starting with # or rem will be ignored
+369446	Commands starting with echo will be printed to the console or log file. It is possible to use the macros %date% and %time%
+369694	File not found {0}
+369734	rem 
+369758	%time%
+369774	%date%
+369942	Running command {0}
+370090	Runs a set of commands defined in a file
+370174	/grant
+370190	/remove
+370208	/show
+370222	 cloud path (/grant user role [/nonotification]|/remove user|/show [/s])  
+370374	 path Path to the folder or file to grant or remove permissions
+370592	  user  email of the user
+370754	  /nonotification  Do not send email notifications
+370930	 /show  show the permissions
+370990	 /s  show the permissions recursively
+371068	 /t  use the <tab> character as the fields separator
+371176	Allowed roles for Box: editor, viewer, co-owner, previewer, uploader, "viewer uploader", "previewer uploader"
+371498	Allowed roles for Google Drive: writer, reader, organizer, owner, commenter
+371652	Allowed roles for OneDrive and SharePoint: write, read
+371764	This command is not supported for the cloud 
+371856	There was an error getting the 
+371922	 permissions - 
+371956	/s
+371964	 is not shared
+371996	User not specified
+372036	There was an error removing the 
+372278	/nonotification
+372438	There was an error changing the 
+372546	/t
+372662	The folder is not shared
+372714	There was an error getting the folder '
+372796	' permissions - 
+372832	Invalid parameter /s, the specified item is not a folder
+372948	Operation not specified correctly, use /grant, /remove or /show
+373160	The folder is not shared with more users
+373384	 quota cloud
+373462	Quota:  {0} - {1}
+373500	Free space:  {0} - {1}
+373548	Shows the used and free space in a cloud server.
+373648	 rename cloud path newname
+373704	 path Path to the source file or folder to rename
+373806	 newname New name for the file or folder
+373890	Renames a file or a folder in a cloud server.
+374104	Unknown or invalid parameter 
+374166	largerthan
+374190	maxresults
+374240	newerthan
+374262	olderthan
+374284	Invalid type. Valid values are all, document, image, video, audio and folder.
+374442	Invalid largerthan size. Use a non-negative integer followed by B, KB, MB or GB.
+374606	Invalid smallerthan size. Use a non-negative integer followed by B, KB, MB or GB.
+374772	Invalid newerthan date. Use yyyy-MM-dd.
+374936	Invalid maxresults. Enter a number from 1 to 150.
+375038	Unknown parameter /
+375080	largerthan cannot be greater than smallerthan.
+375176	newerthan cannot be later than olderthan.
+375262	Size filters cannot be used with /type=folder.
+375400	^(\d+)(B|KB|MB|GB)$
+375442	yyyy-MM-dd
+375466	 search cloud "text" [/folder="path"] [/type=all|document|image|video|audio|folder] [/largerthan=size] [/smallerthan=size] [/newerthan=yyyy-MM-dd] [/olderthan=yyyy-MM-dd] [/maxresults=1..150] [/fullpath]
+375876	 text Text to search for. Use quotes when it contains spaces
+376134	 /type=<type> Filter by all, document, image, video, audio or folder
+376274	 /largerthan=<size> Minimum inclusive file size (B, KB, MB or GB)
+376408	 /smallerthan=<size> Maximum inclusive file size (B, KB, MB or GB)
+376674	 /olderthan=<date> Maximum inclusive modified date (yyyy-MM-dd)
+376804	 /maxresults=<number> Maximum number of results, from 1 to 150 (default 20)
+376958	 /fullpath Show full paths instead of names
+377048	Could not connect to cloud account {0}
+377168	Search did not complete successfully
+377280	Searches for files and folders in a cloud server.
+377382	 sharelink cloud path
+377556	Error creating the shared link: 
+377624	Creates a shared link for a file or a folder in a cloud server.
+379390	 /compareonly  Do not synchronize, only compare and show the comparison results
+379552	 /compareonlydiff  Do not synchronize, only compare and show the differences
+380558	Invalid synchronization type {0}, it must be Mirror, Bidirectional, MirrorUpdate or Update
+380742	\\?\
+380754	Invalid synchronization configuration
+380832	/filter=
+380852	size\s*([<|>])\s*(\d+)\s*MB
+380910	Reading source and destination files and folders, it might take some time...
+381066	Comparing files...
+381134	Synchronization report 
+381184	Starts a synchronization of two folders
+381502	 sourcePath Path to the source folder or file in the cloud, it is possible to use wildcards to specify several files (ex: *.txt)
+381762	 Destination 
+381792	 /encrypt=<encryptionPassword>  encrypt file content, file name and folders names
+381958	 /encryptName=<encryptionPassword>  encrypt file content and name
+382214	 /Do not include encryptionPassword to use the configured password for encryptions for the target account
+382428	Include an encryption password in the command or configure an encryption password for the account with the user interface first
+382686	Source path not found {0}
+382830	sourceCloud
+382856	destinationCloud
+382892	 upload source cloud destination [/O | /R | /S | /D] [/encrypt | /encryptName | /encryptContent]
+383088	 source Path to a local file or folder, it is possible to use wildcards to specify several files (ex: *.txt)
+383308	 cloud Target 
+383340	 destination Path to the destination folder in the target cloud, if the path is not found it will be created
+383654	 download cloud path destinationPath [/O | /R | /S | /D]
+383802	 path Path to the source folder or file in the cloud, it is possible to use wildcards to specify several files (ex: *.txt)
+384288	Downloads a file or a folder from a cloud server to a local folder.
+384426	 zipupload source cloud destination [/zippassword=<password>] [/compressionlevel=1|2|3]
+384604	 source Path to a local file or folder
+384684	 /zippassword=<zipPassword>  encrypt the zip file with a password
+384818	 /compressionlevel=1|2|3  compression level, default is 2, best compression is 3, fast compression is 1
+385028	Zip and upload a file or a folder to a cloud server.
+385136	 runsavedsync syncname [/compareonly|/compareonlydiff] [/reportfile=<ReportFilePath>]
+385420	 GUI
+385846	 EXAMPLE: runsavedsync MySavedSync /reportfile="c:\Logs\MySavedSync_report_{DATE}.html"
+386098	Synchronization report could not be saved to 
+386396	checkBoxEnableChunked
+386442	Enable chunked uploads
+386528	Chunk retries
+386600	Parallel chunks number
+386648	numericUpDown1
+386680	numericUpDown2
+386712	checkBoxShowColoredFolders
+386768	Display different icons for shared folders and locked files (slower refresh).
+386926	checkBoxRefreshIfChanged
+387072	checkBoxSaveCache
+387110	Save files and folders list in cache
+387216	Box Configuration
+387390	labelDuration
+387420	Lock duration:
+387452	comboBoxDuration
+387488	checkBoxDisableDownload
+387538	Disable download
+387574	FormLock
+387594	Lock
+388054	ADDATTRIBUTE
+388082	date
+388094	MetadataValues
+388126	ATTRIBUTENAME
+388280	TagsPage
+388300	_32_box
+388318	favicon_48_box
+388350	faviconbox
+388374	faviconboxcom
+388486	checkBoxShowOthers
+388526	checkBoxShortcuts
+388564	Show shortcuts for SharePoint site folders and other user's folders
+388740	Show the root drives for these users:
+388852	Enter a list of users emails that created a link to share their drives with me
+389012	textBoxEmails
+389042	labelRate
+389064	Number of allowed requests per each 2 seconds:
+389160	numericUpDownRate
+389198	checkBoxShowDriveNames
+389246	Show Drive names for other user's drives
+389330	FormConfigOneDriveForBusiness
+389392	OneDriveForBusiness configuration
+389492	labelSites
+389584	textBoxSites
+389612	checkBoxSaveSitesCache
+389712	FormConfigSharepoint
+389756	Sharepoint configuration
+389832	checkBoxEnableBatch
+389874	Enable batch uploads
+389966	Show team drives
+390002	checkBoxBatchFolders
+390216	radioButtonUsePassword
+390264	Use user and password
+390310	radioButtonUseAccessKey
+390360	Use access key
+390426	Service Key
+390452	textBoxServiceKey
+390490	labelService
+390518	Service
+390568	Access Key
+390592	textBoxAccessKey
+390628	labelCompanyID
+390660	Company ID
+390684	textBoxCompanyId
+390720	FormLoginDirectcloud
+390764	Directcloud Login
+390802	Error:
+390874	REST endpoint:
+390906	Secret Access Key:
+390978	comboBoxEndPoint
+391014	checkBoxBucket
+391046	Connect to a specific bucket
+391150	comboBoxBucket
+391212	checkBoxPathStyle
+391250	Use "Path style" addressing model
+391376	comboBoxSignatureVersion
+391428	labelSignatureVersion
+391474	Signature Version:
+391514	checkBoxRegion
+391546	Override region
+391580	textBoxRegion
+391636	S3 Login
+391656	TIME
+391756	COPYFROMDOWNLOAD
+391792	dataGridViewDownload
+391836	numericUpDownLimit
+391876	buttonSet
+391952	Clear Selected
+391984	tabPageDownload
+392018	tabPageUpload
+392048	dataGridViewUpload
+392088	Copy from Upload
+392124	labelKBs
+392144	BandwidthControl
+392246	unlimited
+392338	Unlimited
+392576	BANDWIDTHFILEERROR
+392616	Bandwidth files (*.taskbandwidth)|*.taskbandwidth
+392718	.taskbandwidth
+392750	bandwidthControl1
+392788	labelConfigFile
+392822	Bandwidth config file
+392868	textBoxFile
+392894	FormBandwidth
+392968	Unable to resolve user name.
+393028	Task definition does not contain a version.
+393178	Level={0}
+393200	 +levels
+393220	 +id's
+393236	cronString
+393260	' is not a valid crontab expression. It must contain at least 5 components of a schedule (in the sequence of minutes, hours, days, months, days of week).
+393570	str
+393580	A crontab field value cannot be empty.
+393780	The fifth parameter representing the day of the week cannot be a '?'.
+393922	License validation failed!
+393978	code=
+393992	state=
+394008	ndus
+394020	hostname
+394082	error_description=
+394122	Error adding account: 
+394264	driveItem
+394286	?code=
+394456	https://api.office.com/discovery/v2.0/me/services
+394558	serviceApiVersion
+394596	v2.0
+394608	capability
+394632	MyFiles
+394724	userId\s*:\s*["|']([^"|']+)["|']
+394792	isLogin\s*=\s*[\"|']([^\"|']+)[\"|']
+394868	isLogin:\s*"([^\"]+)"
+394914	code=(\w+)
+395094	auth/drive
+395118	Google Drive: not authorized, please enable "See, edit, create, and delete all of your Google Drive files" permissions.    Check https://www.airexplorer.net/link/gdriveinfo.php for more information
+395734	DirectCloud.Service
+395776	DirectCloud.ServiceKey
+395824	DirectCloud.Login
+395862	DirectCloud.Password
+395906	DirectCloud.AccessKey
+395952	DirectCloud.CompanyId
+395998	DirectCloud.AccessToken
+396048	DirectCloud.ExpireTime
+396096	refreshToken
+396266	https://openapi.baidu.com/oauth/2.0/token
+396468	thanks
+396484	7200
+396616	uid=
+396628	&code_verifier=
+396788	https://www.airexplorer.net/link/go_to_googleplay.php
+396898	https://www.airexplorer.net/en/ia-help/
+396980	Error deleting file
+397022	MaxRetries
+397176	d\.hh\:mm\:ss
+397316	SELECT2ACCOUNTS
+397350	LOGINERROR
+397374	NOCOMMONFOUMD
+397404	Please install Microsoft Webview2 in your computer to continue: https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section
+397716	styles
+397732	wpficons
+398062	/b
+398080	/d
+398096	{0} uploaded successfully
+398150	File already exists, ignoring upload {0} to {1}
+398248	Error uploading {0}
+398640	ACCESSKEYID
+398666	SECRETACCESSKEY
+398780	Load 
