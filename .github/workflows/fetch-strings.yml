@@ -42,6 +42,7 @@ jobs:
           Copy-Item ..\fetch_stdout.txt C:\out\ -Force -ErrorAction SilentlyContinue
           Copy-Item ..\fetch_stderr.txt C:\out\ -Force -ErrorAction SilentlyContinue
           Copy-Item app\fetch_trace.txt C:\out\ -Force -ErrorAction SilentlyContinue
+          Copy-Item app\fv.txt C:\out\ -Force -ErrorAction SilentlyContinue
           if (-not (Test-Path "C:\out\strings.json")) { Write-Host "strings.json missing"; Get-Content ..\fetch_stdout.txt -ErrorAction SilentlyContinue | Select-Object -Last 20; exit 1 }
           Write-Host ("strings.json size = " + (Get-Item C:\out\strings.json).Length)
 

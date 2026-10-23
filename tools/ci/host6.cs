@@ -55,6 +55,25 @@ class Host6 {
             var mi = t.GetMethod("InstantiateTransferableProgram", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
             if (mi == null) { Console.WriteLine("[h6] method not found"); return 1; }
             Console.WriteLine("[h6] fetch start");
+            // ★ v3: 反射读 <Module>{a8c2e9b2} 的 m_0d0b145be2 实例的全部字段值 → fv.txt
+            try {
+                var gmt = asm.GetType("<Module>{a8c2e9b2-2ded-4e79-99b6-076d192b5696}");
+                if (gmt != null) {
+                    var sf = gmt.GetField("m_0d0b145be2b94a7c8e4fcaf9a9649f1f", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                    var obj = sf == null ? null : sf.GetValue(null);
+                    var fw = new StreamWriter("fv.txt");
+                    fw.WriteLine("objNull=" + (obj == null));
+                    fw.WriteLine("objType=" + (obj == null ? "?" : obj.GetType().FullName));
+                    if (obj != null) {
+                        foreach (var f in obj.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
+                            object v = null; try { v = f.GetValue(obj); } catch {}
+                            fw.WriteLine(f.Name + "=" + (v == null ? "null" : v.ToString()));
+                        }
+                    }
+                    fw.Close();
+                    Console.WriteLine("[h6] fv.txt written");
+                } else Console.WriteLine("[h6] global type not found");
+            } catch (Exception fex) { Console.WriteLine("[h6] fv-ex " + fex.Message); File.AppendAllText(TraceFile, "fv-ex " + fex + "\n"); }
             // 探针: 保护计数器当前值
             try {
                 var cnt = t.GetField("_TemplateNotifierSize", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
