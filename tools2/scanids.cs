@@ -8,8 +8,20 @@ using dnlib.DotNet.Emit;
 // scanids <rebuilt.exe> <itpTokHex> <outIds> — 收集 call ITP 的常量 id
 // 模式: [值生产块] call ITP; 块 = ldc/xor/add/sub/and/or/not + <Module>{...} 恒0字段读取
 class ScanIds {
+    static Dictionary<string, long> fv = new Dictionary<string, long>();
+
     static void Main(string[] a) {
         uint itpTok = 0x06000000u | Convert.ToUInt32(a[1], 16);
+        // a[3]=fv.txt(可选): <Module>{...} 字段真实值(官方运行时反射抓取)
+        if (a.Length > 3 && File.Exists(a[3])) {
+            foreach (var ln in File.ReadAllLines(a[3])) {
+                int eq = ln.IndexOf('=');
+                if (eq <= 0) continue;
+                var k = ln.Substring(0, eq); var v = ln.Substring(eq + 1);
+                long n; if (k.StartsWith("m_") && long.TryParse(v, out n)) fv[k] = n;
+            }
+            Console.WriteLine("[scanids] field values loaded: " + fv.Count);
+        }
         var mod = ModuleDefMD.Load(a[0]);
         var ids = new SortedSet<long>();
         int sites = 0, unknown = 0;
@@ -80,8 +92,16 @@ class ScanIds {
                 st.Push(v); return true;
             }
             case Code.Not: { if (st.Count < 1) return false; var aa = st.Pop(); st.Push(aa.HasValue ? ~aa.Value : (long?)null); return true; }
-            case Code.Ldsfld: st.Push(0L); return true;  // <Module>{...} 恒0静态字段
-            case Code.Ldfld: { if (st.Count < 1) return false; st.Pop(); st.Push(0L); return true; }  // 弹容器ref, 压恒0值 — 净栈0
+            case Code.Ldsfld: st.Push(0L); return true;  // 容器引用占位
+            case Code.Ldfld: {
+                if (st.Count < 1) return false; st.Pop();
+                // 字段名(取 :: 后部分) 查真实值
+                var fn = (ins.Operand?.ToString() ?? "");
+                int cc = fn.IndexOf("::");
+                var fname = cc >= 0 ? fn.Substring(cc + 2) : fn;
+                st.Push(fv.TryGetValue(fname, out var vv) ? vv : (long?)null);
+                return true;
+            }
             case Code.Nop: return true;
             default: return false;
         }
