@@ -1,0 +1,13 @@
+=== host v2 start 03:58:42.579 jitNoInline=1 ===
+=== ENTRY-INVOCATION 03:58:42.757 ===
+EX System.TypeInitializationException: The type initializer for '<Module>' threw an exception.
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor)
+   at System.Reflection.RuntimeMethodInfo.UnsafeInvokeInternal(Object obj, Object[] parameters, Object[] arguments)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at Host.Main(String[] a)
+-- inner --
+EX System.InvalidProgramException: Common Language Runtime detected an invalid program.
+   at CloudClient.Templating.DispatcherInitializer.VerifyCombinedStateRequest()
+   at CloudClient.Templating.DispatcherInitializer.DefineEfficientProfiler()
+   at .cctor()
+-- inner --
