@@ -10,6 +10,12 @@ const read1 = (addr, n) => host.memory.readMemoryValues(addr, n, 1).map(v => Num
 function u32(a, i) { return (a[i] | (a[i+1]<<8) | (a[i+2]<<16) | (a[i+3]<<24)) >>> 0; }
 function u64(a, i) { let v = 0n; for (let k = 7; k >= 0; k--) v = (v << 8n) | BigInt(a[i+k] & 0xff); return Number(v); }
 
+// ★ API 版本协商: 新版 WinDbg(1.2610) 默认移除了 host.namespace/currentSession/
+//   currentThread/memory 等 legacy 全局, 必须显式请求 1.7 才恢复
+function initializeScript() {
+    return [new host.apiVersionSupport(1, 7)];
+}
+
 // 目标方法 IL 大小 (RequestVerifierTransformer..ctor = 2283 等, forcedump failed 名单)
 const TARGET_ILSIZES = [2283];
 const MAX_CALLS = 200000;
