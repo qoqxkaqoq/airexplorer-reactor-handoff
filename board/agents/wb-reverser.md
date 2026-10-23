@@ -276,3 +276,41 @@ v102 CI：启动即崩（<Module>.cctor InvalidProgram 家族）。
 
 GUI 录制 v2（动态窗口检测+20min 上限）第 18 次因 Add-Type 死代码炸 step（已删），
 第 19 次运行中。管线其余部分已稳定。
+
+## 第六轮战报（2026-10-23 15:00 · verifyil 完全校准 + PEVerify 权威诊断管线）
+
+### 🏆 verifyil 完全校准：官方原版 bad=0（22930 全过）
+
+最后一块拼图：**call 调用值类型实例方法（含 `IntPtr::.ctor` 直接 call）时 this 也在栈上**
+（ECMA：call/callvirt 的 instance this 一律 pop）——修后官方原版零误报。
+**附加检查**：maxStack 峰值 + EH 区间合法性（空区间/handler-overlaps-try）——v102 全部通过
+→ **v102 的 IL 结构层面完全合法**，InvalidProgram 来自 JIT 导入阶段的**类型级**验证。
+
+### 🏆 PEVerify 权威诊断管线建立（workflow: peverify.yml）
+
+Windows runner 自带 PEVerify（NETFX 4.8 Tools）做**完整类型级验证**：
+- **官方原版：0 错误**（PEVerify 完全认可）
+- v102：**2379 方法 / 2836 行错误**，全部为写回引入。类型分布：
+  - **502 Unexpected array type** —— 泛型方法定义被写入具体类型 locals
+    （forcedump 实例化抓的 .loc 是 T=object/int32 的具体化视图，写进泛型定义类型错乱）
+  - **1400 Return from .ctor when this uninitialized** —— 待查（疑 ParseIl token/ctor 模式）
+  - **64 Nullobjref + 16 unmanaged pointer + 19 unboxed** —— 值类型语义类
+  - 26 FileNotFound —— peverify 环境依赖（非本体）
+
+### 闭环修复第一轮：v103
+
+泛型方法定义跳过写回（248 个，保持官方桩）→ **array-type 502→467**（残余为非泛型方法的
+.loc/体错位，待逐类分析）。v103 ui-probe 仍启动即崩（符合预期，还有 ~2800 错误未清）。
+
+### 迭代公式（已工具化）
+
+```
+nbrestore2 重跑 → peverify(CI) 拿权威错误清单 → 按类修复 → 复测
+```
+**错误类别 → 修法对照**：
+| 类别 | 修法 |
+|---|---|
+| Unexpected array type(非泛型) | 该方法 .loc 与体错位 → 跳过 .loc 用旧兜底 |
+| .ctor uninit ×1400 | dump 一个样例看 ParseIl 的 ctor 调用链（疑 ldarg.0/newobj 序列） |
+| unmanaged pointer/unboxed ×35 | 值类型实例 call/ldflda 的 ParseIl token 解析 |
+| Nullobjref ×64 | call 目标是"跳过的泛型桩"返回 null 的静态传播 |
