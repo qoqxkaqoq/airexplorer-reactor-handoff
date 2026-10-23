@@ -398,3 +398,55 @@ trace 1.45GB，**录制态进程慢 ~100x：20 分钟仅 1005 次 JIT**（≈官
 - 崩溃链（最终）：.cctor → DefineEfficientProfiler(官方真体) → VerifyCombinedStateRequest(桩)
   → call DirectDefinition(06004282, 官方 .bin 体 = nop;ret 合法) —— 链上全部合法却崩，
   **JIT 失败点在其后 DefineEfficientProfiler 继续执行的某个 call**
+
+## 🏆 第十轮战报（2026-10-23 19:50 · v106 全量重建首次存活！）
+
+### 决定性突破：v106 = 全量重建路线 60+ 轮以来第一个"进程存活"版本
+
+**v106 配方**（全部本地工具产出，3 轮 CI）：
+```
+官方原版基座 + 12907 官方真体写回(v103/nbrestore2)
+  + DefineEfficientProfiler/DefineActiveEvent ret 化(v104, expA 实锤 DEP 真体执行即崩)
+  + IGC 内嵌 tamper 校验段 NOP(v105, " is tampered." throw 点 @0A72-0A9A)
+  + 1601 个非法 EH catch → System.Object(v106)
+```
+**CI 实测（ui-probe 39942240188）**：进程存活 90 秒、responding=True、无崩溃——
+`<Module>.cctor` 引导链首次完整跑通！v47→v100→v103→v104→v105→v106 的收敛链最终走通。
+
+### v106 遗留：UI 未出窗，CPU 满转（死循环在业务 cctor 的状态机）
+
+- v107 对照实验（IGC 也 ret）→ 1.5 秒崩在 `ArgumentGateway..cctor NRE` → **IGC 真体必须保留**
+  （它初始化全局混淆状态 `<Module>{a8c2e9b2}::m_0d0b145be2`）
+- host v4/v5 心跳诊断（5s 落盘）：主线程 25 秒后停更 → **全 CLR 冻结**（死循环无 safepoint，
+  GC STW 挂起一切线程，ThreadAbort 也打不进——抓栈只能靠外部调试器）
+- `ArgumentGateway.cctor` = Reactor **状态机混淆**（switch+轮转变量）：
+  正常流 状态2(IGC/解密)→状态0→ret；死循环机制待最终定位（疑似 switch 表/状态流转被
+  m_0d0b145be2 字段值影响）
+
+### 本轮工具包新增（全部入库 tools2/）
+
+| 工具 | 作用 |
+|---|---|
+| callgraph.cs | 从 entry 遍历调用图，列出"真体调用的桩"（v106 引导链 98 个桩） |
+| tokcheck.cs | 全量 token 可解析性校验（16598 方法 0 坏 token——排除 token 越界） |
+| ehsanity.cs | EH catch 类型 Exception 派生校验（v103 实测 1606 全非法→v106 全修复） |
+| fixcatch.cs | 非法 catch → System.Object（1601 处） |
+| patchtamper.cs | IGC tamper 段 NOP（9 指令） |
+| stubmeth.cs | 指定 token 方法 ret 化 |
+| findstsfld.cs | 全程序字段写入者搜索 |
+| host v3-v5 | 心跳诊断法（定位全 CLR 冻结）+ host_trace 落盘收集 |
+
+### 排除清单（expA/v104/v105/v107 系列实验的结论）
+
+- DEP 真体执行即崩（anti-tamper 校验网络：30 个 Verify* + 8x get_Assembly + CryptoStream）
+- token 越界：无（全解析）
+- EH 结构错位：无（偏移与官方一致，唯 catch 类型 token 需 fix）
+- maxStack：无问题
+- PEVerify 差集法失效（官方原版自带 1752 条 verifiability 错误仍能跑）
+
+### 下一棒行动清单
+
+1. dump IGC 全部 2521 指令，找 m_0d0b145be2 的初始化点（stsfld/newobj 被间接引用？）
+2. dump ArgumentGateway.cctor 的 **switch 表**（dnlib Instruction[]）确认状态流转目标
+3. 死循环若是 m_df3c7fc7 类字段值驱动 → patch 状态机（把 V_0 流转改为直通终态）
+4. 或 windbg 外部抓栈（~*k 原生栈 + JIT 地址对齐）——TTD 管线的 WinDbg 下载可复用
