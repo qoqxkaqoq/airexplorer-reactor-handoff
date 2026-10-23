@@ -206,3 +206,33 @@ Anticipated 卡点：`TrackCompiler` token 约束（PreserveAll 已解）与 cct
 |---|---|
 | `exes/AirExplorer_v70.exe` | **基线**（=v66 水位 + 53 方法官方三件套，ui-probe 同水位验证通过） |
 | `exes/AirExplorer_v71.exe` | ❌ 实验失败保留归档，勿使用 |
+
+## 第四轮战报（2026-10-23 12:45 · v100 产出 + verifyil 定位工具就位）
+
+### v100 全量重建已产出（结构上最接近官方的版本）
+
+`nbrestore2`（新工具）: **官方原版基座 + 引导完整保留**（DefineEfficientProfiler 官方真体 9992 指令已写回）
++ 12330 方法写回（**官方 .loc=7657** 方法用官方 locals）+ 官方 EH。
+v47 时代"locals 全 Object"卡点已被官方 .loc 解锁。
+**CI 实测**：`<Module>.cctor InvalidProgram`（v47 家族问题再现）——**需定位具体非法方法**。
+
+### verifyil — 栈深模拟验证器（新工具，前任苦找的"IL 偏移定位手段"）
+
+`tools2/verifyil.cs`：对每个方法做 IL 栈深 walk（CFG 汇合点一致性检查），输出非法方法+偏移。
+校准对照（关键！）：官方原版 = ok=22909 / **bad=21**（全部为 `.cctor @-> #5 (N vs 0) br` 模式——
+模拟器残余 bug，官方 .cctor 合法）；v100 = ok=20549 / **bad=2381**。
+**下一步**：① 查官方 21 个误报根因（疑 Reactor cctor 的 try 区间栈技巧/leave 语义）→ 修干净后
+② v100 BAD 与官方 bad 的差集 = **真非法清单** → 逐方法修复（ EH 挂接/maxStack/ParseIl 残损）。
+
+### TTD（第 17 次）管线全通但投入产出比下降
+
+GUI 录制成功（1.37GB/60s）但**录制态进程极慢：60s 仅 930 次 JIT**——UI 启动在录制下需 20+ 分钟。
+决策：**TTD 暂缓**，等 v100 的失败清单出来后**精准抓**（把 for...of 扫描 + !tt 100 + apiVersionSupport
+的组合拳已验证可用，随时可重启）。
+
+### 给下一棒的行动清单（按序）
+
+1. verifyil 残余 21 官方误报根因 → 输出干净的 v100 真非法清单
+2. 修真非法方法（优先 `<Module>.cctor` 调用链上的）
+3. 4268 个 skipParse 方法：606 个 Dictionary`2 missType（FindRef 对空 TypeRef 表的兜底路径待查）→ 修复后重跑 nbrestore2
+4. v100 循环直到 ui-probe 出窗 → TTD 补抓 forcedump failed 名单
