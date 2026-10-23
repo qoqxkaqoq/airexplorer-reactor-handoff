@@ -52,6 +52,7 @@ jobs:
         run: |
           # 重编译 host.cs (v2: 异常落盘 + ThreadException)
           & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:tools\ci\host.exe /r:System.Windows.Forms.dll tools\ci\host.cs
+          if ($LASTEXITCODE -ne 0) { Write-Host "HOST COMPILE FAILED"; exit 1 }
           $env:COMPLUS_ReadyToRun = "0"
           $env:COMPlus_JitNoInline = "1"
           # JIT 反汇编序列: 崩溃前最后成功 JIT 的方法 = 定位失败点的关键
@@ -69,6 +70,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item app/_candidate.txt probe/ -Force -ErrorAction SilentlyContinue
+          Copy-Item app/host_trace.txt probe/ -Force -ErrorAction SilentlyContinue
           Get-Content probe/probe.log -ErrorAction SilentlyContinue
 
       - uses: actions/upload-artifact@v4
