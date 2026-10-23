@@ -79,13 +79,99 @@ class LocSig {
                 } else i++;
             }
             if (args.Any(x => x == null)) return null;
-            var gt = FindType(head, mod);
-            if (gt == null) return null;
-            var gsig = gt.ToTypeSig(gt.IsValueType) as ClassOrValueTypeSig;
+            var gsig = ResolveRefSig(head, mod) as ClassOrValueTypeSig;
+            if (gsig == null) return null;
             return new GenericInstSig(gsig, args);
         }
-        var td = FindType(s, mod);
-        return td == null ? null : td.ToTypeSig(td.IsValueType);
+        var sig = ResolveRefSig(s, mod);
+        return sig;
+    }
+
+    // 统一解析: 本模块 TypeDef -> TypeRef 表 -> corlib 基元。
+    // 返回 ClassSig/ValueTypeSig/CorLibTypeSig, 全是可直接入签名的 TypeSig。
+    static TypeSig ResolveRefSig(string full, ModuleDef mod) {
+        var td = FindType(full, mod);
+        if (td != null) return td.ToTypeSig(td.IsValueType);
+        var tdr = FindRef(full, mod);
+        if (tdr != null) {
+            bool st = IsKnownValueType(full);
+            if (!st) {
+                // 真身可解析时用真实 kind(避免把 struct 当 class)
+                var res = tdr.ResolveTypeDef();
+                if (res != null) return res.ToTypeSig(res.IsValueType);
+            }
+            return st ? (TypeSig)new ValueTypeSig(tdr) : new ClassSig(tdr);
+        }
+        return CorLibSig(full, mod);
+    }
+
+    static bool IsKnownValueType(string full) {
+        int dot = full.LastIndexOf('.');
+        string nm = dot > 0 ? full.Substring(dot + 1) : full;
+        switch (nm) {
+            case "Nullable`1": case "DateTime": case "TimeSpan": case "DateTimeOffset":
+            case "Guid": case "Decimal": case "KeyValuePair`2": case "Tuple`1":
+            case "Tuple`2": case "Tuple`3": case "Tuple`4":
+                return true;
+        }
+        return false;
+    }
+
+    static Dictionary<string, ITypeDefOrRef> _byRefFull;
+    // TypeRef 表按 FullName 查找; 找不到就建新 TypeRefUser(追加到表尾, 不动已有行)
+    static ITypeDefOrRef FindRef(string full, ModuleDef mod) {
+        if (_byRefFull == null) {
+            _byRefFull = new Dictionary<string, ITypeDefOrRef>();
+            foreach (var tr in mod.GetTypeRefs())
+                if (!_byRefFull.ContainsKey(tr.FullName)) _byRefFull[tr.FullName] = tr;
+        }
+        if (_byRefFull.TryGetValue(full, out var r)) return r;
+        int dot = full.LastIndexOf('.');
+        if (dot <= 0) return null;
+        var ns = full.Substring(0, dot);
+        var nm = full.Substring(dot + 1);
+        // 按 ns 选 AssemblyRef: WinForms 类型挂 System.Windows.Forms, 其余默认 mscorlib
+        var asmRef = ns.StartsWith("System.Windows.Forms")
+            ? mod.GetAssemblyRefs().FirstOrDefault(x => x.Name == "System.Windows.Forms")
+            : null;
+        if (asmRef == null) asmRef = mod.CorLibTypes.AssemblyRef;
+        var trNew = new TypeRefUser(mod, ns, nm, asmRef);
+        _byRefFull[full] = trNew;
+        return trNew;
+    }
+
+    // CorLib 兜底 —— 直接返回 CorLibTypeSig(本身就是 TypeSig)。
+    // ResolveTypeDef() 在被 Reactor 重写过元数据的模块上解析失败返回 null,
+    // 之前 115 个 missType 连 System.Int32 都命中就是这个原因。
+    static TypeSig CorLibSig(string full, ModuleDef mod) {
+        var cor = mod.CorLibTypes;
+        int dot = full.LastIndexOf('.');
+        if (dot > 0) {
+            var ns = full.Substring(0, dot);
+            var nm = full.Substring(dot + 1);
+            if (ns == "System") {
+                switch (nm) {
+                    case "Int32": return cor.Int32;
+                    case "UInt32": return cor.UInt32;
+                    case "Int64": return cor.Int64;
+                    case "UInt64": return cor.UInt64;
+                    case "Int16": return cor.Int16;
+                    case "UInt16": return cor.UInt16;
+                    case "Byte": return cor.Byte;
+                    case "SByte": return cor.SByte;
+                    case "Boolean": return cor.Boolean;
+                    case "Char": return cor.Char;
+                    case "Single": return cor.Single;
+                    case "Double": return cor.Double;
+                    case "String": return cor.String;
+                    case "Object": return cor.Object;
+                    case "IntPtr": return cor.IntPtr;
+                    case "UIntPtr": return cor.UIntPtr;
+                    case "TypedReference": return cor.TypedReference;
+                }
+            }
+        }
+        return null;
     }
 
     static Dictionary<string, TypeDef> _byFull, _byNested;
@@ -99,31 +185,9 @@ class LocSig {
             }
         }
         if (_byFull.TryGetValue(full, out var td)) return td;
-        // 嵌套: Ns.Outer+Inner —— FullName 表里已是 "Ns.Outer+Inner" 形式, 直接命中
-        // CorLib 常见类型兜底
-        var cor = mod.CorLibTypes;
-        int dot = full.LastIndexOf('.');
-        if (dot > 0) {
-            var ns = full.Substring(0, dot);
-            var nm = full.Substring(dot + 1);
-            if (ns == "System") {
-                switch (nm) {
-                    case "Int32": return cor.Int32.TypeDefOrRef.ResolveTypeDef();
-                    case "UInt32": return cor.UInt32.TypeDefOrRef.ResolveTypeDef();
-                    case "Int64": return cor.Int64.TypeDefOrRef.ResolveTypeDef();
-                    case "UInt64": return cor.UInt64.TypeDefOrRef.ResolveTypeDef();
-                    case "Int16": return cor.Int16.TypeDefOrRef.ResolveTypeDef();
-                    case "Byte": return cor.Byte.TypeDefOrRef.ResolveTypeDef();
-                    case "SByte": return cor.SByte.TypeDefOrRef.ResolveTypeDef();
-                    case "Boolean": return cor.Boolean.TypeDefOrRef.ResolveTypeDef();
-                    case "Char": return cor.Char.TypeDefOrRef.ResolveTypeDef();
-                    case "Single": return cor.Single.TypeDefOrRef.ResolveTypeDef();
-                    case "Double": return cor.Double.TypeDefOrRef.ResolveTypeDef();
-                    case "String": return cor.String.TypeDefOrRef.ResolveTypeDef();
-                    case "Object": return cor.Object.TypeDefOrRef.ResolveTypeDef();
-                }
-            }
-        }
+        // 运行时反射 FullName 嵌套用 '+', dnlib 用 '/' —— 归一化后再查
+        string alt = full.Replace('+', '/');
+        if (_byFull.TryGetValue(alt, out var td2)) return td2;
         return null;
     }
 }
