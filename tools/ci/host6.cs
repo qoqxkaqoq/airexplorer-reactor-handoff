@@ -1,33 +1,63 @@
-// host6.cs — 字符串抓取器: 加载官方原版正常启动(引导完整, 解密器就位, _TemplateNotifierSize>=75
-// 使 ITP 的 StackFrame 保护自动跳过), 然后反射批量调用 InstantiateTransferableProgram(id) 抓明文。
-// 用法: host6.exe <exe> <ids.txt> <out.json> <delaySec>
+// host6.cs — 官方运行时状态快照抓取器 v4
+// 加载官方原版正常启动(引导完整), 反射 dump 引导类全部静态状态 → snapshot.txt
+// 恢复对象: int/string/bool/byte[](base64)/List/enum; 复杂对象展开一层实例字段; 不可恢复标记 SKIP
+// 用法: host6.exe <exe> <out.txt> <delaySec>
 using System;
-using System.Collections.Generic;
+using System.Collections;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
 class Host6 {
     static string TraceFile = "fetch_trace.txt";
+    static StreamWriter W;
+
+    static void Log(string s) { W.WriteLine(s); W.Flush(); }
+
+    // 深度遍历: 简单类型直接记, byte[] 记 base64, IEnumerable 展开元素, 自建类型展开一层实例字段
+    static void DumpObject(string tag, object obj, int depth) {
+        if (obj == null) { Log("NULL " + tag); return; }
+        var t = obj.GetType();
+        if (t == typeof(int) || t == typeof(bool) || t == typeof(long) || t.IsEnum) { Log("INT " + tag + " " + obj); return; }
+        if (t == typeof(string)) { Log("STR " + tag + " " + Convert.ToBase64String(Encoding.UTF8.GetBytes((string)obj))); return; }
+        if (t == typeof(byte[])) {
+            var b = (byte[])obj;
+            if (b.Length > 4000000) { Log("SKIP " + tag + " bytes=" + b.Length); return; }
+            Log("B64 " + tag + " " + Convert.ToBase64String(b)); return;
+        }
+        if (depth > 0 && obj is IEnumerable && t != typeof(System.Security.Cryptography.RSACryptoServiceProvider)) {
+            var it = ((IEnumerable)obj).GetEnumerator();
+            var items = new List<object>();
+            while (it.MoveNext()) { items.Add(it.Current); if (items.Count > 100000) break; }
+            Log("LIST " + tag + " " + items.Count);
+            foreach (var e in items) DumpObject(tag + "[]", e, depth - 1);
+            return;
+        }
+        if (depth > 0 && !t.FullName.StartsWith("System.")) {
+            // 自建类型: 展开一层实例字段
+            Log("OBJ " + tag + " " + t.FullName);
+            foreach (var f in t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
+                object v = null; try { v = f.GetValue(obj); } catch { }
+                DumpObject(tag + "." + f.Name, v, depth - 1);
+            }
+            return;
+        }
+        Log("SKIP " + tag + " " + t.FullName);
+    }
 
     [STAThread]
     static int Main(string[] a) {
         var exePath = Path.GetFullPath(a[0]);
-        var idsFile = Path.GetFullPath(a[1]);
-        var outFile = Path.GetFullPath(a[2]);
-        int delay = a.Length > 3 ? int.Parse(a[3]) : 15;
+        var outFile = Path.GetFullPath(a[1]);
+        int delay = a.Length > 2 ? int.Parse(a[2]) : 15;
         Directory.SetCurrentDirectory(Path.GetDirectoryName(exePath));
-        File.AppendAllText(TraceFile, "=== host6 start " + DateTime.Now.ToString("HH:mm:ss.fff") + " ===\n");
+        W = new StreamWriter(outFile);
+        File.AppendAllText(TraceFile, "=== host6 v4 snapshot start ===\n");
         try {
             var asm = Assembly.LoadFrom(exePath);
             Console.WriteLine("[h6] loaded " + asm.FullName);
-            var ids = new List<long>();
-            foreach (var ln in File.ReadAllLines(idsFile)) {
-                long v; if (long.TryParse(ln.Trim(), out v)) ids.Add(v);
-            }
-            Console.WriteLine("[h6] ids=" + ids.Count);
-            File.AppendAllText(TraceFile, "ids=" + ids.Count + "\n");
 
             Exception entryEx = null;
             var worker = new Thread(delegate() {
@@ -37,102 +67,62 @@ class Host6 {
                     ep.Invoke(null, args);
                 } catch (Exception ex) {
                     entryEx = ex;
-                    var sb = new System.Text.StringBuilder("=== ENTRY EX ===\n");
-                    for (var e2 = ex; e2 != null; e2 = e2.InnerException) { sb.AppendLine(e2.GetType().FullName + ": " + e2.Message); sb.AppendLine(e2.StackTrace); sb.AppendLine("-- inner --"); }
+                    var sb = new StringBuilder("=== ENTRY EX ===\n");
+                    for (var e2 = ex; e2 != null; e2 = e2.InnerException) { sb.AppendLine(e2.GetType().FullName + ": " + e2.Message); }
                     try { File.AppendAllText(TraceFile, sb.ToString()); } catch {}
                 }
             });
             worker.SetApartmentState(ApartmentState.STA);
             worker.Start();
-            Console.WriteLine("[h6] entry launched, waiting " + delay + "s for runtime warmup");
-            for (int wsec = 0; wsec < delay; wsec += 5) {
-                Thread.Sleep(5000);
-                try { File.AppendAllText(TraceFile, "warmup " + (wsec + 5) + "s entryEx=" + (entryEx == null ? "none" : entryEx.GetType().Name) + " alive=" + !worker.Join(0) + "\n"); } catch {}
-            }
+            Console.WriteLine("[h6] entry launched, waiting " + delay + "s");
+            Thread.Sleep(delay * 1000);
+            Console.WriteLine("[h6] snapshot start");
 
-            var t = asm.GetType("CloudClient.Templating.DispatcherInitializer");
-            if (t == null) { Console.WriteLine("[h6] type not found"); return 1; }
-            var mi = t.GetMethod("InstantiateTransferableProgram", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
-            if (mi == null) { Console.WriteLine("[h6] method not found"); return 1; }
-            Console.WriteLine("[h6] fetch start");
-            // ★ v3: 反射读 <Module>{a8c2e9b2} 的 m_0d0b145be2 实例的全部字段值 → fv.txt
-            try {
-                var gmt = asm.GetType("<Module>{a8c2e9b2-2ded-4e79-99b6-076d192b5696}");
-                if (gmt != null) {
-                    var sf = gmt.GetField("m_0d0b145be2b94a7c8e4fcaf9a9649f1f", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
-                    var obj = sf == null ? null : sf.GetValue(null);
-                    var fw = new StreamWriter("fv.txt");
-                    fw.WriteLine("objNull=" + (obj == null));
-                    fw.WriteLine("objType=" + (obj == null ? "?" : obj.GetType().FullName));
-                    if (obj != null) {
-                        foreach (var f in obj.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
-                            object v = null; try { v = f.GetValue(obj); } catch {}
-                            fw.WriteLine(f.Name + "=" + (v == null ? "null" : v.ToString()));
-                        }
-                    }
-                    fw.Close();
-                    Console.WriteLine("[h6] fv.txt written");
-                } else Console.WriteLine("[h6] global type not found");
-            } catch (Exception fex) { Console.WriteLine("[h6] fv-ex " + fex.Message); File.AppendAllText(TraceFile, "fv-ex " + fex + "\n"); }
-            // 探针: 保护计数器当前值
-            try {
-                var cnt = t.GetField("_TemplateNotifierSize", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
-                File.AppendAllText(TraceFile, "TemplateNotifierSize=" + (cnt == null ? "<no field>" : (cnt.GetValue(null) ?? "?").ToString()) + "\n");
-            } catch (Exception pex) { File.AppendAllText(TraceFile, "probe-ex " + pex.Message + "\n"); }
-            int ok = 0, fail = 0, dbg = 0;
-            using (var w = new StreamWriter(outFile)) {
-                w.WriteLine("{");
-                bool first = true;
-                foreach (var id in ids) {
-                    string val = null;
-                    try { val = mi.Invoke(null, new object[] { (int)id }) as string; }
-                    catch (Exception iex) {
-                        if (dbg < 3) {
-                            dbg++;
-                            var sb = new System.Text.StringBuilder("=== id " + id + " EX ===\n");
-                            for (var e2 = iex; e2 != null; e2 = e2.InnerException) { sb.AppendLine(e2.GetType().FullName + ": " + e2.Message); sb.AppendLine(e2.StackTrace); sb.AppendLine("-- inner --"); }
-                            File.AppendAllText(TraceFile, sb.ToString());
-                        }
-                    }
-                    if (val == null) { fail++; continue; }
-                    if (!first) w.WriteLine(",");
-                    first = false;
-                    w.Write("\"" + id + "\": " + NewtonsoftEscape(val));
-                    ok++;
-                    if (ok % 1000 == 0) { Console.WriteLine("[h6] " + ok + " fetched"); File.AppendAllText(TraceFile, "progress " + ok + "\n"); }
-                }
-                w.WriteLine();
-                w.WriteLine("}");
+            var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            int dumped = 0;
+            // 目标1: DispatcherInitializer 全部静态字段(密钥流 _ExtractorVisitors 在此)
+            var di = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+            if (di == null) { Console.WriteLine("[h6] DI not found"); return 1; }
+            foreach (var f in di.GetFields(flags)) {
+                if (f.FieldType.IsPointer) continue;
+                object v = null; try { v = f.GetValue(null); } catch { Log("ERR DI." + f.Name); continue; }
+                DumpObject("DI." + f.Name, v, 2);
+                dumped++;
             }
-            Console.WriteLine("[h6] done ok=" + ok + " fail=" + fail);
-            File.AppendAllText(TraceFile, "=== done ok=" + ok + " fail=" + fail + " ===\n");
-            Environment.Exit(ok > 0 ? 0 : 1);
+            // 目标2: <Module>{...} 静态字段(容器实例 → 展开实例字段)
+            foreach (var t in asm.GetTypes()) {
+                if (!t.FullName.Contains("<Module>{")) continue;
+                foreach (var f in t.GetFields(flags)) {
+                    object v = null; try { v = f.GetValue(null); } catch { continue; }
+                    if (v != null && !(v is int || v is string || v is byte[] || v is bool)) {
+                        Log("OBJ " + t.Name + "." + f.Name + " " + v.GetType().FullName);
+                        foreach (var f2 in v.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
+                            object v2 = null; try { v2 = f2.GetValue(v); } catch { }
+                            DumpObject(t.Name + "." + f.Name + "." + f2.Name, v2, 1);
+                        }
+                    } else DumpObject(t.Name + "." + f.Name, v, 1);
+                    dumped++;
+                }
+            }
+            // 目标3: TemplateArgument 静态字段
+            var ta = asm.GetType("CloudClient.Templating.TemplateArgument");
+            if (ta != null) {
+                foreach (var f in ta.GetFields(flags)) {
+                    object v = null; try { v = f.GetValue(null); } catch { continue; }
+                    DumpObject("TA." + f.Name, v, 1);
+                    dumped++;
+                }
+            }
+            Console.WriteLine("[h6] dumped " + dumped + " static fields");
+            File.AppendAllText(TraceFile, "=== snapshot done " + dumped + " fields ===\n");
+            W.Close();
+            Environment.Exit(0);
             return 0;
         } catch (Exception ex) {
             File.AppendAllText(TraceFile, "FATAL " + ex + "\n");
             Console.WriteLine("[h6] FATAL " + ex.Message);
+            try { W.Close(); } catch {}
             return 1;
         }
-    }
-
-    // 简易 JSON 字符串转义(避免引入依赖)
-    static string NewtonsoftEscape(string s) {
-        var sb = new System.Text.StringBuilder(s.Length + 8);
-        sb.Append('"');
-        foreach (char c in s) {
-            switch (c) {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default:
-                    if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4"));
-                    else sb.Append(c);
-                    break;
-            }
-        }
-        sb.Append('"');
-        return sb.ToString();
     }
 }
