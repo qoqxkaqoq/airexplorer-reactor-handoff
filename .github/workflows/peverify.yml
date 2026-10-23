@@ -44,12 +44,35 @@ jobs:
           # 错误清单也存文件供 diff
           & $env:PEEXE /md /il $exe 2>&1 | Out-File -Encoding utf8 C:\out\peverify_full.txt
 
-      - name: PEVerify 官方原版对照
+  official-baseline:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 定位 PEVerify
         shell: pwsh
         run: |
+          $pe = Get-ChildItem -Path "C:\Program Files (x86)\Microsoft SDKs" -Recurse -Filter "PEVerify.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $pe) { Write-Host "NO PEVERIFY"; exit 1 }
+          Write-Host "PEVerify = $pe"
+          "PEEXE=$pe" | Add-Content $env:GITHUB_ENV
+
+      - name: PEVerify 官方原版基线
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\out | Out-Null
           Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae.exe
           & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae.exe | Out-Null
+          Write-Host "official md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
           & $env:PEEXE /md /il app\AirExplorer.exe 2>&1 | Tee-Object -FilePath C:\out\peverify_official.log | Select-Object -Last 20
+          & $env:PEEXE /md /il app\AirExplorer.exe 2>&1 | Out-File -Encoding utf8 C:\out\peverify_official_full.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: peverify-official
+          path: C:\out\
 
       - uses: actions/upload-artifact@v4
         if: always()
