@@ -99,17 +99,23 @@ class RestoreSnap {
                     nList++;
                     continue;
                 }
-                // 复用官方已验证的 List<T>::Add / .ctor 引用 — 自造 MemberRef 在 .NET FW 解析 MissingMethod
-                var addRef = FindOfficialAdd(mod, elSig);
-                if (addRef == null) {
-                    var listSpecA = new TypeSpecUser(f.FieldType);
-                    addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), listSpecA);
+                // 官方可解析 Class(TypeSpecMD) + 封闭签名(官方签名含 !0 泛型Var, CLR 绑定失败 → MissingMethod)
+                var officialAdd = FindOfficialAdd(mod, elSig);
+                IMemberRefParent addClass;
+                MemberRefUser addRef;
+                if (officialAdd != null) {
+                    addClass = officialAdd.Class;
+                    addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), addClass);
+                } else {
+                    addClass = new TypeSpecUser(f.FieldType);
+                    addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), addClass);
                 }
-                var ctor2 = FindOfficialNewobj(mod, f.FieldType.FullName);
-                if (ctor2 == null) {
-                    var listSpec2 = new TypeSpecUser(f.FieldType);
-                    ctor2 = new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), listSpec2);
-                }
+                var officialCtor = FindOfficialNewobj(mod, f.FieldType.FullName);
+                MemberRefUser ctor2;
+                if (officialCtor != null)
+                    ctor2 = new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), officialCtor.Class);
+                else
+                    ctor2 = new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), new TypeSpecUser(f.FieldType));
                 ins.Add(new Instruction(OpCodes.Newobj, ctor2));
                 for (int k2 = li + 1; k2 < allLines.Length; k2++) {
                     var e2 = allLines[k2].Split(' ');
