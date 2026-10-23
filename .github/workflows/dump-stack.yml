@@ -19,18 +19,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 下载 WinDbg(prss CDN, 复用 TTD 管线已验证姿势)
+      - name: 下载 WinDbg(aka.ms → prss CDN, 复用 TTD 管线已验证姿势)
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path C:\out, C:\wd | Out-Null
-          $app = Invoke-RestMethod "https://p.xixky.eu.org/https://windbg.download.prss.microsoft.com/dbazure/prod/1-0-0/windbg.appinstaller" -Headers @{ "User-Agent" = "ci" }
-          $uri = ([xml]$app).AddOnsBundle.Uri; $hash = ([xml]$app).AddOnsBundle.Sha256
-          if (-not $uri) { $uri = ([xml]$app).MainBundle.Uri }
-          Write-Host "bundle = $uri"
-          Invoke-WebRequest -Uri $uri -OutFile C:\wd\windbg.msixbundle
-          & "C:\Program Files\7-Zip\7z.exe" x -y -oC:\wd\x C:\wd\windbg.msixbundle | Out-Null
-          $cdb = Get-ChildItem -Recurse C:\wd\x -Filter "cdb.exe" | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $cdb) { Get-ChildItem -Recurse C:\wd\x -Filter "*.exe" | Select-Object -First 10 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
+          New-Item -ItemType Directory -Force -Path C:\out | Out-Null
+          Invoke-WebRequest -Uri "https://aka.ms/windbg/download" -OutFile D:\windbg.appinstaller
+          $xml = [xml](Get-Content D:\windbg.appinstaller -Raw)
+          $bundleUri = $xml.AppInstaller.MainBundle.Uri
+          Write-Host "bundle = $bundleUri"
+          Invoke-WebRequest -Uri $bundleUri -OutFile D:\windbg.msixbundle
+          New-Item -ItemType Directory -Force -Path D:\wd | Out-Null
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\windbg.msixbundle | Out-Null
+          $pkg = Get-ChildItem D:\wd -Filter "*.msix" | Select-Object -First 1
+          if ($pkg) { & "C:\Program Files\7-Zip\7z.exe" x -y "-oD:\wd\x" $pkg.FullName | Out-Null }
+          $cdb = Get-ChildItem -Recurse D:\wd -Filter "cdb.exe" | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $cdb) { Get-ChildItem -Recurse D:\wd -Filter "*.exe" | Select-Object -First 10 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
           Write-Host "cdb = $cdb"
           "CDb=$cdb" | Add-Content $env:GITHUB_ENV
 
