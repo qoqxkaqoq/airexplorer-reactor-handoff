@@ -1,20 +1,19 @@
-// JitScan.js — Windbg TTD 时间旅行扫描 (x86 WoW64 / x64 自适应) v2
-// 在 TTD 录制(.run)上运行: 枚举 clrjit!CILJit::compileMethod,
-// 提取目标方法的: IL 快照 + locals.tok + 官方 LocalVarSig blob
-// v2: 不依赖 host.namespace.Debugger(新版 cdb 下 undefined);
-//     目标过滤(TARGET_ILSIZES)避免 16 万次 SeekTo 超时。
-// 输出 C:\out\jitscan.json
-
+// JitScan.js — Windbg TTD 时间旅行扫描 v5
+// 关键: 新版 WinDbg JS 必须在 initializeScript 里声明 apiVersionSupport,
+// 且所有执行逻辑放 invokeScript(.scriptrun), 顶层代码跑在版本协商之前!
+"use strict";
+function initializeScript() {
+    return [new host.apiVersionSupport(1, 7)];
+}
+function invokeScript() {
+mainImpl();
+}
+function mainImpl() {
 const log = x => host.diagnostics.debugLog(x + "\n");
 const read1 = (addr, n) => host.memory.readMemoryValues(addr, n, 1).map(v => Number(v));
 function u32(a, i) { return (a[i] | (a[i+1]<<8) | (a[i+2]<<16) | (a[i+3]<<24)) >>> 0; }
 function u64(a, i) { let v = 0n; for (let k = 7; k >= 0; k--) v = (v << 8n) | BigInt(a[i+k] & 0xff); return Number(v); }
 
-// ★ API 版本协商: 新版 WinDbg(1.2610) 默认移除了 host.namespace/currentSession/
-//   currentThread/memory 等 legacy 全局, 必须显式请求 1.7 才恢复
-function initializeScript() {
-    return [new host.apiVersionSupport(1, 7)];
-}
 
 // 目标方法 IL 大小 (RequestVerifierTransformer..ctor = 2283 等, forcedump failed 名单)
 const TARGET_ILSIZES = [2283];
@@ -122,3 +121,7 @@ out.topSizes = topSizes.map(function(k){ return { ilSize: Number(k), count: out.
 var txt = JSON.stringify(out);
 host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\jitscan.json").Write(txt);
 log("[JitScan] C:\\out\\jitscan.json size=" + txt.length);
+
+}
+
+// 兼容 .scriptload: 顶层不再执行主逻辑
