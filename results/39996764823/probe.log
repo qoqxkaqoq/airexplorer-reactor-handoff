@@ -1,0 +1,8 @@
+[17:39:20.988] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[17:39:21.034] size = 10124800  md5 = DA5CB8C98970C2423955A7402FB2E729
+[17:39:21.045] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[17:39:21.090] started pid = 6364
+[17:39:24.427] process EXITED early, code = -532462766
+[17:39:25.166] EVENT [10/23/2026 5:39:21 PM] Application Error: Faulting application name: AirExplorer.exe, version: 5.11.0.0, time stamp: 0x6a671a98 | Faulting module name: KERNELBASE.dll, version: 10.0.26100.33648, time stamp: 0x3ddf2783 | Exception code: 0xe0434352 | Fault offset: 0x00000000000c7d9a | Faulting process id: 0x18DC | Faulting application start time: 0x1DD63156FB8D091 | Faulting application path: D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe | Faulting module path: C:\Windows\System32\KERNELBASE.dll | Report Id: 9eb29dc9-e05c-4d39-96d7-0024c6b0e1c8 | Faulting package full name:  | Faulting package-relative application ID: 
+[17:39:25.168] EVENT [10/23/2026 5:39:21 PM] .NET Runtime: Application: AirExplorer.exe | Framework Version: v4.0.30319 | Description: The process was terminated due to an unhandled exception. | Exception Info: System.NullReferenceException |    at AirExplorer.Values.ArgumentGateway..cctor() |  | Exception Info: System.TypeInitializationException |    at AirExplorer.Values.ArgumentGateway.EvaluateVisibleAttribute() |    at CloudClient.Models.StatelessModel.SearchAdapter(System.String[]) |  | 
+[17:39:25.169] done
