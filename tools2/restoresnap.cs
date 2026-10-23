@@ -41,7 +41,59 @@ class RestoreSnap {
             if (sp[0] == "LIST") {
                 TypeSig elSig = null;
                 if (f.FieldType is GenericInstSig) elSig = ((GenericInstSig)f.FieldType).GenericArguments.Count > 0 ? ((GenericInstSig)f.FieldType).GenericArguments[0] : null;
-                if (elSig == null) { skip++; continue; }
+                if (elSig == null) {
+                    // 非泛型集合: 数组(SZArraySig)静态化; 引用型集合(SortedList/Hashtable/Object数组)空构造; Object→ldnull
+                    var ft = f.FieldType;
+                    if (ft is SZArraySig sz && (sz.Next.GetElementType() == ElementType.I4 || sz.Next.GetElementType() == ElementType.U4)) {
+                        var elemTy = sz.Next;
+                        var arrSpec = new TypeSpecUser(ft);
+                        // 收集元素行(INT)
+                        var elems = new List<string>();
+                        int nEl = 0;
+                        for (int k2 = li + 1; k2 < allLines.Length; k2++) {
+                            var e2 = allLines[k2].Split(' ');
+                            if (e2.Length < 2 || e2[1] != fname + "[]") break;
+                            if (e2[0] == "INT" && e2.Length >= 3 && long.TryParse(e2[2], out var _)) { elems.Add(e2[2]); li = k2; }
+                        }
+                        nEl = elems.Count;
+                        ins.Add(new Instruction(OpCodes.Ldc_I4, nEl));
+                        ins.Add(new Instruction(OpCodes.Newarr, elemTy.ToTypeDefOrRef()));
+                        for (int k2 = 0; k2 < nEl; k2++) {
+                            ins.Add(new Instruction(OpCodes.Dup));
+                            ins.Add(new Instruction(OpCodes.Ldc_I4, k2));
+                            ins.Add(new Instruction(OpCodes.Ldc_I4, (int)long.Parse(elems[k2])));
+                            ins.Add(new Instruction(OpCodes.Stelem_I4));
+                        }
+                        ins.Add(new Instruction(OpCodes.Stsfld, f));
+                        nList++;
+                        continue;
+                    }
+                    if (ft is SZArraySig sz2) { // 对象数组: newarr(len) 默认 null 元素
+                        int nEl = 0;
+                        for (int k2 = li + 1; k2 < allLines.Length; k2++) {
+                            var e2 = allLines[k2].Split(' ');
+                            if (e2.Length < 2 || e2[1] != fname + "[]") break;
+                            nEl++; li = k2;
+                        }
+                        ins.Add(new Instruction(OpCodes.Ldc_I4, nEl));
+                        ins.Add(new Instruction(OpCodes.Newarr, sz2.Next.ToTypeDefOrRef()));
+                        ins.Add(new Instruction(OpCodes.Stsfld, f));
+                        nList++;
+                        continue;
+                    }
+                    if (ft.GetElementType() == ElementType.Object) { // Object 字段, LIST 0 行 → null
+                        ins.Add(new Instruction(OpCodes.Ldnull));
+                        ins.Add(new Instruction(OpCodes.Stsfld, f));
+                        nList++;
+                        continue;
+                    }
+                    // SortedList/Hashtable 等非泛型引用集合 → newobj 无参 ctor(空集合)
+                    var fr = ft.ToTypeDefOrRef();
+                    ins.Add(new Instruction(OpCodes.Newobj, new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), fr)));
+                    ins.Add(new Instruction(OpCodes.Stsfld, f));
+                    nList++;
+                    continue;
+                }
                 var listSpec = new TypeSpecUser(f.FieldType); // 封闭 List<T> — newobj 必需
                 var addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), listSpec);
                 ins.Add(new Instruction(OpCodes.Newobj, new MemberRefUser(mod, ".ctor",
