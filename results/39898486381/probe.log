@@ -1,0 +1,11 @@
+[04:07:42.708] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[04:07:42.742] size = 7837184  md5 = F8CA87F6CA279B5D3228312D4DB57178
+[04:07:42.751] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[04:07:42.789] started pid = 7104
+[04:08:19.143] still alive, windows = 0
+[04:08:19.155] responding = True  threads = 6  WS(MB) = 26.6  CPU = 00:00:00.1562500
+[04:08:19.164] modules(head40) = AirExplorer.exe,ntdll.dll,MSCOREE.DLL,KERNEL32.dll,KERNELBASE.dll,ADVAPI32.dll,msvcrt.dll,sechost.dll,RPCRT4.dll,mscoreei.dll,SHLWAPI.dll,ucrtbase.dll,kernel.appcore.dll,VERSION.dll,clr.dll,USER32.dll,win32u.dll,VCRUNTIME140_1_CLR0400.dll,GDI32.dll,VCRUNTIME140_CLR0400.dll,gdi32full.dll,ucrtbase_clr0400.dll,msvcp_win.dll,IMM32.DLL,mscorlib.ni.dll,ole32.dll,combase.dll,bcryptPrimitives.dll,uxtheme.dll,clrjit.dll,System.ni.dll,System.Core.ni.dll,System.Xml.ni.dll,diasymreader.dll
+[04:08:23.170] killed
+[04:08:26.679] EVENT [10/23/2026 4:07:47 AM] Application Error: Faulting application name: AirExplorer.exe, version: 5.11.0.0, time stamp: 0x6a671a98 | Faulting module name: KERNELBASE.dll, version: 10.0.26100.33438, time stamp: 0xace796d3 | Exception code: 0xe0434352 | Fault offset: 0x00000000000c75fa | Faulting process id: 0x1BC0 | Faulting application start time: 0x1DD62A40D460ECD | Faulting application path: D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe | Faulting module path: C:\Windows\System32\KERNELBASE.dll | Report Id: 6b760ba2-2729-49ff-a603-ef8c01bebb39 | Faulting package full name:  | Faulting package-relative application ID: 
+[04:08:26.681] EVENT [10/23/2026 4:07:44 AM] .NET Runtime: Application: AirExplorer.exe | Framework Version: v4.0.30319 | Description: The process was terminated due to an unhandled exception. | Exception Info: exception code e0434352, exception address 00007FFD6EBE75FA | Stack: | 
+[04:08:26.682] done
