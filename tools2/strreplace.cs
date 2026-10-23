@@ -52,11 +52,15 @@ class StrReplace {
                     var st = new Stack<long?>();
                     bool ok = true;
                     foreach (var ins in block) { if (!Eval(ins, st)) { ok = false; break; } }
-                    if (ok && st.Count == 1 && st.Peek().HasValue && maps.TryGetValue(st.Peek().Value, out var s)) {
+                    bool force = a.Length > 5 && a[5] == "--force";
+                    string s2 = null;
+                    bool hit2 = ok && st.Count == 1 && st.Peek().HasValue && maps.TryGetValue(st.Peek().Value, out s2);
+                    if (!hit2 && force) { s2 = ""; hit2 = true; }
+                    if (hit2) {
                         // 替换: 块指令 Nop 化(保留对象, 防分支/EH 悬空), call → ldstr
                         for (int k = 0; k < block.Count; k++) { block[k].OpCode = OpCodes.Nop; block[k].Operand = null; }
                         il[i].OpCode = OpCodes.Ldstr;
-                        il[i].Operand = s;
+                        il[i].Operand = s2;
                         replaced++;
                     } else kept++;
                 }

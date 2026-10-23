@@ -498,3 +498,63 @@ trace 1.45GB，**录制态进程慢 ~100x：20 分钟仅 1005 次 JIT**（≈官
 | v109 | v106+IGC调用nop化（CPU 时间不变→卡点在解密链） |
 | v110 | 官方+重写=崩（证明 dnlib 重写破坏 Reactor 文件偏移依赖） |
 | exes/AirExplorer_v70.exe | 现行"可出主窗"基线（前代架构） |
+
+## 🔬 第十二轮战报（2026-10-23 23:40 · 抓栈破案 + 快照恢复路线定型）
+
+### 🏆 dump-stack workflow 首战告捷：直接抓到满转线程的托管栈
+
+```
+SHA1CryptoServiceProvider.HashCore ← TransformBlock
+← InstantiateLiteralEvaluator ← GenerateControllableAnalyzer(hash, Stream, uint, byte[])
+← HandlePool ← InstantiateGlobalCalculator ← <Module>..cctor
+```
+**v106/v109/v111/v112 的 CPU 满转 = IGC 真体的 SHA1 哈希循环永不退出**（一次 CI 定位，
+四轮盲目实验的信息全部被解释）。
+
+### 系列实验排除清单（本轮新增）
+
+| 实验 | 结果 | 结论 |
+|---|---|---|
+| v109 (IGC 调用 nop 化 ×1364) | 满转不变 | 卡点不在调用方重复 |
+| v111 (14130 处字符串→ldstr) | 满转不变 | 卡点不在业务字符串解密 |
+| v112 (19378 处 ITP 全消灭) | 满转不变 | **卡点与解密器链完全无关** |
+| v113 (124 官方字段值恢复) | 满转不变 | 字段恢复时机不对(IGC 在 <Module>.cctor 先跑) |
+| 官方原版资源对比 | **6 资源完全一致** | 资源没丢 |
+| v110 (官方+重写) | 秒崩 | dnlib 重写破坏 Reactor 文件偏移依赖 |
+
+### 🔑 本质认知（盖棺定论）
+
+**官方磁盘"真体"是解释器的输入，不是给 CLR JIT 的代码**——官方运行时 hook 拦截
+cctor 的 call DEP/IGC/DAE，根本不 JIT 这些体；资源数据也是加密态由解释器解密。
+v106 强行 JIT IGC → 它内部逻辑依赖"解释器才会维护的运行时状态"（资源明文、字段值、
+流位置）→ 哈希校验永不通过 → 状态机循环。
+
+**v106 能活 90 秒**已证明大部分业务真体 JIT 语义正常；卡死只在**引导体**（IGC 等
+被解释器接管的少数方法）。
+
+### 🎯 终极方案：运行时状态快照恢复（下轮主线）
+
+官方原版能正常跑完引导（1.5s 出窗）→ **官方进程内引导类静态状态 = "引导已完成"快照**：
+
+```
+1. host6 v4: 官方原版启动后反射 dump 引导类全部静态状态
+   (DispatcherInitializer 的 _ExtractorVisitors byte[] 密钥流/templateSpecObj/
+    automatedError/m_ExtendedSchemaTemplate + <Module>{a8c2e9b2} 实例 + ...)
+2. 工具把快照生成为 IL 初始化代码(byte[] → newarr+stelem 序列)
+3. v114 = v111 + 在 <Module>.cctor 开头(IGC 之前)恢复快照
+   → IGC 的 Stream/字段全是解密后明文 → 哈希正常通过 → 引导"秒完成"
+4. UI 链 → 业务功能 → 逐层验收
+```
+
+已就位：fetch-strings workflow 可复用（改 dump 目标）；fv/strings 抓取姿势已验证；
+字段/数组恢复 IL 生成器（patchfields 扩展）。
+
+### 产物现状
+
+| 产物 | 说明 |
+|---|---|
+| v106 | 全量重建首个存活版（基线） |
+| v111 | +字符串静态化（14130 处 ldstr） |
+| v113 | +字段值恢复（时机待修正为 <Module>.cctor 开头） |
+| dump-stack.yml | **一次 CI 定位卡点**的通用武器(windbg+SOS) |
+| fetch-strings.yml | 官方运行时状态抓取管线(可扩展为快照抓取) |
