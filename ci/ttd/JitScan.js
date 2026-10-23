@@ -50,10 +50,15 @@ var session = getSession();
 var calls = session.TTD.Calls("clrjit!CILJit::compileMethod");
 var out = { arch: isX86 ? "x86" : "x64", targets: TARGET_ILSIZES, methods: [], sizeHistogram: {} };
 var scanned = 0;
+var total = 0;
+try { total = Number(calls.Count()); } catch (e) { log("[JitScan] Count() failed: " + e); }
+var startFrom = Math.floor(total * 0.85);   // 跳过前 85%(桩 JIT 海量小方法), OnLoad 链在尾段
+log("[JitScan] total calls=" + total + " scanning from #" + startFrom);
 
 for (var call of calls) {
-    if (scanned >= MAX_CALLS || out.methods.length >= 50) break;
     scanned++;
+    if (scanned <= startFrom) continue;
+    if (out.methods.length >= 50) break;
     var infoAddr;
     try {
         if (isX86) infoAddr = Number(call.Parameters[2]) >>> 0;
@@ -114,12 +119,16 @@ for (var call of calls) {
     } catch (e) { }
 }
 
-log("[JitScan] scanned=" + scanned + " hits=" + out.methods.length);
+log("[JitScan] done scanned=" + scanned + "/" + total + " hits=" + out.methods.length);
 var topSizes = Object.keys(out.sizeHistogram).sort(function(a,b){ return out.sizeHistogram[b]-out.sizeHistogram[a]; }).slice(0, 30);
 out.topSizes = topSizes.map(function(k){ return { ilSize: Number(k), count: out.sizeHistogram[k] }; });
 var txt = JSON.stringify(out);
-host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\jitscan.json").Write(txt);
-log("[JitScan] C:\\out\\jitscan.json size=" + txt.length);
+var f = host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\jitscan.json");
+var written = false;
+try { f.Write(txt); written = true; } catch (e1) { }
+if (!written) { try { f.WriteLine(txt); written = true; } catch (e2) { } }
+if (!written) { try { f.WriteAllText(txt); written = true; } catch (e3) { log("[JitScan] write err " + e3); } }
+log("[JitScan] C:\\out\\jitscan.json size=" + txt.length + " written=" + written);
 
 }
 
