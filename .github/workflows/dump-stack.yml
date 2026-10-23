@@ -44,8 +44,6 @@ jobs:
           & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
           if (-not (Test-Path "app\AirExplorer.exe")) { Write-Host "extract failed"; exit 1 }
           Copy-Item "exes\AirExplorer_${{ inputs.exe }}.exe" app\AirExplorer.exe -Force
-          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:tools\ci\host.exe /r:System.Windows.Forms.dll tools\ci\host.cs
-          if ($LASTEXITCODE -ne 0) { Write-Host "HOST COMPILE FAILED"; exit 1 }
 
       - name: 启动(带 ui-probe 同款 COMPLUS 环境) + 延时 attach 抓栈
         shell: pwsh
@@ -57,12 +55,15 @@ jobs:
           $env:COMPLUS_JitDiffableDasm = "1"
           New-Item -ItemType Directory -Force -Path probe | Out-Null
           $appDir = (Resolve-Path "app").Path
-          $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "AirExplorer.exe" -WorkingDirectory $appDir -PassThru -NoNewWindow -RedirectStandardOutput C:\out\host_stdout.txt -RedirectStandardError C:\out\host_stderr.txt
-          Write-Host "host pid = $($hp.Id)"
+          # 直接运行 AirExplorer(与 ui-probe 窗口检测同口径 — 该口径下 v106 稳定存活 90s)
+          $hp = Start-Process -FilePath "$appDir\AirExplorer.exe" -WorkingDirectory $appDir -PassThru -NoNewWindow
+          Write-Host "target pid = $($hp.Id)"
           Start-Sleep -Seconds ${{ inputs.wait }}
-          $tgt = Get-Process -Name "AirExplorer" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $tgt) { Write-Host "AirExplorer exited early"; Get-Content C:\out\host_stdout.txt -ErrorAction SilentlyContinue | Select-Object -Last 15; exit 1 }
-          Write-Host "target pid = $($tgt.Id) CPU=$($tgt.TotalProcessorTime)"
+          $tgt = Get-Process -Id $hp.Id -ErrorAction SilentlyContinue
+          if (-not $tgt) { Write-Host "exited early"; exit 1 }
+          Write-Host "alive CPU=$($tgt.TotalProcessorTime)"
+          $tgt = Get-Process -Id $hp.Id -ErrorAction SilentlyContinue
+          if (-not $tgt) { Write-Host "exited early"; exit 1 }
           & $env:CDb -p $tgt.Id -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
             -c ".loadby sos clr; .echo ===CLRSTACK===; ~*e !clrstack; .echo ===NATIVE===; ~*k 40; qd" `
             2>&1 | Tee-Object -FilePath C:\out\stacks.log | Select-Object -Last 60
