@@ -37,35 +37,35 @@ jobs:
           Write-Host "cdb = $cdb"
           "CDb=$cdb" | Add-Content $env:GITHUB_ENV
 
-      - name: 编译 host 并启动候选
+      - name: 解压候选并落位
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
           & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
           if (-not (Test-Path "app\AirExplorer.exe")) { Write-Host "extract failed"; exit 1 }
           Copy-Item "exes\AirExplorer_${{ inputs.exe }}.exe" app\AirExplorer.exe -Force
-          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:tools\ci\host.exe /r:System.Windows.Forms.dll tools\ci\host.cs
-          $hp = Start-Process -FilePath "tools\ci\host.exe" -ArgumentList "AirExplorer.exe" -WorkingDirectory "app" -PassThru -NoNewWindow
-          Start-Sleep -Seconds ${{ inputs.wait }}
-          Write-Host "host pid = $($hp.Id), CPU = $((Get-Process -Id $hp.Id).TotalProcessorTime)"
-          "HPPID=$($hp.Id)" | Add-Content $env:GITHUB_ENV
+          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:app\host.exe /r:System.Windows.Forms.dll tools\ci\host.cs
+          if ($LASTEXITCODE -ne 0) { Write-Host "HOST COMPILE FAILED"; exit 1 }
+          Copy-Item app\host.exe C:\out\host_used.exe
 
-      - name: windbg 抓栈(托管+原生)
+      - name: cdb -o 跟随启动 + 延时抓栈(托管+原生)
         shell: pwsh
         run: |
-          # host.exe 拉起的 AirExplorer 是子进程; 抓它的 pid
-          $tgt = Get-Process -Name "AirExplorer" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $tgt) { Write-Host "AirExplorer not running"; exit 1 }
-          Write-Host "target pid = $($tgt.Id) CPU=$($tgt.TotalProcessorTime)"
-          & $env:CDb -p $tgt.Id -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" -c ".loadby sos clr; ~*e !clrstack; ~*k; qd" 2>&1 | Tee-Object -FilePath C:\out\stacks.log | Select-Object -Last 40
+          # cdb -o: 调试器跟随 host.exe 拉起的子进程(AirExplorer); initial break 后 load sos,
+          # .sleep 等运行, 再抓全部线程托管栈
+          Set-Location app
+          & $env:CDb -o -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
+            -c ".loadby sos clr; .sleep ${{ inputs.wait }}000; .echo ===CLRSTACK===; ~*e !clrstack; .echo ===NATIVE===; ~*k 40; qd" `
+            host.exe AirExplorer.exe 2>&1 | Tee-Object -FilePath C:\out\stacks.log | Select-Object -Last 50
           Write-Host "=== done ==="
 
-      - name: 采集进程内线程 CPU(判断哪个线程满转)
+      - name: 线程 CPU 记录
         if: always()
         shell: pwsh
         run: |
           $tgt = Get-Process -Name "AirExplorer" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($tgt) { $tgt.Threads | Sort-Object -Property TotalProcessorTime -Descending | Select-Object -First 6 | ForEach-Object { Write-Host ("thread " + $_.Id + " cpu=" + $_.TotalProcessorTime) } | Out-File C:\out\threads.txt }
+          else { Write-Host "AirExplorer already exited" | Out-File C:\out\threads.txt }
 
       - uses: actions/upload-artifact@v4
         if: always()
