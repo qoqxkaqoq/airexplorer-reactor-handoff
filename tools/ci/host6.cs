@@ -35,26 +35,46 @@ class Host6 {
                     var ep = asm.EntryPoint;
                     object[] args = ep.GetParameters().Length == 1 ? new object[] { new string[0] } : new object[0];
                     ep.Invoke(null, args);
-                } catch (Exception ex) { entryEx = ex; }
+                } catch (Exception ex) {
+                    entryEx = ex;
+                    var sb = new System.Text.StringBuilder("=== ENTRY EX ===\n");
+                    for (var e2 = ex; e2 != null; e2 = e2.InnerException) { sb.AppendLine(e2.GetType().FullName + ": " + e2.Message); sb.AppendLine(e2.StackTrace); sb.AppendLine("-- inner --"); }
+                    try { File.AppendAllText(TraceFile, sb.ToString()); } catch {}
+                }
             });
             worker.SetApartmentState(ApartmentState.STA);
             worker.Start();
             Console.WriteLine("[h6] entry launched, waiting " + delay + "s for runtime warmup");
-            Thread.Sleep(delay * 1000);
+            for (int wsec = 0; wsec < delay; wsec += 5) {
+                Thread.Sleep(5000);
+                try { File.AppendAllText(TraceFile, "warmup " + (wsec + 5) + "s entryEx=" + (entryEx == null ? "none" : entryEx.GetType().Name) + " alive=" + !worker.Join(0) + "\n"); } catch {}
+            }
 
             var t = asm.GetType("CloudClient.Templating.DispatcherInitializer");
             if (t == null) { Console.WriteLine("[h6] type not found"); return 1; }
             var mi = t.GetMethod("InstantiateTransferableProgram", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
             if (mi == null) { Console.WriteLine("[h6] method not found"); return 1; }
             Console.WriteLine("[h6] fetch start");
-            int ok = 0, fail = 0;
+            // 探针: 保护计数器当前值
+            try {
+                var cnt = t.GetField("_TemplateNotifierSize", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                File.AppendAllText(TraceFile, "TemplateNotifierSize=" + (cnt == null ? "<no field>" : (cnt.GetValue(null) ?? "?").ToString()) + "\n");
+            } catch (Exception pex) { File.AppendAllText(TraceFile, "probe-ex " + pex.Message + "\n"); }
+            int ok = 0, fail = 0, dbg = 0;
             using (var w = new StreamWriter(outFile)) {
                 w.WriteLine("{");
                 bool first = true;
                 foreach (var id in ids) {
                     string val = null;
                     try { val = mi.Invoke(null, new object[] { (int)id }) as string; }
-                    catch { }
+                    catch (Exception iex) {
+                        if (dbg < 3) {
+                            dbg++;
+                            var sb = new System.Text.StringBuilder("=== id " + id + " EX ===\n");
+                            for (var e2 = iex; e2 != null; e2 = e2.InnerException) { sb.AppendLine(e2.GetType().FullName + ": " + e2.Message); sb.AppendLine(e2.StackTrace); sb.AppendLine("-- inner --"); }
+                            File.AppendAllText(TraceFile, sb.ToString());
+                        }
+                    }
                     if (val == null) { fail++; continue; }
                     if (!first) w.WriteLine(",");
                     first = false;
