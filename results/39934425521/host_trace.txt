@@ -1,0 +1,11 @@
+=== host v2 start 09:48:02.371 jitNoInline=1 ===
+=== UNHANDLED 09:48:02.547 ===
+EX System.BadImageFormatException: Index not found. (Exception from HRESULT: 0x80131124)
+   at System.RuntimeTypeHandle.ConstructName(RuntimeTypeHandle handle, TypeNameFormatFlags formatFlags, StringHandleOnStack retString)
+   at System.RuntimeType.RuntimeTypeCache.ConstructName(String& name, TypeNameFormatFlags formatFlags)
+   at System.RuntimeType.get_FullName()
+   at System.Diagnostics.StackTrace.ToString(TraceFormat traceFormat)
+   at System.Exception.GetStackTrace(Boolean needFileInfo)
+   at Host.Dump(String tag, Exception ex)
+   at Host.Main(String[] a)
+-- inner --
