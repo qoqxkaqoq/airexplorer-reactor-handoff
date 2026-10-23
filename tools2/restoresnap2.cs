@@ -56,10 +56,12 @@ class RestoreSnap2 {
             } else if (tag.StartsWith("DI.")) {
                 var fname = tag.Substring(3);
                 if (!diFlds.TryGetValue(fname, out var f)) continue;
+                f.Attributes = (f.Attributes & ~FieldAttributes.FieldAccessMask) | FieldAttributes.Public;
                 EmitStatic(ins, sp, f, ref nDi);
             } else if (tag.StartsWith("TA.")) {
                 var fname = tag.Substring(3);
                 if (!taFlds.TryGetValue(fname, out var f)) continue;
+                f.Attributes = (f.Attributes & ~FieldAttributes.FieldAccessMask) | FieldAttributes.Public;
                 EmitStatic(ins, sp, f, ref nTa);
             }
         }
