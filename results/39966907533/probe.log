@@ -1,0 +1,9 @@
+[14:07:48.721] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[14:07:48.750] size = 9013248  md5 = 43D612AE5CCB21786920422E1D1478A9
+[14:07:48.758] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[14:07:48.788] started pid = 4848
+[14:09:19.067] still alive, windows = 0
+[14:09:19.080] responding = True  threads = 5  WS(MB) = 26.3  CPU = 00:01:30.0156250
+[14:09:19.090] modules(head40) = AirExplorer.exe,ntdll.dll,MSCOREE.DLL,KERNEL32.dll,KERNELBASE.dll,ADVAPI32.dll,msvcrt.dll,sechost.dll,RPCRT4.dll,mscoreei.dll,SHLWAPI.dll,ucrtbase.dll,kernel.appcore.dll,VERSION.dll,clr.dll,USER32.dll,VCRUNTIME140_1_CLR0400.dll,win32u.dll,VCRUNTIME140_CLR0400.dll,GDI32.dll,ucrtbase_clr0400.dll,gdi32full.dll,msvcp_win.dll,IMM32.DLL,mscorlib.ni.dll,ole32.dll,combase.dll,bcryptPrimitives.dll,uxtheme.dll,clrjit.dll,shell32.dll,wintypes.dll,windows.storage.dll,SHCORE.dll,profapi.dll,bcrypt.dll,CRYPTSP.dll,rsaenh.dll,CRYPTBASE.dll,System.ni.dll
+[14:09:23.096] killed
+[14:09:23.864] done
