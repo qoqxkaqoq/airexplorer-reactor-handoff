@@ -150,7 +150,7 @@ class Prep {
             File.WriteAllText(Path.Combine(OutDir, "phaseC.summary"), "stubs=" + stubs + " changed=" + changed);
         }
 
-        // RefScan: 官方引导后全量 IL 字节扫描 — 找委托/静态字段的赋值方法(newobj ParserValidator::.ctor / stsfld UpdateFunction / stsfld WatchSpec)
+        // RefScan: 官方引导后 — ① 直接读委托静态字段的运行时目标(最直接) ② 全量 IL 字节扫赋值点
         RefScan(asm, mod);
 
         Marker(99999);
@@ -167,22 +167,50 @@ class Prep {
     }
 
     static void RefScan(Assembly asm, Module mod) {
-        // (opcode, token) 对: ctor 只看 newobj(0x73); 字段只看 stsfld(0x80)
+        // ① 委托字段侦察: 读运行时值, 拿 Method.Name/MetadataToken, 直接 dump 目标真体
+        var dlgFields = new[] {
+            "ParserValidator::UpdateFunction",
+            "AutomatedRunnerValidator::WatchSpec",
+            "ExtendedManagerValidator::GetAnnotation",
+            "ModelPredicate::ValidateCustomProvider",
+            "ScalableCalcValidator::ValidateGenericController",
+            "IsolatedExecutorValidator::ArrangeAggregator",
+        };
+        var allT = AllTypes(asm).ToList();
+        Log("[dlgscan] begin fields=" + dlgFields.Length);
+        foreach (var spec in dlgFields) {
+            var parts = spec.Split(new[] { "::" }, StringSplitOptions.None);
+            try {
+                var ty = allT.FirstOrDefault(t => t.Name == parts[0]);
+                if (ty == null) { Log("[dlgscan] type missing " + parts[0]); continue; }
+                var f = ty.GetField(parts[1], BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (f == null) { Log("[dlgscan] field missing " + spec); continue; }
+                var v = f.GetValue(null);
+                if (v == null) { Log("[dlgscan] " + spec + " = NULL"); continue; }
+                var d = v as Delegate;
+                if (d == null) { Log("[dlgscan] " + spec + " = " + v.GetType().FullName + " (not delegate)"); continue; }
+                var tgt = d.Method;
+                Log("[dlgscan] " + spec + " -> " + tgt.DeclaringType.FullName + "::" + tgt.Name + " tok=0x" + tgt.MetadataToken.ToString("X8"));
+                FreshDumpIfChanged(mod, (uint)tgt.MetadataToken, tgt.DeclaringType.FullName + "::" + tgt.Name + " (delegate target of " + spec + ")", OutDir);
+            } catch (Exception ex) { Log("[dlgscan] " + spec + " EX " + ex.GetType().Name + ": " + ex.Message); }
+        }
+
+        // ② IL 字节扫描: newobj ParserValidator::.ctor(0x73) / stsfld(0x80) 各观察字段
         var wants = new List<Tuple<byte, uint>>();
         try {
-            var pv = asm.GetType("ParserValidator") ?? AllTypes(asm).First(t => t.Name == "ParserValidator");
-            var fld = pv.GetField("UpdateFunction", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var pv = allT.FirstOrDefault(t => t.Name == "ParserValidator");
+            var fld = pv == null ? null : pv.GetField("UpdateFunction", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
             if (fld != null) wants.Add(Tuple.Create((byte)0x80, (uint)fld.MetadataToken));
-            var ctor = pv.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(object), typeof(IntPtr) }, null);
+            var ctor = pv == null ? null : pv.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(object), typeof(IntPtr) }, null);
             if (ctor != null) wants.Add(Tuple.Create((byte)0x73, (uint)ctor.MetadataToken));
-            var arv = AllTypes(asm).First(t => t.Name == "AutomatedRunnerValidator");
-            var fld2 = arv.GetField("WatchSpec", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var arv = allT.FirstOrDefault(t => t.Name == "AutomatedRunnerValidator");
+            var fld2 = arv == null ? null : arv.GetField("WatchSpec", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
             if (fld2 != null) wants.Add(Tuple.Create((byte)0x80, (uint)fld2.MetadataToken));
-        } catch (Exception ex) { Log("[refscan] token resolve fail: " + ex.Message); return; }
+        } catch (Exception ex) { Log("[refscan] token resolve fail: " + ex.Message); }
         if (wants.Count == 0) { Log("[refscan] no watch tokens"); return; }
         Log("[refscan] watch: " + string.Join(",", wants.Select(w => "0x" + w.Item2.ToString("X8") + "/op" + w.Item1.ToString("X2"))));
         int found = 0;
-        foreach (var ty in AllTypes(asm)) {
+        foreach (var ty in allT) {
             MemberInfo[] ms;
             try { ms = ty.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly); } catch { continue; }
             foreach (var mi in ms) {
