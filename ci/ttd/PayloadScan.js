@@ -94,26 +94,27 @@ function mainImpl() {
                 out.stackPtrs = ptrs.slice(0, 80);
             } catch (e) { log("[PS] stack scan failed: " + e); }
 
-            // dump code at rip and data at each payload pointer
+            // dump code at rip and data at each payload pointer (hex text — CreateFile().Write mangles raw bytes)
             var files = [];
             function dumpFile(name, addr, len) {
                 try {
                     var bytes = read1(addr, len);
+                    var hex = bytes.map(b => b.toString(16).padStart(2, "0")).join("");
                     var f = host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\" + name);
-                    f.Write(bytes.map(b => String.fromCharCode(b)).join(""));
+                    f.Write(hex);
                     files.push(name + " @" + ("0x" + addr.toString(16)) + " " + len + "B");
                 } catch (e) { log("[PS] dump " + name + " failed: " + e); }
             }
             try {
                 var rip = Number(regs.eip !== undefined ? regs.eip : regs.rip);
-                dumpFile("code_at_rip.bin", rip - 0x40, 0x180);
+                dumpFile("code_at_rip.hex", rip - 0x40, 0x180);
             } catch (e) { }
             if (out.stackPtrs) {
                 var k = 0;
                 for (var p of out.stackPtrs) {
                     if (p.inPayload && k < 6) {
                         var a = parseInt(p.val, 16);
-                        dumpFile("payload_at_ptr" + k + ".bin", a - 0x40, 0x200);
+                        dumpFile("payload_at_ptr" + k + ".hex", a - 0x40, 0x200);
                         k++;
                     }
                 }
@@ -138,7 +139,48 @@ function mainImpl() {
             log("[PS] deep dump failed: " + e);
         }
     } else {
-        log("[PS] NO WRITE EVENTS FOUND — stubs were never written in trace");
+        log("[PS] NO WRITE EVENTS FOUND — trying READ events (JIT fetches IL from stub VA)");
+        // fallback: who READS the stub VA? first read event => JIT reading the stub body.
+        // deep-dump regs/stack there: the decrypted-IL buffer pointer is often in a register/stack.
+        try {
+            var t0 = TARGETS[0];
+            var va0 = base + t0.rva;
+            var rs = session.TTD.Memory(va0, va0 + 16, "r");
+            var rcnt = 0; var firstRead = null;
+            for (var r of rs) {
+                rcnt++;
+                if (!firstRead) firstRead = r;
+                if (rcnt > 5) break;
+            }
+            log("[PS] " + t0.tok + " reads=" + rcnt);
+            if (firstRead) {
+                var pos0 = firstRead.Position ? (String(firstRead.Position.Sequence) + ":" + String(firstRead.Position.Steps)) : String(firstRead.Position);
+                host.namespace.Debugger.Utility.Control.ExecuteCommand("!tt " + pos0);
+                var regs2 = host.currentThread.Registers.User;
+                var rd2 = {};
+                for (var rn3 of ["eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "eip"]) {
+                    try { rd2[rn3] = "0x" + Number(regs2[rn3]).toString(16); } catch (e) { }
+                }
+                var out2 = { mode: "read-fallback", firstReadPos: pos0, regs: rd2 };
+                // stack pointer scan for heap buffers (decrypted IL often freshly allocated)
+                var sp2 = Number(regs2.esp);
+                try {
+                    var sw = read1(sp2, 512);
+                    var pp = [];
+                    for (var i2 = 0; i2 + 3 < sw.length; i2++) {
+                        var v2 = (sw[i2] | (sw[i2+1] << 8) | (sw[i2+2] << 16) | (sw[i2+3] << 24)) >>> 0;
+                        if (v2 > 0x10000 && v2 < 0x7FFFFFFF) pp.push({ off: i2 * 4, val: "0x" + v2.toString(16) });
+                    }
+                    out2.stackPtrs = pp.slice(0, 60);
+                } catch (e) { }
+                var txt2 = JSON.stringify(out2);
+                var f3 = host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\payloadscan.json");
+                f3.Write(txt2);
+                log("[PS] payloadscan.json (read-fallback) written, " + txt2.length + " bytes");
+            }
+        } catch (e) {
+            log("[PS] read fallback failed: " + e);
+        }
     }
     log("[PS] done");
 }
