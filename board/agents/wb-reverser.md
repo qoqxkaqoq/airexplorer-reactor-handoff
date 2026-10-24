@@ -728,3 +728,60 @@ ITP(06004196) 使用的静态：`_ExtractorVisitors`(B64✓已恢复) / `_Recomm
 - 窗口门闩：`SearchAdapter 状态8 → RunScopeThread → if(CreateMixedCache()) ApplyExtendedIterator(PInvoke)`；`m_IsClientDictionary` 唯一赋值 = `PlanEnumerator` ← `ExecuteResponsiveProxy` ← `AnalyzeReg` ← `AdvancedClient.ReceiveInternalToken/GetFinalizer`（实例方法——需主窗体实例）
 - v140 已恢复五件套：ctor(6298B/1601 指令) + RequestCommonObserver(14684B) + RequestIntegratedRecord(568B+EH) + SplitSynchronizer + MergeManager
 - **v140(有配置) 仍无窗** → 配置读取分支还有未恢复依赖，下一步：① bootcfg 抓 v140 有配置路径的 MergeManager 是否执行（tmp 断点/procdump 早期 dump）② GenerateFilteredEvent(06002B03) 配置应用链逐环节 ③ 对比官方/ v140 在配置解析后的 globalTemplate 与窗口门闩字段
+
+### 2026-10-24 深夜重大修正：v139"主窗口渲染"里程碑证伪 + 启动状态机全解
+
+**❌ 里程碑证伪（勿再引用）**：
+- 之前记录的"v139 主窗口 visible=True（Ribbon+导览树+Accounts）"和"Register account 对话框 40+ 图标"截图，经 artifact 复核（run 40088489266 的 `_candidate.txt`）**全部来自 candidate=official 的基线 run**（md5 A12B5C573E1B54E98CCCC29351EAA066），不是 v139！
+- v139 的真实 ui-probe 记录（run 40088038591, md5 A826563105C4FACF52A40F134AC05184）：`still alive, windows = 0` —— **v139 从未在 CI 出过窗**
+- v139/v140 真实 UI 状态：**0 窗口、0 AdvancedClient 实例、Application.Run 空转**（有配置/无配置皆然）
+
+**bootcfg 全矩阵实测（procdump+!dumpheap -type AdvancedClient）**：
+| run | candidate | 配置 | 主窗体实例数 | 结果 |
+|---|---|---|---|---|
+| 40097515378 | official | 无(未生成seed) | **1 @2s** | t=3s 出窗 ✓ |
+| 40097515378 | v140 | 无 | **0 @6s** | 60s 无窗 |
+| 40098622109 | v139 | 无 | **0 @6s** | 60s 无窗 |
+| 40098623865 | v140 | 无 (ui-probe) | windows=0 | 35s 无窗 |
+| 40095458794 | v140 | 有(seed) | 0 @60s | 60s 无窗 |
+
+→ **"有配置/无配置"分叉理论作废**：v139/v140 在两种配置下都一样（窗体从未创建）。
+
+**SearchAdapter(06002D22) 无参 GUI 状态机全解（IL 逐块解码）**：
+```
+entry V_0=5 → state5: ServicePointManager.SecurityProtocol |= 3840 (TLS) → len(args)<1?
+  ├─ yes → state7: new object()→_ReceiverModelObj; _ContextConverter=DateTime.MinValue
+  │         → state8: _InternalManagers=args → OSVersion/Version/M环境值
+  │           → if(m<6) state2 else state6
+  ├─ state6: VerifyActiveCalc()=SetProcessDPIAware() → state2
+  ├─ state2: ElementSolver 委托调用 → state1
+  ├─ state1: CommonBufferValidator(false)=Application.EnableVisualStyles()
+  │         → FinderMap::DirectDefinition() → RunSimpleGateway() → RunScopeThread()
+  │         → state0
+  ├─ state0: CollectPortableInspector(true)=Application.AddMessageFilter(单例) → Mutex(ITP串)
+  │         → WaitOne(1000,true) 失败→VerifyTransferableSelector()(EnumWindows)→return 0
+  └─ state3: AppDomain.UnhandledException += VerifyLogicalFactory; ThreadException += VerifyAdaptableConverter
+            → ValidateDynamicEncryptor() → LiteralContextValidator 委托 = Application.Run(返回的 InitializerReg 单例!)
+```
+
+**门闩链真解（推翻旧记录）**：
+- `RunScopeThread`(06002F14) = `if(m_IsClientDictionary) ApplyExtendedIterator(2)`，且整体 try/catch 吞异常
+- `ApplyExtendedIterator`(06002F9B) = **P/Invoke uxtheme.dll #135 = SetPreferredAppMode(ForceDark)** —— 只是 Win10 暗色模式 API，不是窗体创建！
+- `CreateMixedCache`(06002F0C) = `return m_IsClientDictionary`；唯一写者 `PlanEnumerator(bool)`(06002F0D)
+- `ExecuteResponsiveProxy`(06002F13) 状态机：`WatcherRecordValidator 委托返回值 < 18362 (Win10 1909 build) ? PlanEnumerator(false) : PlanEnumerator(true)` —— **纯 OS 版本判断，与配置无关**
+- `AnalyzeReg`(06002F11)：读 `RequestWorker::WriteRequest()._RequestSorter.PatchList("Theme")` → 与 ITP 串比对 → Dark→DetachedMonitor / 其他→ClientEvent → 仅影响渲染器选择
+
+**窗体创建点之谜（关键未解）**：
+- 全模块静态 xref：`new AdvancedClient(false)` 唯一出现在 MergeManager(06002BD6, 47指令真体)；MergeManager 语义 = "新建窗口"（挂 FormClosing/FormClosed → OpenScalableWriter/OpenScheduledBuffer，加入 regRecommenderList）
+- SplitSynchronizer(06002995) 是挂在 `m_SegmentedClient` ToolStripMenuItem 上的 EventHandler（注册代理字段 040023B6 → 绑定表 0A000D57 实例目标 = add_Click 类）—— 菜单点击处理器，不是启动路径
+- InitializerReg::.ctor(06002BD1) 官方静态也是 nop 桩 —— ValidateDynamicEncryptor 的 `new InitializerReg()` 单例 = Application.Run 收到的 ApplicationContext
+- **官方 2s dump 堆里已有 `List<AdvancedClient>` + `AdvancedClient[2]`** → regRecommenderList 已被初始化/添加过 → 官方启动时（2s 前）确实执行过含窗体创建的代码
+- **结论：官方首个 AdvancedClient 的创建点在某个加密方法体里（静态显示 nop 桩，运行时由 Reactor 解密），静态 xref 不可见** → 唯一可靠手段 = 运行时抓（bpmd 06002985 / TTD）
+
+**在途**：bootcfg v3（bpmd 06002985 命中即停抓创建栈，官方+候选对称）已 dispatch，等结果即可拿到官方创建链第一现场。
+
+**今日 CI 工具教训**：
+1. PowerShell here-string 内容顶格会截断 YAML 块标量（`@"` 后内容与闭合 `"@` 都会终止 `run: |`）→ 用缩进的 `$lines = @('...','...')` 数组替代
+2. cdb 命令行：**所有 cdb 选项必须在 debuggee 命令行之前**，`cdb -o app.exe -G -y ...` 会把 `-G -y ...` 当成 app.exe 的参数
+3. job logs API 302 到 blob 后带 Authorization 会 401 → 用 artifact 下载或 `curl redirect_url 拼代理`（同 artifact 纪律）
+4. workflow_dispatch 对新推 workflow 报 422 "does not have workflow_dispatch" = YAML 解析失败的伪装症状（本例=here-string 截断），本地 `python3 -c "import yaml; yaml.safe_load(...)"` 先验
