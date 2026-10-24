@@ -69,7 +69,7 @@ class RestoreSnap2 {
         for (int k = ins.Count - 1; k >= 0; k--) il.Insert(0, ins[k]);
         Console.WriteLine("[restore2] inst=" + nInst + " DI=" + nDi + " TA=" + nTa + " → r6cf451d0d now " + il.Count + " instrs");
         var opts = new ModuleWriterOptions(mod);
-        opts.MetadataOptions.Flags |= MetadataFlags.PreserveAll;
+        opts.MetadataOptions.Flags |= MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack;
         mod.Write(a[2], opts);
         Console.WriteLine("[restore2] wrote " + a[2]);
     }
