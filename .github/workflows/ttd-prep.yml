@@ -1,0 +1,154 @@
+name: ttd-prep
+# C2 最小链: 官方样本引导后 PrepareMethod/自然调用 夹逼抓真体
+# job managed: 无 TTD, 纯托管新鲜读体(验证引导后元数据视图是否解密)
+# job agcall:  无 TTD, 自然执行夹逼(首次触碰触发 JIT 链)
+# job ttd:     TTD 录制 prep 进程 → JitScan2.js 按标记窗口抓 compileMethod 真体
+on:
+  workflow_dispatch:
+    inputs:
+      delay:
+        description: 'boot 等待秒数'
+        required: false
+        default: '20'
+
+jobs:
+  managed:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: 官方样本
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\out, app | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { Write-Host "extract failed"; exit 1 }
+          Write-Host "official md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
+      - name: 编译 prep
+        shell: pwsh
+        run: |
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /nologo /target:exe /out:C:\out\prep.exe /r:System.dll ci\ttd\prep.cs
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: 引导 + PrepareMethod + 新鲜读体
+        shell: pwsh
+        run: |
+          Set-Location app
+          $hp = Start-Process -FilePath "C:\out\prep.exe" -ArgumentList "AirExplorer.exe","C:\out","${{ inputs.delay }}","prep" -PassThru -NoNewWindow -RedirectStandardOutput ..\prep_stdout.txt -RedirectStandardError ..\prep_stderr.txt
+          $deadline = (Get-Date).AddMinutes(20)
+          while (-not $hp.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 10 }
+          if (-not $hp.HasExited) { try { $hp.Kill() } catch {} }
+          Get-Content C:\out\prep.log -ErrorAction SilentlyContinue | Select-Object -Last 60
+          Copy-Item ..\prep_stdout.txt, ..\prep_stderr.txt C:\out\ -Force -ErrorAction SilentlyContinue
+          $bins = (Get-ChildItem C:\out -Filter "m_*.bin" -ErrorAction SilentlyContinue).Count
+          Write-Host "dumped .bin count = $bins"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prep-managed
+          path: C:\out\
+
+  agcall:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: 官方样本
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\out, app | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { Write-Host "extract failed"; exit 1 }
+          Write-Host "official md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
+      - name: 编译 prep
+        shell: pwsh
+        run: |
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /nologo /target:exe /out:C:\out\prep.exe /r:System.dll ci\ttd\prep.cs
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: 引导 + 自然执行夹逼
+        shell: pwsh
+        run: |
+          Set-Location app
+          $hp = Start-Process -FilePath "C:\out\prep.exe" -ArgumentList "AirExplorer.exe","C:\out","${{ inputs.delay }}","agcall" -PassThru -NoNewWindow -RedirectStandardOutput ..\agcall_stdout.txt -RedirectStandardError ..\agcall_stderr.txt
+          $deadline = (Get-Date).AddMinutes(20)
+          while (-not $hp.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 10 }
+          if (-not $hp.HasExited) { try { $hp.Kill() } catch {} }
+          Get-Content C:\out\prep.log -ErrorAction SilentlyContinue | Select-Object -Last 60
+          Copy-Item ..\agcall_stdout.txt, ..\agcall_stderr.txt C:\out\ -Force -ErrorAction SilentlyContinue
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prep-agcall
+          path: C:\out\
+
+  ttd:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: 下载解包 WinDbg
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "https://aka.ms/windbg/download" -OutFile D:\windbg.appinstaller
+          $xml = [xml](Get-Content D:\windbg.appinstaller -Raw)
+          $bundleUri = $xml.AppInstaller.MainBundle.Uri
+          Invoke-WebRequest -Uri $bundleUri -OutFile D:\windbg.msixbundle
+          New-Item -ItemType Directory -Force -Path D:\wd | Out-Null
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\windbg.msixbundle | Out-Null
+          $pkg = Get-ChildItem D:\wd -Filter "*.msix" | Select-Object -First 1
+          if ($pkg) { & "C:\Program Files\7-Zip\7z.exe" x -y "-oD:\wd\x" $pkg.FullName | Out-Null }
+          $ttd = @("D:\wd\x\amd64\ttd\TTD.exe", "D:\wd\amd64\ttd\TTD.exe", "D:\wd\ttd\TTD.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          Write-Host "TTD = $ttd"; Write-Host "cdb = $cdb"
+          if (-not $ttd -or -not $cdb) { Get-ChildItem -Recurse D:\wd -Filter "TTD.exe" | Select-Object -First 3 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
+          Set-Content -Path D:\wd\paths.txt -Value $ttd
+          Add-Content -Path D:\wd\paths.txt -Value $cdb
+      - name: 官方样本 + prep
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\ttd, C:\out, app | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /nologo /target:exe /out:C:\out\prep.exe /r:System.dll ci\ttd\prep.cs
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: TTD 录制 prep (agcall 模式, 自然执行夹逼)
+        shell: pwsh
+        run: |
+          $p = Get-Content D:\wd\paths.txt
+          $ttdExe = $p[0].Trim()
+          $exe = (Resolve-Path "C:\out\prep.exe").Path
+          # 录制宿主 prep.exe (它内部加载官方 AirExplorer 并引导)
+          $tt = Start-Process -FilePath $ttdExe -ArgumentList "-accepteula","-out","C:\ttd\trace.run","$exe","app\AirExplorer.exe","C:\out","${{ inputs.delay }}","agcall","skipwalk" -WorkingDirectory (Resolve-Path "app").Path -PassThru -NoNewWindow
+          $deadline = (Get-Date).AddMinutes(25)
+          while (-not $tt.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 15 }
+          if (-not $tt.HasExited) { try { $tt.Kill() } catch {} }
+          Get-Content C:\out\prep.log -ErrorAction SilentlyContinue | Select-Object -Last 40
+          if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; exit 1 }
+          Write-Host ("trace 大小: " + (Get-Item C:\ttd\trace.run).Length)
+      - name: cdb 标记窗口扫描 (JitScan2.js)
+        shell: pwsh
+        run: |
+          $p = Get-Content D:\wd\paths.txt
+          $cdbExe = $p[1].Trim()
+          $js = (Resolve-Path "ci\ttd\JitScan2.js").Path -replace '\\','/'
+          & $cdbExe -z C:\ttd\trace.run `
+            -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
+            -c "!tt 100; .reload /f clrjit.dll; lm m clrjit*; .scriptrun $js; q" 2>&1 | Tee-Object -FilePath C:\out\cdb.log | Select-Object -Last 40
+          if (Test-Path C:\out\jitscan2.json) {
+            $sz = (Get-Item C:\out\jitscan2.json).Length
+            Write-Host "jitscan2.json = $sz 字节"
+            $j = Get-Content C:\out\jitscan2.json -Raw | ConvertFrom-Json
+            Write-Host ("markers=" + $j.markers.Count + " windows=" + $j.windows.Count)
+            $withIl = ($j.windows | ForEach-Object { $_.calls } | Where-Object { $_.il }).Count
+            Write-Host ("窗口内带 IL 的调用 = " + $withIl)
+          } else { Write-Host "JS 未产出结果"; Get-Content C:\out\cdb.log -Tail 40 }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ttd-prep-out
+          path: C:\out\
