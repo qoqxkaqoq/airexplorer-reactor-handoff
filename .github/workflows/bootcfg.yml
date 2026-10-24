@@ -216,6 +216,17 @@ jobs:
           } else { Write-Host "official_creator.log 未生成" }
           exit 0
 
+      - name: 第5步 读取注入日志
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path C:\out\ctor_log.txt) {
+            Write-Host "=== ctor_log.txt (行数 $((Get-Content C:\out\ctor_log.txt).Count)) ==="
+            Get-Content C:\out\ctor_log.txt | Select-Object -First 40 | Write-Host
+            Write-Host "=== TAG 统计 ==="
+            Get-Content C:\out\ctor_log.txt | ForEach-Object { ($_ -split '\|')[0] } | Group-Object | Sort-Object Count -Descending | Format-Table Name,Count | Out-String | Write-Host
+          } else { Write-Host "ctor_log.txt 不存在 = 五个方法一个都没执行" }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -227,6 +238,7 @@ jobs:
             C:\out\cand_exc.log
             C:\out\official_creator.log
             C:\out\cand_creator.log
+            C:\out\ctor_log.txt
             C:\out\seed_airexplorer.xml
 
 # reindex-20261024
