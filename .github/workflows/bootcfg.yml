@@ -20,13 +20,19 @@ jobs:
         shell: pwsh
         run: |
           $ProgressPreference = "SilentlyContinue"
-          Invoke-WebRequest -Uri "https://aka.ms/windbg/download" -OutFile "D:\wd.appinstaller"
-          [xml]$x = Get-Content D:\wd.appinstaller
-          Invoke-WebRequest -Uri $x.AddOns.Package.Uri -OutFile "D:\wd.msix"
-          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\wd.msix | Out-Null
-          $cdb = Get-ChildItem -Recurse D:\wd -Filter cdb.exe | Select-Object -First 1
-          if (-not $cdb) { exit 1 }
-          $cdb.FullName | Set-Content D:\wd\cdb.txt
+          Invoke-WebRequest -Uri "https://aka.ms/windbg/download" -OutFile D:\windbg.appinstaller
+          $xml = [xml](Get-Content D:\windbg.appinstaller -Raw)
+          $bundleUri = $xml.AppInstaller.MainBundle.Uri
+          Write-Host "bundle = $bundleUri"
+          Invoke-WebRequest -Uri $bundleUri -OutFile D:\windbg.msixbundle
+          New-Item -ItemType Directory -Force -Path D:\wd | Out-Null
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\windbg.msixbundle | Out-Null
+          $pkg = Get-ChildItem D:\wd -Filter "*.msix" | Select-Object -First 1
+          if ($pkg) { & "C:\Program Files\7-Zip\7z.exe" x -y "-oD:\wd\x" $pkg.FullName | Out-Null }
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          Write-Host "cdb = $cdb"
+          if (-not $cdb) { Get-ChildItem -Recurse D:\wd -Filter "cdb.exe" | Select-Object -First 3 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
+          Set-Content -Path D:\wd\cdb.txt -Value $cdb.FullName
 
       - name: 官方安装包解压
         shell: pwsh
