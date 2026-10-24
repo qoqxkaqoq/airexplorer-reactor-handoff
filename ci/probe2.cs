@@ -114,6 +114,35 @@ class Probe2 {
                     }
                 }
             } catch (Exception ex) { Log("[probe2] RW check FAIL: " + Chain(ex)); }
+            // 5) 手动重放 ValidateManager→GenerateAdjustableAggregator 链条, 逐环节打印
+            try {
+                var flagsS = BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+                var flagsI = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+                var tiT = asm.GetType("CloudClient.Templating.TemplateInitializer");
+                var rw2 = asm.GetType("AirExplorer.Networking.RequestWorker");
+                var sorter = rw2.GetField("_RequestSorter", flagsI).GetValue(rw2.GetMethod("WriteRequest", flagsS).Invoke(null, null));
+                if (sorter != null) {
+                    string dir = (string)sorter.GetType().GetField("_DividedTemplateTitle", flagsI).GetValue(sorter);
+                    string label = (string)sorter.GetType().GetField("literalTemplateLabel", flagsI).GetValue(sorter);
+                    Log("[probe2] CHAIN dir=" + dir + " label=" + label);
+                    try { Log("[probe2] CHAIN File.Exists(combined)=" + System.IO.File.Exists(System.IO.Path.Combine(dir ?? "", label ?? ""))); } catch (Exception e2) { Log("[probe2] CHAIN File.Exists EX " + e2.Message); }
+                    var vsT = asm.GetType("ValidatorSchema") ?? asm.GetTypes().First(t => t.Name == "ValidatorSchema");
+                    var cct = vsT.GetField("CheckCustomizableTransmitter", flagsS).GetValue(null);
+                    var sBridge = vsT.GetMethod("ExecuteExplorer", flagsS);
+                    var s = (string)sBridge.Invoke(null, new[] { (object)dir, label, cct });
+                    Log("[probe2] CHAIN CheckCustomizableTransmitter(dir,label) = " + (s == null ? "NULL" : "\"" + s + "\" len=" + s.Length));
+                    var gvT = asm.GetTypes().First(t => t.Name == "GroupedValidator");
+                    var vcl = gvT.GetField("VerifyCentralLocator", flagsS).GetValue(null);
+                    var gBridge = gvT.GetMethod("ExecuteExplorer", flagsS);
+                    var b1 = (bool)gBridge.Invoke(null, new[] { (object)s, vcl });
+                    Log("[probe2] CHAIN VerifyCentralLocator(content) = " + b1);
+                    var gaa = tiT.GetMethod("GenerateAdjustableAggregator", flagsI);
+                    var b2 = (bool)gaa.Invoke(sorter, new[] { (object)s });
+                    Log("[probe2] CHAIN GenerateAdjustableAggregator(content) = " + b2);
+                    var ht2 = (System.Collections.IDictionary)sorter.GetType().GetField("globalTemplate", flagsI).GetValue(sorter);
+                    Log("[probe2] CHAIN globalTemplate.Count=" + (ht2 == null ? -1 : ht2.Count));
+                }
+            } catch (Exception ex) { Log("[probe2] CHAIN FAIL: " + Chain(ex)); }
         } else if (mode == "itp") {
             var di = asm.GetType("CloudClient.Templating.DispatcherInitializer");
             var itp = di.GetMethod("InstantiateTransferableProgram", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
