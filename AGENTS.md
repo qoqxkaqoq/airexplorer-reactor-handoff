@@ -28,7 +28,11 @@
 | A 线：壳机制边界 | ✅ 已钉死：baseline 原位全是桩（真体运行时从 3.2MB 负载回填）；dnlib 重写必崩；唯一文件级路=负载密文 known-plaintext 重加密（需解 token→(offset,len,key) 表） |
 | A 线：tamper 验证实验 | ✅ 间接完成：nb_original+6 补丁存活 150s 无自毁（壳不杀文件改动，但也没用因为宿主本身 0 窗） |
 | A 线：A3 便携化 | ✅ **launcher 方案 CI 全验收通过**（run 40115006727）：`portable/AirExplorer_Portable.cmd` 重定向 USERPROFILE/APPDATA 等到 exe 旁 `data\`，官方 exe 零修改零注入；Accounts.xml 等用户数据落 data\、真实 profile 零残留、主窗完整渲染（MAIN_CONTENT=CONTENT）；依赖集固化 `portable/deps.zip` |
+| A 线：负载解密 | ✅ **重大突破（10-25）**——Reactor 运行时 PRNG keystream 完全破译并验证 3266/3266（`work/decrypt_prng.py`）；6 资源读取链全摸清：2.33MB 主库由 `0600428A WrapperProvider::WrapCommonSorter`（23KB IL、420 块平坦化）读取，**解密循环在它自己体内**（RandomDecryptor 只是 BinaryReader 转发壳）；解密输出 → Deflate 解压 → 反射跳板调用 |
+| A 线：主库明文导出 | ✅ **interp.py 282M 步跑通（10-25）**：deflate-input 与资源等长（流变换）→ 解压 4260864B = **完整 PE 程序集**，但内容 = **626 嵌入资源的卫星包**（1 类型 0 方法，UI/本地化），不含激活逻辑；keystream 全程已知、可同尺寸回写 |
 | A 线：暗桩清理 | ⏳ 依赖负载重加密路线（暗桩在加密体里，文件级改不到） |
+
+**A 线激活直通的落地路径（10-25 定稿）**：3 个门控布尔字段的写入点全在 3.2MB 负载里，负载不是 ARX 链密码（payldprobe 9 方法×786K 偏移全灭）→ **唯一路 = TTD 抓回填例程**（`.github/workflows/a-ttd.yml` + `ci/ttd/PayloadScan.js` 已就绪：TTD.Memory 写查询定位桩 VA 回填时刻 → 抓解密例程+表指针 → 离线实现负载 decrypt/encrypt（dump 明文做已知明文验证）→ A1 五补丁重加密 → 单 exe 启动即 Pro）。CI 长稳验收用 `.github/workflows/a-soak.yml`（`ci/soak.ps1`，7 分钟进程活+窗在+无错框）。
 
 **⚠️ 历史修正**：旧记录"v139 主窗口完整渲染 ✅ / Register account 对话框 ✅"**已证伪**——带截图的成功 run（40088489266）`_candidate.txt = candidate: official`（官方基线），v139 真实 ui-probe = windows=0。勿再引用。
 
@@ -41,6 +45,10 @@
 | 官方 EH ×2218 + catch 名 ×34 + manifest | `work/eh_official.zip` | 28B CORINFO clause；classTok 可 ResolveToken 100% 命中 |
 | 主武器工具 | `tools2/bodyswap.cs` | **体+locals+EH 三件套一体替换**（唯一安全姿势） |
 | 诊断工具 | `tools2/metadiff.cs, methodtok.cs, tokmeth.cs, typedump.cs` | 见源码头注释 |
+| PRNG 破译 | `work/decrypt_prng.py` | `prng_round/keystream/decrypt/encrypt`，3266/3266 验证；known-plaintext 重加密的核心 |
+| 平坦化线性化 | `work/flat.py` | `python3 work/flat.py <dumpfile> [stateVar] [switchVar] [out]`；0600428A 走通 389/420 块 |
+| 具体解释器 | `work/interp.py` | 0600428A 专用，跑到 DeflateStream 导出 `/tmp/mainlib_*.bin`；新 token 加进 BUILTINS/ARITY/AR 三张表 |
+| 原位 IL 验证 | `tools2/peekil.cs` + `peekil8.csproj` | 读 exe 原位 IL，判定"哪些方法原位即真体"（如 06004264） |
 
 ## ⚠️ 已实证的硬约束（违反必炸，别再踩）
 

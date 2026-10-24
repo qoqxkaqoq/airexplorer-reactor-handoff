@@ -1,0 +1,89 @@
+name: A-line Soak (7min stable run)
+
+# A 线长稳验收: 候选 exe 连续运行 ≥7 分钟, 全程进程存活 + 主窗可见 + 无错误对话框。
+# 默认测官方基线(经 portable launcher, 即交付形态); 打出激活补丁 exe 后把 exe 输入指向它。
+
+on:
+  workflow_dispatch:
+    inputs:
+      exe:
+        description: "被测对象: app 内相对路径 (AirExplorer_Portable.cmd 或 AirExplorer.exe)"
+        required: false
+        default: "AirExplorer_Portable.cmd"
+      minutes:
+        description: "soak 分钟数"
+        required: false
+        default: "7"
+
+permissions:
+  contents: write
+
+jobs:
+  soak:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备运行目录（官方基线 + 依赖 + launcher）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path app | Out-Null
+          Copy-Item exes/AirExplorer_baseline_verified.exe app/AirExplorer.exe -Force
+          Copy-Item portable/AirExplorer_Portable.cmd app/ -Force
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp portable/deps.zip | Out-Null
+          if (-not (Test-Path "app\BouncyCastle.Crypto.dll")) { throw "deps extract failed" }
+          $md5 = (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash
+          Write-Host "base md5 = $md5"
+          "# soak target: ${{ inputs.exe }}  base md5: $md5" | Out-File -Encoding utf8 app/_candidate.txt
+
+      - name: 启动被测对象
+        shell: pwsh
+        run: |
+          $target = "app\${{ inputs.exe }}"
+          if (-not (Test-Path $target)) { throw "target not found: $target" }
+          Write-Host "starting $target"
+          Start-Process -FilePath (Resolve-Path $target).Path -WorkingDirectory (Resolve-Path 'app').Path
+          Start-Sleep -Seconds 15
+
+      - name: Soak（7 分钟长稳监测）
+        shell: pwsh
+        run: |
+          $m = "${{ inputs.minutes }}"
+          if ([string]::IsNullOrWhiteSpace($m)) { $m = "7" }
+          ./ci/soak.ps1 -ExePath "app\AirExplorer.exe" -Minutes ([int]$m) -DataDir "app\data"
+
+      - name: 数据目录落盘快照
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path app/data) {
+            Get-ChildItem app/data -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+              "{0}  {1}" -f $(if ($_.PSIsContainer) { "<dir>" } else { $_.Length }), $_.FullName.Substring((Resolve-Path 'app').Path.Length + 1)
+            } | Out-File -Encoding utf8 soak_data.txt
+            Get-Content soak_data.txt
+          } else { Write-Host "app/data NOT CREATED" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a-soak
+          path: |
+            soak_data.txt
+            app/_candidate.txt
+          retention-days: 14
+
+      - name: 回传结果到 ci-results 分支
+        if: always()
+        shell: pwsh
+        run: |
+          git config user.email "ci@local"
+          git config user.name "ci"
+          New-Item -ItemType Directory -Force -Path "results/$env:GITHUB_RUN_ID" | Out-Null
+          Copy-Item app/_candidate.txt "results/$env:GITHUB_RUN_ID/" -Force -ErrorAction SilentlyContinue
+          if (Test-Path soak_data.txt) { Copy-Item soak_data.txt "results/$env:GITHUB_RUN_ID/" -Force }
+          git checkout -B ci-results
+          git add -f results
+          git commit -m "a-soak run $env:GITHUB_RUN_ID" -q
+          git push -f origin "HEAD:refs/heads/ci-$env:GITHUB_RUN_ID"

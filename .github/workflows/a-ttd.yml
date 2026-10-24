@@ -1,0 +1,97 @@
+name: ttd-payloadscan
+
+# TTD 录制官方 exe 启动 → 定位受保护方法体的原位回填写事件 →
+# 抓回填时刻的寄存器/栈/代码/负载指针 → 逆向负载解密算法（A1 激活直通的前置）。
+# 产物: payloadscan.json + code_at_rip.bin + payload_at_ptr*.bin
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ttd:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载并解包 WinDbg
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "https://aka.ms/windbg/download" -OutFile D:\windbg.appinstaller
+          $xml = [xml](Get-Content D:\windbg.appinstaller -Raw)
+          $bundleUri = $xml.AppInstaller.MainBundle.Uri
+          Invoke-WebRequest -Uri $bundleUri -OutFile D:\windbg.msixbundle
+          New-Item -ItemType Directory -Force -Path D:\wd | Out-Null
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\windbg.msixbundle | Out-Null
+          $pkg = Get-ChildItem D:\wd -Filter "*.msix" | Select-Object -First 1
+          if ($pkg) { & "C:\Program Files\7-Zip\7z.exe" x -y "-oD:\wd\x" $pkg.FullName | Out-Null }
+          $ttd = @("D:\wd\x\amd64\ttd\TTD.exe", "D:\wd\amd64\ttd\TTD.exe", "D:\wd\ttd\TTD.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          Write-Host "TTD = $ttd"
+          Write-Host "cdb = $cdb"
+          if (-not $ttd) { exit 1 }
+          Set-Content -Path D:\wd\paths.txt -Value $ttd
+          Add-Content -Path D:\wd\paths.txt -Value $cdb
+
+      - name: TTD 录制官方基线（出窗后再录 30s finalize）
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\ttd, C:\out | Out-Null
+          $p = Get-Content D:\wd\paths.txt
+          $ttdExe = $p[0].Trim()
+          $exe = (Resolve-Path "exes\AirExplorer_baseline_verified.exe").Path
+          # 依赖集（官方安装器解包, 与基线配套）
+          & "C:\Program Files\7-Zip\7z.exe" x -y "-oD:\app" portable/deps.zip | Out-Null
+          Copy-Item $exe D:\app\AirExplorer.exe -Force
+          $tgtName = "AirExplorer"
+          $tt = Start-Process -FilePath $ttdExe -ArgumentList "-accepteula","-out","C:\ttd\trace.run","D:\app\AirExplorer.exe" -PassThru -NoNewWindow
+          $deadline = (Get-Date).AddMinutes(20)
+          $seenWin = $false
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 15
+            $tgt = Get-Process -Name $tgtName -ErrorAction SilentlyContinue
+            if (-not $tgt) { Write-Host "target exited early"; break }
+            $found = $false
+            if ($tgt.MainWindowTitle -and $tgt.MainWindowTitle.Length -gt 0) {
+              Write-Host ("window: '" + $tgt.MainWindowTitle + "'")
+              if ($tgt.MainWindowTitle -like "*Error detected*" -or $tgt.MainWindowTitle -like "*Air Explorer*") { $found = $true }
+            }
+            if ($found) {
+              if (-not $seenWin) { $seenWin = $true; Write-Host "window seen, extra 30s..."; Start-Sleep -Seconds 30 }
+              else { break }
+            }
+          }
+          Get-Process -Name $tgtName -ErrorAction SilentlyContinue | Stop-Process -Force
+          Wait-Process -Id $tt.Id -Timeout 600 -ErrorAction SilentlyContinue
+          if (-not (Test-Path "C:\ttd\trace.run")) { Write-Host "录制失败"; exit 1 }
+          Write-Host ("trace 大小: " + (Get-Item C:\ttd\trace.run).Length)
+
+      - name: cdb 回填扫描 (PayloadScan.js)
+        shell: pwsh
+        run: |
+          $p = Get-Content D:\wd\paths.txt
+          $cdbExe = $p[1].Trim()
+          $js = (Resolve-Path "ci\ttd\PayloadScan.js").Path -replace '\\','/'
+          & $cdbExe -z C:\ttd\trace.run `
+            -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
+            -c ".scriptrun $js; q" 2>&1 | Tee-Object -FilePath C:\out\cdb.log | Select-Object -Last 60
+          if (Test-Path C:\out\payloadscan.json) {
+            $sz = (Get-Item C:\out\payloadscan.json).Length
+            Write-Host "payloadscan.json = $sz 字节"
+            Get-Content C:\out\payloadscan.json | Select-Object -First 1
+          } else { Write-Host "JS 未产出结果"; Get-Content C:\out\cdb.log -Tail 60 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ttd-payloadscan
+          path: |
+            C:\out\payloadscan.json
+            C:\out\code_at_rip.bin
+            C:\out\payload_at_ptr*.bin
+            C:\out\cdb.log
+          retention-days: 14

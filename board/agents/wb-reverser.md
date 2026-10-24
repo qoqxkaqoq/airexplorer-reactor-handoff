@@ -929,3 +929,73 @@ entry V_0=5 → state5: ServicePointManager.SecurityProtocol |= 3840 (TLS) → l
 **激活直通（A1）与暗桩清理（A3-2）状态不变**：负载满熵 + XOR 假设证伪（见上第 2 节）→ 文件级路只剩 TTD 解密例程逆向；否则接受"官方原样 + 便携"为 A 线交付上限。
 
 **本轮提交链**：1dc787a0（边界文档+a1inplace）→ ec47a6f7（dump 归档）→ 6fcf4337（launcher 初版）→ ad4c172a（deps 修复）→ 本提交（验收结论+payldscan）。
+
+## 2026-10-25 · 第 III 段：PRNG 破译 + 负载读取链全解（业主指令：启动即 Pro + CI ≥7min）
+
+### 1. Reactor 运行时 PRNG keystream 破译并验证 ✅
+
+- **06004193 DispatcherInitializer::TrackCompiler**（1664B IL，1664B→635 行反汇编全文转录）= 委托表（26KB 资源 `CollectorTransaction.ValidatorProject`）解密器
+- 算法：定长种子 ARX 流密码，按 4 字节字 XOR，小端；种子 v9=0 起步
+- **关键坑：局部量声明为 unsigned int32 → `conv.u8` 是零扩展**（此前所有发散的根因）。2×2 网格对拍（`work/grid4193.py`）一次定位
+- 常量：K1=506503628 / K1B=1610158714+1328951073-1267867220 / K2=1959015338 / K3=854276594 / K4=41684485
+- 验证：26KB 委托表解密 **3266/3266** 字段 token 全部落库合法集合；`encrypt()` roundtrip 逐字节一致（`work/decrypt_prng.py`）
+- 明文结构：8 字节对 (fieldTok, value)，`value&0x40000000`=callvirt，`value&0x3FFFFFFF`=方法 tok
+
+### 2. 工具链新增（全部本地零 CI 成本）
+
+- `work/flat.py`：控制流平坦化线性化器（纯 Python，修了 flat.cs 的 var2/plen/闭包三个致命 bug）。**0600428A 走通 389/420 块**（5938 行），06004192 全 14 块，0600419C 前 18 块
+- `tools2/peekil(.cs)+peekil8.csproj`：**读 exe 原位 IL**（RVA→文件偏移→头+前 64B）。多工程目录要 `EnableDefaultCompileItems=false`
+- `work/interp.py`：dump 方法体**具体解释器**（(raw,kind) 栈模型 + 内建外部调用 + 到 DeflateStream ctor 导出明文）
+- `work/blobcheck.py`：exe CLR blob 直接解析 6 资源 ↔ `work/res_*.bin` **6/6 md5 吻合**（提取零偏差）
+- `work/try_mainlib.py` / `seed_sweep.py` / `deflscan*.py`：种子穷举与 deflate 扫描
+
+### 3. 负载读取链全貌（重要修正）
+
+- **6 个 CLR 资源裸负载无 4 字节前缀**；26KB 委托表 = TrackCompiler 内联 ARX（种子 0）✓
+- **2.33MB 主库 `ValidatorGenerator.DefinitionError`**（疑似方法体库）读取者 = 0600428A `WrapperProvider::WrapCommonSorter`（23KB IL、420 switch 平坦化）：
+  `GetManifestResourceStream(混淆名) → new RandomDecryptor(stream) → Position=0 → ReadBytes(Length) → [状态机内联变换循环：v30 按 word 读、v29/v9 32B key 数组逐块拼装] → v28 → MemoryStream → DeflateStream(Decompress) → CopyTo → ToArray → ImplementOrderedContainer → CallConcreteReceiver(反射 static 调用) → m_TesterSenders=资源名清单 → _IsFinalizerTemplate=true`
+- **RandomDecryptor(0200062A) 无解密**：06004264 `.ctor(Stream)` **原位即真体**（peekil 证实）= `newobj BinaryReader(stream); stfld _AdvancedDecryptor`；06004265-69 全是 BinaryReader 转发桩。**解密循环在 0600428A 自己体内**（IL_5035 读 word → IL_1DA9 循环体）
+- 引导链（`<Module>::.cctor` 原位真体）：`call 0600419C DefineEfficientProfiler(37KB, IntPtr/Win32 API 解析+VirtualProtect 铺路) → 06004192 InstantiateGlobalCalculator(8970B, RSACryptoServiceProvider 许可) → 06004194 DefineActiveEvent(22B, Debugger.IsAttached 暗桩)`
+- 6 资源全部**不是裸 deflate**（offset 0..511 扫描失败）；种子 0/长度派生/名字 hash(FNV/CRC32/djb2/adler) × 4 种字节序全部无命中 → **主库解密 = 0600428A 体内状态机专用算法，正在用 interp.py 具体执行提取明文**
+- `060042A7 CallConcreteReceiver` = 反射跳板：`Type.GetMethod(混淆名, {byte[]}).Invoke(null, {bytes})`
+
+### 4. 对 A 线的意义
+
+- 若 interp 跑通导出 Deflate 输入 → zlib 解压 = 主库明文 → **known-plaintext 重加密路线打通**：改激活方法体 → 同 keystream 回加密 → 单 exe 启动即 Pro
+- 疑点待清：0600428A 读的资源名由混淆 int 决定（解释器用占位名绑定主库资源；若解压失败换 6 资源逐个试）
+
+## 2026-10-25 · 第 IV 段：主库明文到手 + 5 条快捷路全探明（负结果为主）+ TTD 战役启动
+
+### 1. interp.py 跑通，主库明文导出 ✅（本轮最大成果）
+
+- 修 newobj AR 表（0A00012D 无参 MemoryStream 漏登记）后，282M 步穿过解密循环：
+  **deflate-input = 2337031B（与资源等长 → 解密是逐位置流变换）→ zlib 解压 4260864B → `MZ` 头**
+- **主库明文 = 完整 PE 程序集**（GUID 名 `2902d7dc-...`，1 类型 0 方法 **626 个嵌入资源**）
+  = Reactor 资源保护卫星包（`<Type>.resources`，UI/本地化/图标），**不含代码，激活逻辑不在其中**
+- keystream = `res ⊕ deflate-input` 全程已知；回加密 = 逐位置 XOR；deflate 流尾部垃圾被忽略 →
+  **改后重压缩 ≤ 2337031B 补零回填即可同尺寸写回**（`work/check_export.py` 验证脚本）
+- 产物固化：`work/mainlib_plain.bin.gz`（2.3MB）/ `work/mainlib_deflate-input.bin`（2.3MB）
+
+### 2. 快捷路探明（全部负结果，避免重蹈）
+
+| 探针 | 结果 |
+|---|---|
+| peekil 对拍 5 个激活目标原位 IL | **全是桩**（0600212A/06002157 桩=恒 true 也无用，运行时被负载回填覆盖） |
+| payldprobe ProbeA：负载明文 token 头 | 0/6 命中 |
+| payldprobe ProbeB：dump 真体 ⊕ 负载 + ARX 链检验（种子无关） | 9 方法 × 786K 偏移全灭 → **负载不是 TrackCompiler ARX 链密码** |
+| 26KB 委托表查 3 个门控字段 | 不在表内（表覆盖 04002102..04002DC3；字段是**实例**字段，表只管静态初始化） |
+| 主库 626 资源扫许可相关 | 只有 `licence16x16.png` 图标等 UI 资源，无公钥/许可配置 |
+| 主库 keystream 复用到其余 5 资源 | 全灭（各资源独立 keystream） |
+| 06000CEE MoveNext 反汇编 | 不是 Portable.Licensing 直调，判定逻辑藏在队列/委托架构后 |
+
+**结论不变**：3 个布尔门控的写入点全在负载里，负载密码未破 → 唯一路 = TTD 抓回填例程。
+
+### 3. TTD 战役（本轮启动）
+
+- `ci/ttd/PayloadScan.js`：TTD.Memory 写查询定位 0600212A/06002133/06002127 桩 VA（rva 0x195D18/0x196088/0x195CD4）的回填写事件 → SeekTo → 抓寄存器/栈内负载指针/rip 代码/回填后体字节 → payloadscan.json + payload_at_ptr*.bin
+- `.github/workflows/a-ttd.yml`：录制官方基线出窗 +30s → cdb 扫描 → artifact
+- **拿到 artifact 后**：离线分析回填例程 → 实现负载 decrypt/encrypt（已知明文验证）→ A1 五补丁重加密 → 单 exe 启动即 Pro
+
+### 4. 长稳验收
+
+- `ci/soak.ps1`（7 分钟进程活+窗在+无错框，退出码 0/2/3/4）+ `.github/workflows/a-soak.yml`（默认测 launcher 交付形态，出包后把 exe 输入指向补丁版）
