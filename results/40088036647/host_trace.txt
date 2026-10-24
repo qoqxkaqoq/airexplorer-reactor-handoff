@@ -1,0 +1,7 @@
+=== host v3 start 11:00:40.439 ===
+[resolve] ITP il=446 ok=50 bad=0
+=== heartbeat 5s alive=True ===
+=== heartbeat 10s alive=True ===
+=== heartbeat 15s alive=True ===
+=== heartbeat 20s alive=True ===
+=== heartbeat 25s alive=True ===
