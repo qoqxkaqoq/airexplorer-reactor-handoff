@@ -1,0 +1,8 @@
+[06:31:35.604] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[06:31:35.642] size = 7837184  md5 = F8CA87F6CA279B5D3228312D4DB57178
+[06:31:35.652] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[06:31:35.697] started pid = 5660
+[06:31:37.216] process EXITED early, code = -532462766
+[06:31:37.693] EVENT [10/24/2026 6:31:36 AM] Application Error: Faulting application name: AirExplorer.exe, version: 5.11.0.0, time stamp: 0x6a671a98 | Faulting module name: KERNELBASE.dll, version: 10.0.26100.33648, time stamp: 0x3ddf2783 | Exception code: 0xe0434352 | Fault offset: 0x00000000000c7d9a | Faulting process id: 0x161C | Faulting application start time: 0x1DD6381514CCD74 | Faulting application path: D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe | Faulting module path: C:\Windows\System32\KERNELBASE.dll | Report Id: a42cc4cc-443c-4d04-a658-94caae4c7b66 | Faulting package full name:  | Faulting package-relative application ID: 
+[06:31:37.696] EVENT [10/24/2026 6:31:35 AM] .NET Runtime: Application: AirExplorer.exe | Framework Version: v4.0.30319 | Description: The process was terminated due to an unhandled exception. | Exception Info: exception code e0434352, exception address 00007FF95F537D9A | Stack: | 
+[06:31:37.697] done
