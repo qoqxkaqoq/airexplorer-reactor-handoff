@@ -238,6 +238,40 @@ class Prep {
             } catch (Exception ex) { Log("[dlgscan] " + spec + " EX " + Chain(ex)); }
         }
 
+        // 实例委托侦察: _RequestSorter._ExtendedTemplate (注册 DefailtProxyAuth 的处理器)
+        try {
+            var rw = allT.FirstOrDefault(t => t.FullName == "AirExplorer.Networking.RequestWorker");
+            var wr = rw.GetMethod("WriteRequest", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var inst = wr.Invoke(null, null);
+            var sorter = rw.GetField("_RequestSorter", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).GetValue(inst);
+            if (sorter != null) {
+                var etf = sorter.GetType().GetField("_ExtendedTemplate", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (etf != null) {
+                    var ev = etf.GetValue(sorter) as Delegate;
+                    if (ev == null) Log("[dlgscan] _ExtendedTemplate = NULL");
+                    else {
+                        // MulticastDelegate 可能多播 — 全部目标都抓
+                        foreach (var dl in ev.GetInvocationList()) {
+                            var tm = dl.Method;
+                            Log("[dlgscan] _ExtendedTemplate -> " + tm.DeclaringType.FullName + "::" + tm.Name + " tok=0x" + tm.MetadataToken.ToString("X8"));
+                            FreshDumpIfChanged(mod, (uint)tm.MetadataToken, tm.DeclaringType.FullName + "::" + tm.Name + " (_ExtendedTemplate handler)", OutDir);
+                        }
+                    }
+                } else Log("[dlgscan] _ExtendedTemplate field missing");
+                // 顺带: TI 上其余实例委托字段都扫一遍
+                foreach (var f2 in sorter.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)) {
+                    if (f2.FieldType.BaseType == null || f2.FieldType.BaseType.FullName != "System.MulticastDelegate") continue;
+                    var dv = f2.GetValue(sorter) as Delegate;
+                    if (dv == null) { Log("[dlgscan] TI." + f2.Name + " = NULL"); continue; }
+                    foreach (var dl in dv.GetInvocationList()) {
+                        var tm = dl.Method;
+                        Log("[dlgscan] TI." + f2.Name + " -> " + tm.DeclaringType.FullName + "::" + tm.Name + " tok=0x" + tm.MetadataToken.ToString("X8"));
+                        FreshDumpIfChanged(mod, (uint)tm.MetadataToken, tm.DeclaringType.FullName + "::" + tm.Name + " (TI instance delegate " + f2.Name + ")", OutDir);
+                    }
+                }
+            } else Log("[dlgscan] _RequestSorter = NULL");
+        } catch (Exception ex) { Log("[dlgscan] instance EX " + Chain(ex)); }
+
         // ② IL 字节扫描: newobj ParserValidator::.ctor(0x73) / stsfld(0x80) 各观察字段
         var wants = new List<Tuple<byte, uint>>();
         try {
@@ -249,6 +283,21 @@ class Prep {
             var arv = allT.FirstOrDefault(t => t.Name == "AutomatedRunnerValidator");
             var fld2 = arv == null ? null : arv.GetField("WatchSpec", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
             if (fld2 != null) wants.Add(Tuple.Create((byte)0x80, (uint)fld2.MetadataToken));
+            // newobj RequesterSystemState::.ctor — PropertyLoaded 处理器的订阅点
+            var tiT2 = allT.FirstOrDefault(t => t.FullName != null && t.FullName.EndsWith("TemplateInitializer"));
+            if (tiT2 != null) {
+                var rst = tiT2.GetNestedType("RequesterSystemState", BindingFlags.Public | BindingFlags.NonPublic);
+                if (rst == null) { foreach (var t3 in allT) if (t3.Name == "RequesterSystemState") { rst = t3; break; } }
+                if (rst != null) {
+                    var rctor = rst.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(object), typeof(IntPtr) }, null);
+                    if (rctor != null) wants.Add(Tuple.Create((byte)0x73, (uint)rctor.MetadataToken));
+                }
+                var cft = allT.FirstOrDefault(t3 => t3.Name == "CommandFactory");
+                if (cft != null) {
+                    var cfctor = cft.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(string) }, null);
+                    if (cfctor != null) wants.Add(Tuple.Create((byte)0x73, (uint)cfctor.MetadataToken));
+                }
+            }
         } catch (Exception ex) { Log("[refscan] token resolve fail: " + ex.Message); }
         if (wants.Count == 0) { Log("[refscan] no watch tokens"); return; }
         Log("[refscan] watch: " + string.Join(",", wants.Select(w => "0x" + w.Item2.ToString("X8") + "/op" + w.Item1.ToString("X2"))));
