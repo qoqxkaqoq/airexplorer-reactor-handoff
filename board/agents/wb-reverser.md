@@ -1038,3 +1038,51 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 - **TTD artifact 回来后**：① PayloadScan 抓桩 VA 回填例程（方法体库=ValidatorViewer 假说可当场验证：回填数据源指针落点）② 补抓 forcedump failed 名单（含 m_ExtendedSchemaTemplate 读者=激活验证点）
 - **字符串池明文化**：解 FactoryValidator 资源（种子未知，需 060042AC case44 分支或 TTD）→ 3288 字符串全明 → 激活相关字符串 xref 定位门控写入点
 - **A2 公钥替换路线评估**：若 m_ExtendedSchemaTemplate 读者做 `ImportParameters/FromXmlString` 且公钥字节静态可寻（IL 常量或 rva 数据）→ 文件级补丁公钥 + 自签 License → 不碰负载直通激活
+
+## 第 VI 段（2026-10-25 · TTD v2 战果解读 + 字符串池解密器完整破译 + v3 免索引策略）
+
+### 1. TTD run 40123180425（v2 脚本）artifact 解读——写事件命中且写入值=明文 IL
+
+- 3 个目标（0600212A/06002133/06002127）的 16B 桩 VA 窗口各有 **4 次 4 字节写，写 IP 全部同一地址 0x7ffcbfce0801**（系统 DLL 区间，进程是 x64：AnyCPU ILONLY PE32 按 native x64 跑，CLR 映像 base=0x23292270000）
+- **0600212A 窗口 4 次写拼出两个完整 tiny getter**：
+  - `1e 02 7b 3d | 0c 00 04 2a` = `get_X() { ldarg.0; ldfld 0x04000C3B; ret }`
+  - `1e 02 7b 3b | 0c 00 04 2a` = 同构，ldfld **0x04000C3D（_IsDecoratorProvider，激活门控布尔！）**
+  - 0x1E = tiny header（7<<2|2）——写入值就是回填的明文方法体，**回填写入指令=解密循环的 mov 存储点**
+- v2 脚本三致命伤（全部 v3 修掉）：① trace 未索引，`w.Position`=undefined → `!tt undefined` 全炸；② 没记录每次写的地址 → 无法重建；③ x64 进程却读 eax/esp（返回 NaN 字符串）
+- payloadscan.json 0 字节（CreateFile 返回对象无 Write 属性）——v3 改为全部走 debugLog→cdb.log，不依赖文件
+
+### 2. v3 免索引策略（PayloadScan.js 全重写，run 40125259583 + 40125651490 双发）
+
+- `TTD.Memory` 只开 16B 窗（已证成本 ~14min/3 查询）→ 拿写 IP + 每 body 前 16B 明文
+- `ln`/`u` 静态定位写 IP（模块归属 + 反汇编，B:0 就能做）
+- **bp/bu 写 IP + `g` 正向重放**：不依赖索引；每次命中活抓 x64 全寄存器 + `k 12` + `dps @rsp L30` + 数据寄存器周边内存 dump → 解密例程源缓冲指针
+- 目标：0600212A（校验）+ 06003909/06002BD1/06004204（forcedump failed 新明文）+ **06004282 DirectDefinition win=0x2000（全 body 回填捕获）**
+- bp 不可直接设时的降级：`sxe ld; g` 逐模块加载推进直到写 IP 可读
+
+### 3. 字符串池架构全明（本轮本地零成本破译）
+
+- **06004196 InstantiateTransferableProgram(int id) 全解码**（3288 调用点入口）：
+  - 池 byte[] `_ExtractorVisitors` (04001FD0)；**格式 = 池内偏移 id 处 int32 长度 + id+4 起 UTF-16LE 字符串体**
+  - 缓存：`_RecommenderTemplates`(List<int> id) ↔ `editableMonitorTemplates`(List<string>)
+  - **调用方程序集暗桩只在 `_TemplateNotifierSize < 75` 时启用**（前 75 次调用查 StackFrame(1).GetMethod().DeclaringType.Assembly，不在白名单 → throw；之后永不查）——暗桩自限次
+  - miss 时调 `06004282 FinderMap::DirectDefinition()` 初始化池
+- **06004282 DirectDefinition 的 dump = nop;ret**（真体在负载里，forcedump 也没抓到）→ 已加 TTD 0x2000 窗口目标，回填 IL = key 来源
+- **0600418B GenerateAlphabeticVerifier(byte[] key, byte[] _, byte[] ct) = 唯一 stsfld _ExtractorVisitors 的方法 = 字符串池解密器**（920B，全库无直接 call 调用方=调用方也在负载里）
+- **解密公式（从 IL 完整推导，PRNG 常量与 TrackCompiler 相同）**：
+  ```
+  v4=0; kw=len(key)/4
+  for i in 0..n-1:
+    keyWord = LE32(key[(i%kw)*4:]);  ctWord = LE32(ct[i*4:])（尾块=尾部 rem 字节倒拼）
+    s = v4 + keyWord;  out = prng_round(s);  v4 = s + out
+    plain = ctWord ^ out
+  ```
+  栈机验证：`ldloc v20`(=v4old=s) 进 prng 链，`conv.r.un→r8→u4` 恒等，末尾 `add` = v4old+prngout
+- **probe_pool_key 30 组资源两两组合全灭**（key 不是任何资源的原始字节/前缀）→ key 在负载/运行时构造 → 等 TTD
+- **brute_pool_k0.py**：kw=1 假设 numpy 向量化暴力 2^32 个 k0，约束 plain0=[len,0,0,0]（len<1024，2^-24 通过率≈256 幸存）+ plain1 双重验证（kw=1 时 s1=v4_1+k0 可闭环）——已跑
+- 060042B1 EnableAuthorizer = BinaryReader 连读 4 个 int（池头部 [id 偏移表] 结构，待池明文后自然解开）
+
+### 4. 下一步
+
+- **TTD 双 run 回来**：① 写 IP 模块归属 + 反汇编（回填循环指令形态）② bp 命中的寄存器/栈 → 解密例程源缓冲 ③ **06004282 DirectDefinition 全 body IL** → key 来源 → 离线解 FactoryValidator → 3288 字符串全明
+- 池明文后：激活相关字符串（trial/expired/license/pro）xref 全部 3288 调用点 → 门控布尔写入点定位 → A1 直改或 A2 公钥替换落地
+- kw>1 时 brute_pool_k0 需扩展（k0 仍可得，k1..kn 待 TTD 或逐词暴力）
