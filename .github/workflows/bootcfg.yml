@@ -50,7 +50,9 @@ jobs:
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru
-          Start-Sleep -Seconds 60
+          Start-Sleep -Seconds 55
+          # 优雅关闭 → 让官方把 airexplorer.xml 写盘；失败再强杀
+          if (-not $p.HasExited) { $null = $p.CloseMainWindow(); Start-Sleep -Seconds 5 }
           if (-not $p.HasExited) { $p.Kill(); Start-Sleep -Seconds 3 }
           Get-ChildItem "$env:APPDATA\AirExplorer" -ErrorAction SilentlyContinue | Format-Table Name,Length | Out-String | Write-Host
           if (Test-Path "$env:APPDATA\AirExplorer\airexplorer.xml") {
@@ -96,7 +98,7 @@ jobs:
           )
           Set-Content -Path D:\cdb_cmd.txt -Value $lines -Encoding ASCII
           Push-Location app
-          $proc = Start-Process -FilePath $cdb -ArgumentList "-o AirExplorer.exe -G -y `"$sym`" -cf D:\cdb_cmd.txt -logo C:\out\official_exc.log" -PassThru -NoNewWindow
+          $proc = Start-Process -FilePath $cdb -ArgumentList "-G -y `"$sym`" -cf D:\cdb_cmd.txt -logo C:\out\official_exc.log AirExplorer.exe" -PassThru -NoNewWindow
           Pop-Location
           Start-Sleep -Seconds 40
           if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
@@ -153,7 +155,7 @@ jobs:
           )
           Set-Content -Path D:\cdb_cmd.txt -Value $lines -Encoding ASCII
           Push-Location app
-          $proc = Start-Process -FilePath $cdb -ArgumentList "-o AirExplorer.exe -G -y `"$sym`" -cf D:\cdb_cmd.txt -logo C:\out\cand_exc.log" -PassThru -NoNewWindow
+          $proc = Start-Process -FilePath $cdb -ArgumentList "-G -y `"$sym`" -cf D:\cdb_cmd.txt -logo C:\out\cand_exc.log AirExplorer.exe" -PassThru -NoNewWindow
           Pop-Location
           Start-Sleep -Seconds 40
           if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
