@@ -1,0 +1,8 @@
+[01:10:08.366] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[01:10:08.409] size = 10159616  md5 = C9C827273B4D4BC1E8F50BBEDD410CD9
+[01:10:08.418] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[01:10:08.463] started pid = 4864
+[01:10:09.990] process EXITED early, code = -1073741819
+[01:10:10.436] EVENT [10/24/2026 1:10:09 AM] Application Error: Faulting application name: AirExplorer.exe, version: 5.11.0.0, time stamp: 0x6a671a98 | Faulting module name: unknown, version: 0.0.0.0, time stamp: 0x00000000 | Exception code: 0xc0000005 | Fault offset: 0x00007ffbaf122e4a | Faulting process id: 0x1300 | Faulting application start time: 0x1DD635469367373 | Faulting application path: D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe | Faulting module path: unknown | Report Id: 843acc11-ee0f-4488-aac4-32d9be7b5be0 | Faulting package full name:  | Faulting package-relative application ID: 
+[01:10:10.437] EVENT [10/24/2026 1:10:08 AM] .NET Runtime: Application: AirExplorer.exe | Framework Version: v4.0.30319 | Description: The process was terminated due to an unhandled exception. | Exception Info: System.NullReferenceException |    at AirExplorer.Values.ArgumentGateway.EvaluateVisibleAttribute() |    at CloudClient.Models.StatelessModel.SearchAdapter(System.String[]) |  | 
+[01:10:10.439] done
