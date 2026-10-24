@@ -999,3 +999,42 @@ entry V_0=5 → state5: ServicePointManager.SecurityProtocol |= 3840 (TLS) → l
 ### 4. 长稳验收
 
 - `ci/soak.ps1`（7 分钟进程活+窗在+无错框，退出码 0/2/3/4）+ `.github/workflows/a-soak.yml`（默认测 launcher 交付形态，出包后把 exe 输入指向补丁版）
+
+## 2026-10-25 · 第 V 段：加密资产地图重画 + 字符串解密架构全明 + PRNG 纯XOR全灭 + RSA初始化器
+
+### 1. "3.2MB 负载" = cor20 资源区本体（6 个伪名资源，`work/reslist.py`）
+
+| 资源 | 大小 | 角色 |
+|---|---|---|
+| ValidatorGenerator.DefinitionError | 2337031 | 主库=UI 卫星包（已解，种子 0，deflate 后 4.26MB） |
+| GlobalValidator.FactoryValidator | 398794 | **字符串密文池**（`_ExtractorVisitors` 来源，见下） |
+| ErrorReceiver.ValidatorViewer | 356328 | **疑似方法体库**（deflate 10x 压缩 3.58MB IL 的量级假说） |
+| ValidatorAllocator.ValidatorProc | 47915 | ？（可能 locals/EH/token 表） |
+| CollectorTransaction.ValidatorProject | 26128 | 委托表（已解，种子 0，3266/3266） |
+| ValidatorArgument.EmitterReporter | 256 | ？小配置 |
+
+Σ=3166452B ≈ cor20 Resources size 0x30510C。**资源区外没有负载**——方法体密文必在 6 资源之一（ValidatorViewer 假说压缩比 ~10x，IL 高度模板重复可行）。
+
+### 2. PRNG 纯 XOR 假设全灭（对齐无关扫描，`work/probe_prng_al.py`）
+
+ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按 **1 字节对齐** 全扫 3.14MB × 10 dump：1-jump 候选 0（1 个噪声未过 32B 精验）。→ **资源 XOR 层的明文不是 IL 而是 deflate 流**（与主库结构一致：XOR→deflate→明文），且各资源种子独立非 0。纯 XOR 直解 IL 的路彻底关闭。
+
+### 3. 字符串解密架构全明（disasm 链：06004196→06004195→060042AD→060042AC）
+
+`DispatcherInitializer::InstantiateTransferableProgram(Int32)`（06004196，446B，**3288 个调用点**）：
+- 密文池 = 静态字段 `_ExtractorVisitors` (byte[])；格式 `[id处int=偏移/长度][UTF-16LE 字符串字节]`；缓存 `_RecommenderTemplates`(List<int>)+`editableMonitorTemplates`(List<string>)
+- 初始化 = `automatedError.GetManifestResourceStream("GlobalValidator.FactoryValidator")` → `SearchStrategy` (06004195) → `InstantiateAccessibleProcessor(44, [stream, id], null)` (060042AD) → `InstantiateStatelessUser<T>` (060042AC, 3038B) → `_TemplateController` (BinaryReader) + `EnableAuthorizer` (060042B1) 连读 4 个 int + 委托跳板拼装
+- **内置调用方程序集校验暗桩**：StackFrame(1).GetMethod().DeclaringType.Assembly != automatedError 时查 GetReferencedAssemblies 白名单，不在 → `throw`（每个字符串调用点共享）
+- 解密动作可能在 06004282 `FinderMap::DirectDefinition()` 或 060042AC 分支内（就地解密 _ExtractorVisitors）
+
+### 4. 06004192 = RSA 初始化器 + 调用方校验（`work/probe_prng_al.py` 同轮 flat 产物）
+
+- `new RSACryptoServiceProvider()` → stsfld `m_ExtendedSchemaTemplate` (04001FCD)；**先 CheckAdjustableExplorer(true) 后建实例**；`SortRole(typeof(DispatcherInitializer)).Assembly` → `ValidateFilteredTransaction` → bool v2；v2=false 直接 ret；然后 `CustomizeMatcher(asm)` 返回值驱动平坦化状态（**调用方程序集校验暗桩**，flat 走 12/14 块）
+- **m_ExtendedSchemaTemplate 全库只有 06004192 一个 stsfld，0 个 ldsfld**——读者不在 16598 dump 里（forcedump failed 名单或反射访问）。读者 = 激活签名验证点候选 → 等 TTD artifact 抓
+- 0600419C（625 块）= **反调试编排器**（非解密器）：`isRecommenderObserver` 单次守卫 + 15 个 P/Invoke 包装器顺序调用（CalcChecker/CheckCommonEventChain/ValidateAutomatedChainProgram/ValidateMixedProgramIterator/VerifyCustomIteratorRunner/ValidateGenericRunnerFilter/CheckReadableFilterCollection+ValidateAttachedCollectionExtractor/VerifyBasicExtractorProfiler/ReplaceUser/ValidateFlexibleErrorSpec/OpenService/SaveOrder(ldstr "1879051414"+10)/CheckOrderedSetState/VerifyCombinedStateRequest）+ `v83=0xF1F2F3F4` 特征标记 bne.un 分叉 → 死路 IL_4877 VerifyCombinedStateRequest（InvalidProgramException 考古链同款）
+
+### 5. 下一步
+
+- **TTD artifact 回来后**：① PayloadScan 抓桩 VA 回填例程（方法体库=ValidatorViewer 假说可当场验证：回填数据源指针落点）② 补抓 forcedump failed 名单（含 m_ExtendedSchemaTemplate 读者=激活验证点）
+- **字符串池明文化**：解 FactoryValidator 资源（种子未知，需 060042AC case44 分支或 TTD）→ 3288 字符串全明 → 激活相关字符串 xref 定位门控写入点
+- **A2 公钥替换路线评估**：若 m_ExtendedSchemaTemplate 读者做 `ImportParameters/FromXmlString` 且公钥字节静态可寻（IL 常量或 rva 数据）→ 文件级补丁公钥 + 自签 License → 不碰负载直通激活

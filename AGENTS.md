@@ -49,6 +49,9 @@
 | 平坦化线性化 | `work/flat.py` | `python3 work/flat.py <dumpfile> [stateVar] [switchVar] [out]`；0600428A 走通 389/420 块 |
 | 具体解释器 | `work/interp.py` | 0600428A 专用，跑到 DeflateStream 导出 `/tmp/mainlib_*.bin`；新 token 加进 BUILTINS/ARITY/AR 三张表 |
 | 原位 IL 验证 | `tools2/peekil.cs` + `peekil8.csproj` | 读 exe 原位 IL，判定"哪些方法原位即真体"（如 06004264） |
+| 资源清单解析 | `work/reslist.py` | cor20 资源区逐条列出（名字/大小/熵）——"3.2MB 负载"=6 个伪名资源 |
+| 对齐无关 PRNG 探针 | `work/probe_prng_al.py` | numpy 向量化 prng_round，1 字节对齐全扫负载（XOR 直解 IL 假设证伪工具） |
+| 反汇编 | `tools2/disasm8.csproj`（产物 disasm8.dll） | `dotnet disasm8.dll <exe> <dumpDir> <tok|--str s>`，dump 真体完整反汇编 |
 
 ## ⚠️ 已实证的硬约束（违反必炸，别再踩）
 
