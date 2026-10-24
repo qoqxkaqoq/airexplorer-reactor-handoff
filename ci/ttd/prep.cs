@@ -186,7 +186,8 @@ class Prep {
             MemberInfo[] ms;
             try { ms = ty.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly); } catch { continue; }
             foreach (var mi in ms) {
-                if (!(mi is MethodBase m)) continue;
+                MethodBase m = mi as MethodBase;
+                if (m == null) continue;
                 MethodBody b = null;
                 try { b = m.GetMethodBody(); } catch { }
                 if (b == null) continue;
