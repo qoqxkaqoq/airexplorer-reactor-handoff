@@ -93,12 +93,18 @@ jobs:
             if ($wins) { Write-Host ("V139 主窗口出现于 t={0}s title={1}" -f $i, ($wins -join "|")); $shown = $true; break }
           }
           if (-not $shown -and -not $p.HasExited) {
-            Write-Host "V139(有配置) 60s 无主窗口 —— cdb attach 抓全线程托管栈"
+            Write-Host "V139(有配置) 60s 无主窗口 —— cdb 两段式: attach→dump→SOS 栈"
             $cdb = (Get-Content D:\wd\cdb.txt).Trim()
-            & $cdb -p $p.Id -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; .threads; ~*e !clrstack; qd" 2>&1 | Out-File C:\out\v139_stacks.log -Encoding utf8
-            Get-Content C:\out\v139_stacks.log -Tail 80
+            $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
+            & $cdb -p $p.Id -y $sym -c ".dump /ma C:\out\v139.dmp; qd" 2>&1 | Select-Object -Last 8
+            Start-Sleep -Seconds 3
+            if (Test-Path C:\out\v139.dmp) {
+              Write-Host ("dump 大小: " + (Get-Item C:\out\v139.dmp).Length)
+              & $cdb -z C:\out\v139.dmp -y $sym -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q" 2>&1 | Tee-Object -FilePath C:\out\v139_stacks.log | Select-Object -Last 60
+            } else { Write-Host "dump 失败" }
           }
           if (-not $p.HasExited) { $p.Kill() }
+          exit 0
 
       - uses: actions/upload-artifact@v4
         if: always()
