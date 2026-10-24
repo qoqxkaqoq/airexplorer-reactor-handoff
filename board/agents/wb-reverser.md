@@ -671,3 +671,23 @@ ITP(06004196) 使用的静态：`_ExtractorVisitors`(B64✓已恢复) / `_Recomm
 - 官方 CHAIN 实测: `VerifyCentralLocator=False`(配置文件不存在) 但 `GenerateAdjustableAggregator=True` → GAA 走 `brfalse→GenerateSortedArgument(new CommandFactory(_FilteredTemplateContent))` → 注册发生在此链
 - v138: GAA 返回 True 但未注册 → **`CommandFactory::.ctor 06002B51` 是 4B 桩** + **`_ExtendedTemplate`(PropertyLoaded 事件, 实例委托) 无人订阅**(处理器在加密方法, 全模块无 (Object,CommandFactory)→Void 签名匹配)
 - 注册动作 = `_ExtendedTemplate.Invoke(this, new CommandFactory(_FilteredTemplateContent))` — 处理器真体 + CommandFactory.ctor 真体 + add_PropertyLoaded 订阅点, 三件都在官方内存里 → 已扩 prep(dlgscan 实例委托读 + refscan newobj 监视) 抓取 → v139 数据源
+
+### 🎉 v139：首个完整渲染官方 UI 的重建版本（历史性突破）
+
+**验收里程碑（run 40087571147 / 40088036647 / 40088038591，md5 A826563105C4FACF52A40F134AC05184）**：
+- **进程存活 + responding=True**（v135-v138 全部 2 秒崩 0xE0434352）
+- **probe2: `EVA returned OK`** — EVA 全链通过，`globalTemplate={DefailtProxyAuth: True}` 与官方**逐字段一致**（4 个模板字段：config 目录/airexplorer.xml/0.1/AirExplorer 全对齐）
+- **主窗口 `Air Explorer v5.11.0` visible=True**（945×600）：完整 Ribbon（Explore/Accounts/Search/Synchronize/Scheduler/Options/View/Tools/Pro/帮助）+ 左侧 "All" 导览树 + Accounts 子工具栏（Add Category/Add account/Search/Import/Export）——**mainwindow.png 截图存证**
+- **"Register account" 对话框 visible=True**：40+ 云服务商图标网格（115/Baidu/GoogleDrive/OneDrive/Mega/FTP/Nextcloud…）全部真实加载——**window1_hwnd66170.png 截图存证**
+- 官方首次启动（无账户）就是这个形态：Accounts 页 + 注册引导；文件列表需要登录云账户（官方语义，非重建缺陷）
+
+**v139 = v138 + C2 第三批五件套**（bodyswap）：
+- `AggregatorLogger::.ctor 06002B4C`(128B) ← **根因修复**：桩导致 `remoteNodeAggregatorObj` 永空 → IR 惰性建键失败 → DTR unbox null NRE
+- `CommandFactory::.ctor 06002B51`(34B)、DTR/ISC/ParseFlexibleAuthorizer 对照组
+- 全链打通：DTR→IR→new AggregatorLogger(key,null)→InstantiateSeparatedChooser→`_BuilderConfiguration.Invoke(this,logger)`→RequestDetachedViewer(1293 指令真体)→填值→IR 插入 globalTemplate→DTR 返回 True→EVA case0 走官方同款分支
+
+**经验沉淀**：
+- C2 抓取盲区已补：phase C 只复查"当前还是桩"的方法，会漏掉"官方引导期已执行已解密"的方法（AggregatorLogger.ctor 就这样漏了三轮）→ 需要把已知活动路径 token 显式加进 targets（已加 5 个）
+- LOADEX(WebView2/DragDrop 缺程序集) 是 runner 无关噪声，官方同样有，不是注入问题
+- probe2 CHAIN（手动逐环节重放）是定位静默吞异常链的利器
+- 下一步：① jitcheck v139 确认零 JIT 回归 ② official 基线 ui-probe 对比 ③ Explore 页签内容初始化（SearchAdapter→OnLoad 之后的层）④ 登录后的真实文件列表
