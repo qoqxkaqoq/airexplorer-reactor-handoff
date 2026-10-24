@@ -29,6 +29,7 @@ class RestoreSnap {
 
         var il = cctor.Body.Instructions;
         var ins = new List<Instruction>();
+        var only = System.Environment.GetEnvironmentVariable("RSONLY");
         int nB64 = 0, nInt = 0, nStr = 0, nList = 0, skip = 0;
         var allLines = File.ReadAllLines(a[1]);
         for (int li = 0; li < allLines.Length; li++) {
@@ -38,13 +39,14 @@ class RestoreSnap {
             if (!flds.TryGetValue(sp[1], out var f)) continue;
             var fname = sp[1];
             // LIST 恢复: newobj List<T>(封闭泛型 TypeSpec 取自字段签名); dup; 元素 Add ×N; stsfld
-            if (sp[0] == "LIST") {
+            if (sp[0] == "LIST" && (only == null || only.StartsWith("LIST") || only == "ARR" || only == "ARR2" || only == "OBJ")) {
+                if (only == "ARR" || only == "ARR2" || only == "OBJ") { /* 非泛型分支过滤在下方 */ }
                 TypeSig elSig = null;
                 if (f.FieldType is GenericInstSig) elSig = ((GenericInstSig)f.FieldType).GenericArguments.Count > 0 ? ((GenericInstSig)f.FieldType).GenericArguments[0] : null;
                 if (elSig == null) {
                     // 非泛型集合: 数组(SZArraySig)静态化; 引用型集合(SortedList/Hashtable/Object数组)空构造; Object→ldnull
                     var ft = f.FieldType;
-                    if (ft is SZArraySig sz && (sz.Next.GetElementType() == ElementType.I4 || sz.Next.GetElementType() == ElementType.U4)) {
+                    if (ft is SZArraySig sz && (sz.Next.GetElementType() == ElementType.I4 || sz.Next.GetElementType() == ElementType.U4) && (only == null || only == "ARR")) {
                         var elemTy = sz.Next;
                         var arrSpec = new TypeSpecUser(ft);
                         // 收集元素行(INT)
@@ -68,7 +70,7 @@ class RestoreSnap {
                         nList++;
                         continue;
                     }
-                    if (ft is SZArraySig sz2) { // 对象数组: newarr(len) 默认 null 元素
+                    if (ft is SZArraySig sz2 && (only == null || only == "ARR2")) { // 对象数组: newarr(len) 默认 null 元素
                         int nEl = 0;
                         for (int k2 = li + 1; k2 < allLines.Length; k2++) {
                             var e2 = allLines[k2].Split(' ');
@@ -81,13 +83,14 @@ class RestoreSnap {
                         nList++;
                         continue;
                     }
-                    if (ft.GetElementType() == ElementType.Object) { // Object 字段, LIST 0 行 → null
-                        ins.Add(new Instruction(OpCodes.Ldnull));
-                        ins.Add(new Instruction(OpCodes.Stsfld, f));
+                    if (ft.GetElementType() == ElementType.Object && (only == null || only == "OBJ" || only == "OBJ1" || only == "OBJ2")) { // Object 字段, LIST 0 行 → null
+                        if (only != "OBJ2") ins.Add(new Instruction(OpCodes.Ldnull));
+                        if (only != "OBJ1") ins.Add(new Instruction(OpCodes.Stsfld, f));
                         nList++;
                         continue;
                     }
                     // SortedList/Hashtable/Dictionary 等非泛型引用集合 → newobj 无参 ctor(空集合)
+                    if (only != null && only != "CT") { skip++; continue; }
                     // 复用官方已验证的 newobj 引用(自造 TypeRef 在 .NET FW 可能 MissingMethod)
                     var ctorRef = FindOfficialNewobj(mod, ft.FullName);
                     if (ctorRef == null) {
@@ -99,11 +102,12 @@ class RestoreSnap {
                     nList++;
                     continue;
                 }
-                // 直接复用官方 MemberRef(含原 sig) — sigclose 会统一克隆触发重编码(VAR)
-                var addRef = FindOfficialAdd(mod, elSig);
+                // 直接复用官方 MemberRef(含原 sig) — Class 必须与字段类型完全一致(否则 callvirt 栈类型不匹配 → InvalidProgram)
+                var addRef = FindOfficialAdd(mod, elSig, f.FieldType.FullName);
                 var ctor2 = FindOfficialNewobj(mod, f.FieldType.FullName);
                 if (ctor2 == null)
                     ctor2 = new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), new TypeSpecUser(f.FieldType));
+                if (only != null && only != "LIST") { skip++; continue; }
                 ins.Add(new Instruction(OpCodes.Newobj, ctor2));
                 for (int k2 = li + 1; k2 < allLines.Length; k2++) {
                     var e2 = allLines[k2].Split(' ');
@@ -125,14 +129,14 @@ class RestoreSnap {
                 continue;
             }
             f.Attributes = (f.Attributes & ~FieldAttributes.FieldAccessMask) | FieldAttributes.Public;
-            if (sp[0] == "B64" && sp.Length >= 3) {
+            if (sp[0] == "B64" && sp.Length >= 3 && (only == null || only == "B64")) {
                 ins.Add(new Instruction(OpCodes.Ldstr, sp[2]));
                 ins.Add(new Instruction(OpCodes.Call, new MemberRefUser(mod, "FromBase64String",
                     MethodSig.CreateStatic(new SZArraySig(mod.CorLibTypes.Byte), mod.CorLibTypes.String),
                     new TypeRefUser(mod, "System", "Convert", mod.CorLibTypes.AssemblyRef))));
                 ins.Add(new Instruction(OpCodes.Stsfld, f));
                 nB64++;
-            } else if (sp[0] == "INT" && sp.Length >= 3) {
+            } else if (sp[0] == "INT" && sp.Length >= 3 && (only == null || only == "INT")) {
                 long v;
                 if (sp[2] == "True") { ins.Add(new Instruction(OpCodes.Ldc_I4_1)); ins.Add(new Instruction(OpCodes.Stsfld, f)); nInt++; continue; }
                 if (sp[2] == "False") { ins.Add(new Instruction(OpCodes.Ldc_I4_0)); ins.Add(new Instruction(OpCodes.Stsfld, f)); nInt++; continue; }
@@ -140,7 +144,7 @@ class RestoreSnap {
                 ins.Add(new Instruction(OpCodes.Ldc_I4, (int)v));
                 ins.Add(new Instruction(OpCodes.Stsfld, f));
                 nInt++;
-            } else if (sp[0] == "STR" && sp.Length >= 3) {
+            } else if (sp[0] == "STR" && sp.Length >= 3 && (only == null || only == "STR")) {
                 ins.Add(new Instruction(OpCodes.Ldstr, sp[2]));
                 ins.Add(new Instruction(OpCodes.Call, new MemberRefUser(mod, "FromBase64String",
                     MethodSig.CreateStatic(new SZArraySig(mod.CorLibTypes.Byte), mod.CorLibTypes.String),
@@ -153,7 +157,7 @@ class RestoreSnap {
                     new TypeRefUser(mod, "System.Text", "Encoding", mod.CorLibTypes.AssemblyRef))));
                 ins.Add(new Instruction(OpCodes.Stsfld, f));
                 nStr++;
-            } else if (sp[0] == "SKIP" && fname == "automatedError") {
+            } else if (sp[0] == "SKIP" && fname == "automatedError" && (only == null || only == "SKIP")) {
                 var asmRef = new TypeRefUser(mod, "System.Reflection", "Assembly", mod.CorLibTypes.AssemblyRef);
                 ins.Add(new Instruction(OpCodes.Call, new MemberRefUser(mod, "GetExecutingAssembly",
                     MethodSig.CreateStatic(new ClassSig(asmRef)), asmRef)));
@@ -171,7 +175,7 @@ class RestoreSnap {
     }
 
     // 在官方程序集里找已存在且能被 CLR 解析的引用(官方代码里出现过的 MemberRef 必然可解析)
-    static MemberRef FindOfficialAdd(ModuleDef mod, TypeSig elSig) {
+    static MemberRef FindOfficialAdd(ModuleDef mod, TypeSig elSig, string listTypeFullName) {
         foreach (var t in mod.GetTypes()) foreach (var m in t.Methods) {
             if (!m.HasBody) continue;
             foreach (var oi in m.Body.Instructions) {
@@ -180,7 +184,7 @@ class RestoreSnap {
                 if (mr == null || mr.Name != "Add" || mr.MethodSig == null || mr.MethodSig.Params.Count != 1) continue;
                 var p0 = mr.MethodSig.Params[0];
                 bool p0ok = p0 is GenericVar || p0 is GenericMVar || p0.FullName == elSig.FullName;
-                if (p0ok && mr.Class != null && mr.Class.FullName.Contains("List`1")) return mr;
+                if (p0ok && mr.Class != null && mr.Class.FullName == listTypeFullName) return mr;
             }
         }
         return null;
