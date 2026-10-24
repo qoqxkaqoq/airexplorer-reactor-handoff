@@ -1,0 +1,89 @@
+name: A3 Portable Launcher Probe
+
+# A3 数据便携验收: 官方 exe 零修改, launcher 重定向 USERPROFILE/APPDATA 后启动。
+# 验收点: 1) 出窗(进程树枚举) 2) app/data 落盘 3) 真实 profile 无新增 AirExplorer 目录。
+# 不依赖官网安装器(2026-10-24 起新安装器解不出主程序), 直接用仓库内 baseline_verified。
+
+on:
+  workflow_dispatch:
+    inputs:
+      wait:
+        description: "等待秒数"
+        required: false
+        default: "40"
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备运行目录（仓库内官方基线 + launcher）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path app | Out-Null
+          Copy-Item exes/AirExplorer_baseline_verified.exe app/AirExplorer.exe -Force
+          Copy-Item portable/AirExplorer_Portable.cmd app/ -Force
+          $md5 = (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash
+          Write-Host "base md5 = $md5"
+          "# base: exes/AirExplorer_baseline_verified.exe  md5: $md5  launcher: portable/AirExplorer_Portable.cmd" | Out-File -Encoding utf8 app/_candidate.txt
+
+      - name: 真实 profile 前置快照
+        shell: pwsh
+        run: |
+          "REALPROFILE_BEFORE" | Out-File -Encoding utf8 probe_before.txt
+          foreach ($base in @($env:APPDATA, $env:LOCALAPPDATA, $env:USERPROFILE)) {
+            Get-ChildItem $base -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Air.?Explorer' } | ForEach-Object { "PRE: $($_.FullName)" | Out-File -Append -Encoding utf8 probe_before.txt }
+          }
+          Get-Content probe_before.txt
+
+      - name: UI 探针（经 launcher 启动, 进程树枚举窗口）
+        shell: pwsh
+        run: |
+          $w = "${{ github.event.inputs.wait }}"
+          if ([string]::IsNullOrWhiteSpace($w)) { $w = "40" }
+          ./tools/ci/probe.ps1 -ExePath "app\AirExplorer_Portable.cmd" -WaitSec $w -OutDir probe
+
+      - name: 数据便携验收
+        if: always()
+        shell: pwsh
+        run: |
+          "=== app/data 落盘 ===" | Out-File -Append -Encoding utf8 probe/portable_check.txt
+          if (Test-Path app/data) {
+            Get-ChildItem app/data -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+              $rel = $_.FullName.Substring((Resolve-Path 'app').Path.Length + 1)
+              "{0}  {1}" -f $(if ($_.PSIsContainer) { "<dir>" } else { $_.Length }), $rel
+            } | Out-File -Append -Encoding utf8 probe/portable_check.txt
+          } else { "app/data NOT CREATED" | Out-File -Append -Encoding utf8 probe/portable_check.txt }
+          "=== 真实 profile 残留检查 ===" | Out-File -Append -Encoding utf8 probe/portable_check.txt
+          Get-Content probe_before.txt -ErrorAction SilentlyContinue | Out-File -Append -Encoding utf8 probe/portable_check.txt
+          foreach ($base in @($env:APPDATA, $env:LOCALAPPDATA, $env:USERPROFILE)) {
+            Get-ChildItem $base -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Air.?Explorer' } | ForEach-Object { "POST: $($_.FullName)" | Out-File -Append -Encoding utf8 probe/portable_check.txt }
+          }
+          Get-Content probe/portable_check.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a3-portable
+          path: probe
+          retention-days: 14
+
+      - name: 回传结果到 ci-results 分支
+        if: always()
+        shell: pwsh
+        run: |
+          git config user.email "ci@local"
+          git config user.name "ci"
+          New-Item -ItemType Directory -Force -Path "results/$env:GITHUB_RUN_ID" | Out-Null
+          Copy-Item probe/* "results/$env:GITHUB_RUN_ID/" -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item app/_candidate.txt "results/$env:GITHUB_RUN_ID/" -Force -ErrorAction SilentlyContinue
+          git checkout -B ci-results
+          git add -f results
+          git commit -m "a3-portable run $env:GITHUB_RUN_ID" -q
+          git push -f origin "HEAD:refs/heads/ci-$env:GITHUB_RUN_ID"

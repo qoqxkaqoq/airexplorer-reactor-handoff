@@ -58,6 +58,27 @@ L "exe = $exe"
 L "size = $((Get-Item $exe).Length)  md5 = $((Get-FileHash $exe -Algorithm MD5).Hash)"
 L "OS = $([Environment]::OSVersion.VersionString)  SessionId = $((Get-Process -Id $PID).SessionId)"
 
+# 子进程树枚举: 兼容经 .cmd launcher 包装的启动方式 (cmd.exe -> AirExplorer.exe)。
+# 对直接启动 exe 无影响(树里只有自己)。
+function Get-TreePids([uint32]$RootPid) {
+    $all = New-Object System.Collections.Generic.List[uint32]
+    $all.Add($RootPid)
+    $frontier = @($RootPid)
+    $depth = 0
+    while ($frontier.Count -gt 0 -and $depth -lt 6) {
+        $depth++
+        $next = @()
+        foreach ($fpid in $frontier) {
+            Get-CimInstance Win32_Process -Filter "ParentProcessId=$fpid" -ErrorAction SilentlyContinue | ForEach-Object {
+                $cpid = [uint32]$_.ProcessId
+                if (-not $all.Contains($cpid)) { $all.Add($cpid); $next += $cpid }
+            }
+        }
+        $frontier = $next
+    }
+    return ,$all
+}
+
 $startTime = Get-Date
 $p = Start-Process -FilePath $exe -WorkingDirectory $workdir -PassThru
 L "started pid = $($p.Id)"
@@ -68,7 +89,8 @@ $seen = @{}
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 1500
     if ($p.HasExited) { L "process EXITED early, code = $($p.ExitCode)"; break }
-    $wins = [WinProbe]::List([uint32]$p.Id)
+    $wins = @()
+    foreach ($tp in (Get-TreePids([uint32]$p.Id))) { $wins += [WinProbe]::List($tp) }
     foreach ($w in $wins) {
         $key = "$($w.Hwnd)"
         if ($seen.ContainsKey($key)) { continue }
@@ -93,7 +115,8 @@ while ((Get-Date) -lt $deadline) {
 }
 
 if (-not $p.HasExited) {
-    $wins = [WinProbe]::List([uint32]$p.Id)
+    $wins = @()
+    foreach ($tp in (Get-TreePids([uint32]$p.Id))) { $wins += [WinProbe]::List($tp) }
     L "still alive, windows = $($wins.Count)"
     L "responding = $($p.Responding)  threads = $($p.Threads.Count)  WS(MB) = $([math]::Round($p.WorkingSet64/1MB,1))  CPU = $($p.TotalProcessorTime)"
     try {
@@ -103,7 +126,8 @@ if (-not $p.HasExited) {
     ($wins | ForEach-Object { "  hwnd=0x{0:X} visible={1} class='{2}' title='{3}'" -f [int64]$_.Hwnd, $_.Visible, $_.Class, $_.Title }) | ForEach-Object { L $_ }
 # 收尾: 尝试关闭模态对话框后抓主窗口 (即使不可见也 PrintWindow)
 
-    $wins = [WinProbe]::List([uint32]$p.Id)
+    $wins = @()
+    foreach ($tp in (Get-TreePids([uint32]$p.Id))) { $wins += [WinProbe]::List($tp) }
     foreach ($w in $wins) {
         if ($w.Visible -and $w.Class -like "WindowsForms10*" -and $w.Title -notlike "Air Explorer*") {
             L "close dialog: '$($w.Title)'"
@@ -111,7 +135,8 @@ if (-not $p.HasExited) {
         }
     }
     Start-Sleep -Seconds 4
-    $wins = [WinProbe]::List([uint32]$p.Id)
+    $wins = @()
+    foreach ($tp in (Get-TreePids([uint32]$p.Id))) { $wins += [WinProbe]::List($tp) }
     foreach ($w in $wins) {
         if ($w.Title -like "Air Explorer*") {
             $wd = $w.Rect.Right - $w.Rect.Left; $ht = $w.Rect.Bottom - $w.Rect.Top
@@ -143,8 +168,10 @@ if (-not $p.HasExited) {
         }
     }
     try {
-        $p.Kill()
-        L "killed"
+        taskkill /PID $($p.Id) /T /F 2>$null | Out-Null
+        Start-Sleep -Milliseconds 800
+        if (-not $p.HasExited) { $p.Kill() }
+        L "killed (tree)"
     } catch { L "kill failed: $($_.Exception.Message)" }
 }
 
