@@ -57,13 +57,21 @@ jobs:
             Write-Host "官方未生成 airexplorer.xml，列出实际生成的内容:"; Get-ChildItem "$env:APPDATA\AirExplorer" -Recurse -ErrorAction SilentlyContinue | Format-Table FullName,Length | Out-String | Write-Host
           }
 
-      - name: 第2步 清配置 → 官方(带种子配置)启动 45s
+      - name: 第2步 清配置 → 官方(带种子配置)启动 45s（并抓官方 3s 主窗体创建栈）
         shell: pwsh
         run: |
           Remove-Item "$env:APPDATA\AirExplorer" -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path "$env:APPDATA\AirExplorer" | Out-Null
           Copy-Item C:\out\seed_airexplorer.xml "$env:APPDATA\AirExplorer\airexplorer.xml" -ErrorAction SilentlyContinue
+          Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile D:\pd.zip
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\pd D:\pd.zip | Out-Null
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
           $p = Start-Process -FilePath "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru
+          Start-Sleep -Seconds 2
+          & D:\pd\procdump64.exe -accepteula -ma $p.Id C:\out\official_2s.dmp 2>&1 | Select-Object -Last 2
+          & $cdb -z C:\out\official_2s.dmp -y $sym -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !clrstack; q" 2>&1 | Tee-Object -FilePath C:\out\official_2s_stacks.log | Select-Object -Last 40
+          if (-not (Test-Path C:\out\official_2s.dmp)) { Write-Host "official 2s dump 失败，继续" }
           $t0 = Get-Date
           $shown = $false
           for ($i = 3; $i -le 45; $i += 3) {
@@ -74,6 +82,7 @@ jobs:
           }
           if (-not $shown -and -not $p.HasExited) { Write-Host "OFFICIAL 45s 无主窗口" }
           if (-not $p.HasExited) { $p.Kill(); Start-Sleep -Seconds 3 }
+          exit 0
 
       - name: 第3步 换 v139 + 同一配置 → 启动 60s
         shell: pwsh
@@ -122,4 +131,5 @@ jobs:
           name: bootcfg-out
           path: |
             C:\out\v139_stacks.log
+            C:\out\official_2s_stacks.log
             C:\out\seed_airexplorer.xml
