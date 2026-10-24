@@ -1190,3 +1190,29 @@ TTD 回放态限制：`!dumpheap`/`!clrstack` 需要 GC heap（回放态 GC in p
 1. 驱动器方法 !dumpil → 静态读负载密文流结构（条目头 10B/游程跳零/解密 key 推导）→ 离线实现 decrypt/encrypt
 2. 06003909/06002BD1 真体 → 入 dump 库 → 检查是否含门控布尔写入（stfld _IsDecoratorProvider）
 3. 若驱动器 IL 里有解密 key 常量 → 负载流完全破解 → A1 五补丁重加密 → 单 exe 启动即 Pro
+
+## IX. v6 前夜离线反查（0 CI 成本，10-25）
+
+### 1. 06003909 窗口族身份反查（决定性）
+
+用 v5 重建片段（fat header + body 前 12B）的 IL 前缀扫 dump 库 16598 个文件：
+
+| v5 片段 | 前缀 | dump 命中 | 身份 |
+|---|---|---|---|
+| @800 (ilSize=0x11, maxStack=3) | `28fe380006036f03...` | **0600390A** ✅ | `RequestVerifierTransformer::RequestPassiveHandler(int)`：call 060038FE → ldarg.1 → callvirt 06003903 → ret |
+| @900 (0xB2, maxStack=4) | `20b42b8a53fe0e01...` | **0600390B** ✅ | `::SendHiddenFormatter(object,EventArgs)`：ToolStripButton m_RequestSenderFormatter 取反 toggle |
+| @A00 (0x121, maxStack=5) | `2040a6e707fe0e00...` | **0600390D** ✅ | `::RequestInternalDistributor()`：3 个控件文本 ← 字符串解密器 |
+| @B00 (0x752, maxStack=5, eh=3) | `20b0b4f428fe0e05...` | **0600390E** ✅ | `::ArrangeEncryptor()`：ToolStripDropDownButton 下拉菜单填充 |
+| @0 (0x89D, maxStack=7, locals=0x11000AE8, MoreSects) | `2894410006288242...` | ❌ 无（ilSize=0x89D 全库 0 个） | 06003909 本体，仍 MISSING |
+| （推断 0600390C，ilSize=0xE2） | 未知 | ❌ | 窗口中未见其写事件 |
+
+**结论**：
+- 06003909 窗口 = `AirExplorer.Networking.RequestVerifierTransformer`（混淆的搜索/工具栏 Form 类）的方法族 06003909..0600390E
+- **族内 4/6 已在 dump 库**，且前缀逐字节吻合 → 第三重验证 dump=真体明文
+- 仅缺 06003909（Form ctor，0x89D，开头 `call 06004194(DefineActiveEvent 反调试); call 06004282`）和 0600390C（0xE2）
+- **06004196 `InstantiateTransferableProgram(int)` 就是字符串解密入口**（0600390D 三处调用：常量运算出 id → `call 06004196` → 返回 string → ParserSharer::ExecuteExplorer 写控件文本）；id 运算 = `const xor|add|sub const` ^ `<Module>` canary 字段（040020B8 的 m_137064ba.../m_c59d822c.../m_6412136b...）—— 与已知"`<Module>` 金丝雀字段防篡改，字符串 id 用 const^const^字段值"完全吻合
+- RequestVerifierTransformer 族回填事件仅 30 个 dword：每方法只写了 fat header+前 ~12-28B 到桩槽位，**完整体不在 exe 映像槽位**（在驱动器 native 区，CLR 读 IL 的指针被运行时另指或后续补写）——v6 native 热图会给出真相
+
+### 2. dump 头格式最终确认
+
+24B = tok u32 / ilSize u32 / maxStack u32 / ehCount u32 / preExtra u32 / localsTok u32，之后裸 IL（无 EH 尾表？06004282 eh=0 确认 2B 体直接 `00 2A`）。
