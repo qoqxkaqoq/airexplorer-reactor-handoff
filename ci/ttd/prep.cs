@@ -92,6 +92,11 @@ class Prep {
             new[] { "06002F81", "AG::EvaluateVisibleAttribute" },
             new[] { "06002B06", "TI::InstantiateRandomIterator" },
             new[] { "06004196", "ITP" },
+            new[] { "06002B4C", "AggregatorLogger::.ctor(String,Object)" },
+            new[] { "06002B51", "CommandFactory::.ctor(String)" },
+            new[] { "06002B0E", "TI::DefineTransferableRecord" },
+            new[] { "06002B2D", "TI::InstantiateSeparatedChooser" },
+            new[] { "06002B4A", "AggregatorLogger::ParseFlexibleAuthorizer" },
         };
         var mod = asm.GetModules()[0];
         int mi = 0;
