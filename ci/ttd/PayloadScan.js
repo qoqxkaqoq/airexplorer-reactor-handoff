@@ -1,16 +1,13 @@
-// PayloadScan v5 — 决定性一击: TTD 回放态用 SOS 直接读回填后的解密 IL
-// 已知(2026-10-25 v4c):
-//   - 回填写入方 = Marshal.WriteInt32 的 NGEN 体(mscorlib_ni+0x570801)
-//   - 调用链: 驱动器(0x7ff9ecea3ab9 JIT 帧) -> 060041FA VerifyCustomIteratorRunner(19B 壳) -> Marshal.WriteInt32
-//   - dump MISSING 方法: 06003909 RequestVerifierTransformer::.ctor / 06002BD1(未知名)
-//   - TTD 回放态 dumpheap/clrstack 不可用(GC in plan), 但 !ip2md/!dumpil 不需要 GC heap
-// v5 阶段:
-//   P1 TTD.Memory 写查询(目标表) → 事件/明文 IL/位置   (同 v4)
-//   P2 !tt 到关键回填时刻 → 寄存器/栈/反汇编           (同 v4)
-//   P3 writerIP bp + g, 命中#1 即 .loadby sos clr:
-//      dps @rsp → retaddr → !ip2md → !dumpmd+!dumpil (060041FA 壳)
-//      k 15 解析全部裸 JIT 帧地址 → 逐个 !ip2md → !dumpil (驱动器方法!)
-//   P4 !dumpil <BASE> <token> 对全部 TARGETS(MISSING 方法真体直接到手)
+// PayloadScan v6 — native 驱动器决定性一击
+// v5 实锤: 060041FA 的调用方在 0x7fff914c7000 区域, !ip2md 说 "not in JIT code range"
+//          → 驱动器是 native 代码(内存加载的 Reactor 运行时), 不是托管 JIT
+// v5 实锤: 06003909 桩窗口 = 多方法族回填区(6 方法: codesize 0x89D/0x11/0xB2/0xE2/0x121/0x752)
+// v6 阶段:
+//   P1 TTD.Memory 写查询(同 v5, 06003909 窗口 0x2000)
+//   P2 !tt 首事件 → lm / !address / u native 区 / MZ 检查
+//   P3 bp writerIP 命中#1 → TTD "e"(执行)查询 native 模块区 → 执行 IP 直方图 →
+//      热点 top → !tt 热点 → u 反汇编(解密循环 native 代码!)
+//   P4 !name2ee → 060041FA 的 MD → !dumpil
 "use strict";
 
 function initializeScript() {
@@ -41,8 +38,9 @@ for (var m of proc.Modules) {
     } catch (e) { }
 }
 var BASE = mod ? Number(mod.BaseAddress) : 0;
-log("[V5] module AirExplorer base=0x" + BASE.toString(16) + " modules=" + modList.length);
-if (!BASE) { log("[V5] FATAL no AirExplorer module"); return; }
+log("[V6] module AirExplorer base=0x" + BASE.toString(16) + " modules=" + modList.length);
+for (var ml of modList) log("[V6]   mod " + ml.name + " base=0x" + ml.base.toString(16) + " size=0x" + (ml.end - ml.base).toString(16));
+if (!BASE) { log("[V6] FATAL no AirExplorer module"); return; }
 function modOf(a) { for (var x of modList) if (a >= x.base && a < x.end) return x.name; return "?"; }
 function ExecuteCommand2(cmd) {
     var out = "";
@@ -61,15 +59,7 @@ function ecStr(r) {
     } catch (e2) { }
     try { return JSON.stringify(r); } catch (e3) { return "[unprintable]"; }
 }
-function EC(cmd) { var out = ExecuteCommand2(cmd); log("[V5|CMD] " + cmd + "\n" + out); return out; }
-function readBytes(addr, n) {
-    var out = [];
-    try {
-        var vals = host.memory.readMemoryValues(addr, n, 1);
-        for (var v of vals) out.push(Number(v) & 0xFF);
-    } catch (e) { }
-    return out;
-}
+function EC(cmd) { var out = ExecuteCommand2(cmd); log("[V6|CMD] " + cmd + "\n" + out); return out; }
 function memReadable(a) {
     try { host.memory.readMemoryValues(a, 1, 1); return true; } catch (e) { return false; }
 }
@@ -80,7 +70,7 @@ function evPos(w) {
 }
 function dumpRegs() {
     var regs;
-    try { regs = host.currentThread.Registers.User; } catch (e2) { log("[V5] no regs"); return null; }
+    try { regs = host.currentThread.Registers.User; } catch (e2) { log("[V6] no regs"); return null; }
     var names = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rip"];
     var rd = {};
     for (var rn of names) {
@@ -88,26 +78,20 @@ function dumpRegs() {
     }
     var s = "";
     for (var k in rd) s += k + "=0x" + rd[k].toString(16) + " ";
-    log("[V5] REGS " + s);
+    log("[V6] REGS " + s);
     return rd;
 }
 
 var TARGETS = [
-    { tok: "0600212A", rva: 0x00195D18, win: 16 },
-    { tok: "06003909", rva: 0x00334EB0, win: 0x1000 },
-    { tok: "06002BD1", rva: 0x0024EA40, win: 0x400 },
-    { tok: "06004282", rva: 0x00407F38, win: 8 },
-    { tok: "0600418B", rva: 0x003FAA64, win: 8 },
-    { tok: "06004196", rva: 0x003FDA7C, win: 8 },
+    { tok: "06003909", rva: 0x00334EB0, win: 0x2000 },
+    { tok: "06002BD1", rva: 0x0024EA40, win: 0x800 },
     { tok: "060042B0", rva: 0x0040EE88, win: 8 },
     { tok: "060042B1", rva: 0x0040F2A4, win: 8 },
+    { tok: "0600212A", rva: 0x00195D18, win: 16 },
 ];
-// 注: win 收紧 — 060042B0/060042B1/06004282/0600418B/06004196 真体已在 dump,
-//     只需确认是否回填(events>0); 06003909(win 0x1000) / 06002BD1(0x400) MISSING,
-//     尽量多抓字节做已知明文 + 验证 !dumpil。
 
-// ---------------- P1: TTD.Memory write queries ----------------
-log("[V5] PHASE1 TTD.Memory");
+// ---------------- P1 ----------------
+log("[V6] PHASE1 TTD.Memory");
 var allEvents = [];
 var writerIPs = [];
 var firstPos = {};
@@ -126,16 +110,16 @@ for (var t of TARGETS) {
             var known = false;
             for (var ip2 of writerIPs) if (ip2 === ev.ip) known = true;
             if (!known) writerIPs.push(ev.ip);
-            if (tw <= 64 || cnt <= 40)
-                log("[V5] EVT " + ev.tok + " i=" + cnt + " addr=0x" + ev.addr.toString(16) + " size=" + ev.size
+            if (cnt <= 64)
+                log("[V6] EVT " + ev.tok + " i=" + cnt + " addr=0x" + ev.addr.toString(16) + " size=" + ev.size
                     + " val=" + hexW(ev.val) + " ip=0x" + ev.ip.toString(16) + " pos=" + ev.pos);
-            if (cnt > 8 + tw / 4) break;
+            if (cnt > 2000) break;
         }
-    } catch (e) { log("[V5] TTD.Memory failed for " + t.tok + ": " + e); }
-    log("[V5] " + t.tok + " events=" + cnt);
+    } catch (e) { log("[V6] TTD.Memory failed for " + t.tok + ": " + e); }
+    log("[V6] " + t.tok + " events=" + cnt);
 }
 
-// IL reconstruction (only for MISSING: 06003909 / 06002BD1)
+// reconstruction for 06003909 / 06002BD1
 for (var t3 of TARGETS) {
     if (t3.tok !== "06003909" && t3.tok !== "06002BD1") continue;
     var tw3 = t3.win;
@@ -149,113 +133,189 @@ for (var t3 of TARGETS) {
     }
     var known3 = 0;
     for (var k3 in bytes) known3++;
-    log("[V5] IL " + t3.tok + " reconstructed=" + known3 + "/" + tw3 + " bytes");
+    log("[V6] IL " + t3.tok + " reconstructed=" + known3 + "/" + tw3 + " bytes");
+    // 只 log 有数据的 256B 行
     for (var row = 0; row < tw3; row += 256) {
+        var has = false;
+        for (var j3 = row; j3 < row + 256 && j3 < tw3; j3++) if (bytes[j3] !== undefined) { has = true; break; }
+        if (!has) continue;
         var hexr = "";
-        for (var j3 = row; j3 < row + 256 && j3 < tw3; j3++) hexr += (bytes[j3] === undefined ? "??" : hexB(bytes[j3]));
-        if (hexr.indexOf("??") < 0 || hexr.indexOf(hexB(0)) >= 0) log("[V5] IL " + t3.tok + " @" + row.toString(16) + " " + hexr);
+        for (var j4 = row; j4 < row + 256 && j4 < tw3; j4++) hexr += (bytes[j4] === undefined ? "??" : hexB(bytes[j4]));
+        log("[V6] IL " + t3.tok + " @" + row.toString(16) + " " + hexr);
     }
 }
 
-// ---------------- P2: !tt to first backfill ----------------
-log("[V5] PHASE2 tt-to-backfill");
-var ttTargets = ["06003909", "06002BD1"];
-for (var tk of ttTargets) {
-    var pos = firstPos[tk];
-    if (!pos || pos === "undef") { log("[V5] P2 " + tk + " no pos"); continue; }
-    log("[V5] P2 ---- " + tk + " pos=" + pos + " ----");
-    try { EC("!tt " + pos); } catch (e) { log("[V5] !tt " + tk + " failed: " + e); }
+// ---------------- P2: !tt first backfill → native module discovery ----------------
+log("[V6] PHASE2 tt + native module discovery");
+var pos0909 = firstPos["06003909"];
+if (pos0909 && pos0909 !== "undef") {
+    EC("!tt " + pos0909);
     var rd = dumpRegs();
-    if (rd) { EC("k 15"); EC("dps @rsp L40"); }
-}
-
-// ---------------- P3: writerIP bp + g → SOS dumpil ----------------
-log("[V5] PHASE3 writerIP + SOS");
-if (writerIPs.length > 0) {
-    var wip = writerIPs[0];
-    log("[V5] writerIPs all: " + writerIPs.map(function (x) { return "0x" + x.toString(16); }).join(","));
-    var ipHex = "0x" + wip.toString(16);
-    EC("ln " + ipHex);
-    var set = memReadable(wip);
-    var tries = 0;
-    while (!set && tries < 60) {
-        tries++;
-        ExecuteCommand2("sxe ld");
-        ExecuteCommand2("g");
-        set = memReadable(wip);
-        if (set) break;
-    }
-    if (set) {
-        ExecuteCommand2("bp " + ipHex);
-        log("[V5] bp set on " + ipHex + " (tries=" + tries + ")");
-        // HIT#1: 进入 SOS
-        try { ExecuteCommand2("g"); } catch (e) { log("[V5] P3 g#1 threw: " + e); }
-        log("[V5] P3 ---- HIT#1 ----");
-        EC("ln @rip");
-        var rd3 = dumpRegs();
-        EC("k 15");
-        EC("dps @rsp L10");
-        // SOS 加载
-        EC(".loadby sos clr");
-        EC("!EEVersion");
-        // retaddr (rsp+8) = 060041FA JIT 内
-        var rsp = rd3 ? rd3.rsp : 0;
-        // 解析 k 输出的全部 JIT 裸地址
+    EC("lm");
+    // writerIP 之外, k 里应该有 native 基址。直接看 v5 已知形态: 栈上 0x7fff914c7000
+    EC("k 15");
+    // 从寄存器/栈找 native 基址: 取所有 0x7ff 开头且 modOf='?' 的地址, 对齐 0x1000
+    var natBase = 0;
+    if (rd) {
+        // 先试 rsp 附近 dps 已在 k 中; 用 r13/r14? v5 显示 0x7fff914c7000 出现在 k 第 7 行 RetAddr
+        // 动态解析 k
         var kOut = ExecuteCommand2("k 15");
-        var jitAddrs = [];
-        var lineRe = /(?:^|\s)0{0,8}([0-9a-f]{6,16})`([0-9a-f]{4,16})\s{2,}/g;
-        var altRe = /\s0{0,2}([0-9a-f]{8,16})\s{2,}0x0000([0-9a-f`]{8,16})/g;
-        // k 行格式: <childsp> <retaddr> <callsite>. retaddr 列在第二列。
-        var linesK = kOut.split("\n");
-        for (var lk of linesK) {
-            // 取第二列
+        var cands = [];
+        var lkArr = kOut.split("\n");
+        for (var lk of lkArr) {
             var cols = lk.trim().split(/\s+/);
-            if (cols.length >= 2) {
-                var c2 = cols[1].replace(/`/g, "").replace(/^0+/, "");
-                if (c2.length >= 12) {
-                    var v2 = parseInt(c2, 16);
-                    if (isFinite(v2) && v2 > 0x7ff000000000 && modOf(v2) === "?") jitAddrs.push(v2);
-                }
-                // callsite 列也可能裸 (0x00007ff9`eceab1ae 形式)
-                var c3 = (cols[2] || "").replace(/`/g, "").replace(/^0x0000/, "0x");
-                if (/^0x[0-9a-f]{12,16}$/i.test(c3)) {
-                    var v3 = parseInt(c3.slice(2), 16);
-                    if (isFinite(v3) && v3 > 0x7ff000000000 && modOf(v3) === "?") jitAddrs.push(v3);
+            for (var ci = 1; ci < cols.length && ci <= 2; ci++) {
+                var cc = cols[ci].replace(/`/g, "").replace(/^0x/, "");
+                if (cc.length >= 12 && /^[0-9a-f]+$/i.test(cc)) {
+                    var vv = parseInt(cc, 16);
+                    if (isFinite(vv) && vv > 0x7ff000000000 && modOf(vv) === "?") cands.push(vv);
                 }
             }
         }
-        var uniq = [];
-        for (var ja of jitAddrs) { var dup = false; for (var u of uniq) if (u === ja) dup = true; if (!dup) uniq.push(ja); }
-        log("[V5] P3 JIT frame addrs: " + uniq.map(function (x) { return "0x" + x.toString(16); }).join(", "));
-        var mdSeen = {};
-        for (var fa of uniq) {
-            var ip = EC("!ip2md 0x" + fa.toString(16));
-            var mdm = ip.match(/MethodDesc:\s*([0-9a-f`]+)/i);
-            if (mdm) {
-                var md = mdm[1].replace(/`/g, "");
-                if (!mdSeen[md]) {
-                    mdSeen[md] = true;
-                    log("[V5] P3 ---- md " + md + " (from 0x" + fa.toString(16) + ") ----");
-                    EC("!dumpmd 0x" + md);
-                    EC("!dumpil 0x" + md);
+        cands.sort(function (a, b) { return a - b; });
+        log("[V6] P2 native addrs from k: " + cands.map(function (x) { return "0x" + x.toString(16); }).join(", "));
+        if (cands.length > 0) {
+            var lo = cands[0] & 0xFFFFFFFFFFFF0000;
+            // 向下找直到不可读(基址)
+            natBase = lo;
+            for (var down = 0; down < 16; down++) {
+                var probe = lo - down * 0x10000;
+                if (!memReadable(probe)) { natBase = probe + 0x10000; break; }
+                natBase = probe;
+            }
+        }
+    }
+    if (natBase) {
+        log("[V6] P2 native base candidate = 0x" + natBase.toString(16));
+        EC("ln 0x" + natBase.toString(16));
+        EC("!address 0x" + natBase.toString(16));
+        EC("dps 0x" + natBase.toString(16) + " L4");
+        EC("u 0x" + natBase.toString(16) + " L60");
+        // 头部 MZ?
+        var mz = readBytesSafe(natBase, 2);
+        log("[V6] P2 first bytes = " + (mz ? mz : "<unreadable>"));
+        // 记下供 P3
+        session.__natBase = natBase;
+    }
+}
+function readBytesSafe(a, n) {
+    try {
+        var vals = host.memory.readMemoryValues(a, n, 1);
+        var h = "";
+        for (var v of vals) h += hexB(Number(v) & 0xFF);
+        return h;
+    } catch (e) { return null; }
+}
+
+// ---------------- P3: writerIP bp → native execute heatmap ----------------
+log("[V6] PHASE3 native execute heatmap");
+if (writerIPs.length > 0) {
+    var wip = writerIPs[0];
+    var ipHex = "0x" + wip.toString(16);
+    var set = memReadable(wip);
+    var tries = 0;
+    while (!set && tries < 60) { tries++; ExecuteCommand2("sxe ld"); ExecuteCommand2("g"); set = memReadable(wip); if (set) break; }
+    if (set) {
+        ExecuteCommand2("bp " + ipHex);
+        try { ExecuteCommand2("g"); } catch (e) { log("[V6] P3 g#1 threw: " + e); }
+        log("[V6] P3 ---- HIT#1 ----");
+        var rd3 = dumpRegs();
+        // native 基址: 重新从 k 解析 (此刻在 WriteInt32, 栈上有 native 帧信息)
+        var k3 = ExecuteCommand2("k 12");
+        var natB = 0;
+        var arr = [];
+        var lks = k3.split("\n");
+        for (var l2 of lks) {
+            var cs = l2.trim().split(/\s+/);
+            for (var c4 = 1; c4 < cs.length && c4 <= 2; c4++) {
+                var c5 = cs[c4].replace(/`/g, "").replace(/^0x/, "");
+                if (c5.length >= 12 && /^[0-9a-f]+$/i.test(c5)) {
+                    var v5 = parseInt(c5, 16);
+                    if (isFinite(v5) && v5 > 0x7ff000000000 && modOf(v5) === "?") arr.push(v5);
+                }
+            }
+        }
+        if (arr.length > 0) {
+            arr.sort(function (a, b) { return a - b; });
+            natB = arr[0] & 0xFFFFFFFFFFFF0000;
+            for (var d2 = 0; d2 < 16; d2++) {
+                var p2 = (arr[0] & 0xFFFFFFFFFFFF0000) - d2 * 0x10000;
+                if (!memReadable(p2)) { natB = p2 + 0x10000; break; }
+                natB = p2;
+            }
+        }
+        log("[V6] P3 native base = 0x" + natB.toString(16));
+        if (natB) {
+            EC("ln 0x" + natB.toString(16));
+            // 执行查询: native 模块 64KB 窗口
+            var nbEnd = natB + 0x10000;
+            var hist = {};
+            var eCnt = 0;
+            try {
+                var es = session.TTD.Memory(natB, nbEnd, "e");
+                for (var ee of es) {
+                    eCnt++;
+                    var ipE = Number(ee.IP);
+                    if (hist[ipE] === undefined) hist[ipE] = 0;
+                    hist[ipE]++;
+                    if (eCnt > 200000) break;
+                }
+            } catch (e) { log("[V6] TTD exec query failed: " + e); }
+            log("[V6] P3 exec events=" + eCnt + " uniqueIPs=" + Object.keys(hist).length);
+            // top 30 热点
+            var pairs = [];
+            for (var ipH in hist) pairs.push({ ip: Number(ipH), c: hist[ipH] });
+            pairs.sort(function (a, b) { return b.c - a.c; });
+            for (var pi = 0; pi < Math.min(30, pairs.length); pi++)
+                log("[V6] HOT 0x" + pairs[pi].ip.toString(16) + " (base+0x" + (pairs[pi].ip - natB).toString(16) + ") count=" + pairs[pi].c);
+            // 最热 IP 处反汇编 + !tt
+            if (pairs.length > 0) {
+                var hot = pairs[0].ip;
+                // 找一个它的执行 pos: 重新查询该 IP 附近窗口的执行事件拿 pos
+                try {
+                    var es2 = session.TTD.Memory(hot, hot + 1, "e");
+                    var firstE = null, lastE = null, nE = 0;
+                    for (var e2 of es2) {
+                        nE++;
+                        if (!firstE) firstE = evPos(e2);
+                        lastE = evPos(e2);
+                        if (nE >= 100000) break;
+                    }
+                    log("[V6] P3 hotIP 0x" + hot.toString(16) + " execCount=" + nE + " firstPos=" + firstE + " lastPos=" + lastE);
+                    if (lastE) {
+                        EC("!tt " + lastE);
+                        dumpRegs();
+                        EC("u @rip-0x80 L40");
+                        EC("u @rip L10");
+                        EC("k 12");
+                    }
+                } catch (e) { log("[V6] hotIP pos query failed: " + e); }
+                // 全区反汇编: 解密循环区域
+                if (pairs.length > 3) {
+                    var lo2 = pairs[0].ip, hi2 = pairs[0].ip;
+                    for (var p6 of pairs) { if (p6.c < 10) continue; if (p6.ip < lo2) lo2 = p6.ip; if (p6.ip > hi2) hi2 = p6.ip; }
+                    log("[V6] P3 hot range 0x" + lo2.toString(16) + " - 0x" + hi2.toString(16) + " span=0x" + (hi2 - lo2).toString(16));
+                    EC("u 0x" + (lo2 - 0x20).toString(16) + " L" + Math.min(200, (hi2 - lo2) / 4 + 80));
                 }
             }
         }
         ExecuteCommand2("bc *");
-        log("[V5] P3 done (1 hit only; SOS extracted)");
     } else {
-        log("[V5] bp never readable after 60 tries");
+        log("[V6] bp never readable");
     }
-} else {
-    log("[V5] no writerIPs found");
 }
 
-// ---------------- P4: !dumpil <BASE> <token> — 直接读回填后真体 ----------------
-log("[V5] PHASE4 dumpil tokens");
-var toks = ["06003909", "06002BD1", "060042B0", "060042B1", "0600418B", "06004196", "060041FA", "0600212A"];
-for (var tk2 of toks) {
-    log("[V5] P4 ---- dumpil " + tk2 + " ----");
-    EC("!dumpil 0x" + BASE.toString(16) + " 0x" + tk2);
+// ---------------- P4: name2ee → dumpil 060041FA ----------------
+log("[V6] PHASE4 name2ee dumpil");
+EC(".loadby sos clr");
+var n2e = EC("!name2ee AirExplorer.exe CloudClient.Templating.DispatcherInitializer.VerifyCustomIteratorRunner");
+var mdm = n2e.match(/MethodDesc:\s*([0-9a-f`]+)/i);
+if (mdm) {
+    var md = mdm[1].replace(/`/g, "");
+    EC("!dumpil 0x" + md);
 }
-log("[V5] done");
+// 驱动器若为 native, 060041FA 的 MD 无用; 但 06003909 族方法的 IL 已由 P1 重建。
+// 额外: dumpmodule 看有没有 token->IL 接口
+EC("!dumpmodule 0x" + BASE.toString(16));
+log("[V6] done");
 }
