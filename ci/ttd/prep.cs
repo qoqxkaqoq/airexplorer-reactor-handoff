@@ -20,6 +20,7 @@ using System.Threading;
 
 class Prep {
     static StreamWriter Log_;
+    static string OutDir = ".";
     static object Lock = new object();
     static void Log(string s) {
         lock (Lock) { Console.WriteLine(s); try { Log_.WriteLine(s); Log_.Flush(); } catch {} }
@@ -35,15 +36,22 @@ class Prep {
     }
 
     static int Main(string[] a) {
+        // Log_ 必须最先建立, 任何早期异常都要落盘可查
+        OutDir = a.Length > 1 ? a[1] : ".";
+        try { if (!Path.IsPathRooted(OutDir)) OutDir = Path.GetFullPath(OutDir); Directory.CreateDirectory(OutDir); } catch {}
+        try { Log_ = new StreamWriter(Path.Combine(OutDir, "prep.log")); } catch { Log_ = null; }
+        try { return Run(a); }
+        catch (Exception ex) { Log("[prep] FATAL " + Chain(ex)); return 9; }
+    }
+
+    static int Run(string[] a) {
         if (a.Length < 3) { Console.WriteLine("usage: prep <exe> <outDir> <delaySec> [mode] [skipwalk]"); return 1; }
         string exe = Path.GetFullPath(a[0]);
-        string outDir = Path.GetFullPath(a[1]);
-        int delay = int.Parse(a[2]);
         string mode = a.Length > 3 ? a[3] : "prep";
+        int delay = int.Parse(a[2]);
         bool skipWalk = a.Length > 4 && a[4] == "skipwalk";
-        Directory.CreateDirectory(outDir);
         Directory.SetCurrentDirectory(Path.GetDirectoryName(exe));
-        Log_ = new StreamWriter(Path.Combine(outDir, "prep.log"));
+        Log("[prep] cwd=" + Environment.CurrentDirectory);
 
         using (var md5 = MD5.Create())
         using (var fs = File.OpenRead(exe))
@@ -91,7 +99,7 @@ class Prep {
             foreach (var t in targets) {
                 uint tok = Convert.ToUInt32(t[0], 16);
                 Marker(50000 + mi++);
-                ForceAndDump(mod, tok, t[1], outDir);
+                ForceAndDump(mod, tok, t[1], OutDir);
                 Marker(50000 + mi++);
             }
         } else if (mode == "agcall") {
@@ -111,7 +119,7 @@ class Prep {
             } catch (Exception ex) { Log("[prep] EVA natural EX: " + Chain(ex)); }
             Marker(60002);
             // 调用后再读一次目标方法的新鲜体
-            foreach (var t in targets) FreshDumpIfChanged(mod, Convert.ToUInt32(t[0], 16), t[1], outDir);
+            foreach (var t in targets) FreshDumpIfChanged(mod, Convert.ToUInt32(t[0], 16), t[1], OutDir);
         }
 
         if (!skipWalk) {
@@ -131,14 +139,14 @@ class Prep {
                     try {
                         if (m.IsGenericMethodDefinition) continue;
                         RuntimeHelpers.PrepareMethod(m.MethodHandle);
-                        if (FreshDumpIfChanged(mod, (uint)m.MetadataToken, ty.FullName + "::" + m.Name, outDir)) changed++;
+                        if (FreshDumpIfChanged(mod, (uint)m.MetadataToken, ty.FullName + "::" + m.Name, OutDir)) changed++;
                     } catch { }
                     if (sw.ElapsedMilliseconds > 8 * 60 * 1000) { Log("[prep] phase C time cap reached"); goto done; }
                 }
             }
         done:
             Log("[prep] phase C done: stubs=" + stubs + " changed=" + changed + " fail=" + dumpFail + " elapsed=" + sw.ElapsedMilliseconds + "ms");
-            File.WriteAllText(Path.Combine(outDir, "phaseC.summary"), "stubs=" + stubs + " changed=" + changed);
+            File.WriteAllText(Path.Combine(OutDir, "phaseC.summary"), "stubs=" + stubs + " changed=" + changed);
         }
 
         Marker(99999);
