@@ -633,3 +633,19 @@ ITP(06004196) 使用的静态：`_ExtractorVisitors`(B64✓已恢复) / `_Recomm
 
 - 旧 token（xixka）对原仓库无写权限（不能 push/dispatch）；fork 方案被 GitHub 自动删除（仓库内容触发审查）；**owner token 可用**，wb-c2 已快进合并 main（ebeef02→05e0652，纯增量：新探针/C2 链/host6 v5/agscan/agfix 修复，无覆盖）
 - ttd-prep 首轮完整验证 run：40064657856（origin/main）
+
+### v135 实测（C2 首战告捷：两 ctor 真体已恢复）
+
+**C2 抓取成功**（prep managed/agcall，官方 md5 A12B5C573E1B54E98CCCC29351EAA066 引导后新鲜读体）：
+- `RequestWorker::.ctor 06002AF0` = **317B 真体**（80 指令；v132 视图是 4B 桩）
+- `TemplateInitializer::.ctor 06002AF7` = **325B 真体**+1 EH（catch ExtendedProxy/<>c；v132 视图 4B 桩）
+- EVA 06002F81=358B、InstantiateRandomIterator 06002B06=243B、ITP 06004196=446B（官方内存视图，供对照）
+- 机制确认：Reactor 在**首次执行时原地解密**方法体（"before ilSize=317"——boot 期 RequestWorker.cctor 已触发解密），PrepareMethod 不解密桩（phase C 248 桩 changed=0）
+
+**v135 = v132 + 两 ctor（bodyswap 三件套）已推送**。probe2/UI Probe（run 40068623507/40068625457）：
+- 真实启动链打通到更深：`StatelessModel.SearchAdapter → EVA → WriteRequest → RequestWorker.cctor → new RequestWorker() → ctor 执行 → ParserValidator.ExecuteExplorer NRE → 0xE0434352 崩溃`
+- **关键结构发现**：`_RequestSorter` 的唯一赋值点在 RequestWorker.ctor 真体内（`IL_00FB: ldsfld ParserValidator::UpdateFunction → ExecuteExplorer(s,s,del) → newobj TemplateInitializer::.ctor(s,s) → stfld _RequestSorter`）——之前"全模块 0 stsfld"是因为它是 **stfld 实例字段**且藏在加密 ctor 里
+- 下一断点：`ParserValidator` 是 MulticastDelegate，`UpdateFunction` 静态委托字段在 v135 无任何 stsfld/newobj（已扫全模块）→ 赋值方法在官方引导期解密的加密方法里
+- **真 EVA 语义**（358B 全读通）：case0 `DefineTransferableRecord` 的**布尔值穿越两条 stloc 被 brfalse 消费**（业主"第 0 块布尔参与状态机推进"实证）；case1/2 取代理用户名/密码（PatchList+HandleFormatter）；case3 `new NetworkCredential(V_0,V_1)` → 全局代理安装。**case0 检查段不可伪造：true=跳过凭证安装，false=用空凭据继续，都是错语义**
+
+**refscan 模式已上线**（prep.cs）：官方引导后全量 IL 字节扫 `newobj ParserValidator::.ctor(06004719)`/`stsfld UpdateFunction`/`stsfld WatchSpec`，命中即抓真体——下一轮 v136 的数据源。
