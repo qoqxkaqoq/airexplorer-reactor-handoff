@@ -1,0 +1,103 @@
+name: bootcfg-probe
+# 复现真机"有配置"启动路径: 官方跑一次生成默认配置 → 用该配置分别启动 官方/v139 对比
+# 若 v139(有配置) 卡死/无窗而官方秒开 → cdb attach 抓全线程托管栈定位撞桩点
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: '对比对象 exe（默认 v139）'
+        required: false
+        default: 'exes/AirExplorer_v139.exe'
+
+jobs:
+  bootcfg:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载解包 WinDbg(cdb)
+        shell: pwsh
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          Invoke-WebRequest -Uri "https://aka.ms/windbg/download" -OutFile "D:\wd.appinstaller"
+          [xml]$x = Get-Content D:\wd.appinstaller
+          Invoke-WebRequest -Uri $x.AddOns.Package.Uri -OutFile "D:\wd.msix"
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\wd.msix | Out-Null
+          $cdb = Get-ChildItem -Recurse D:\wd -Filter cdb.exe | Select-Object -First 1
+          if (-not $cdb) { exit 1 }
+          $cdb.FullName | Set-Content D:\wd\cdb.txt
+
+      - name: 官方安装包解压
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\out | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          if (-not (Test-Path "app\AirExplorer.exe")) { throw "extract failed" }
+
+      - name: 第1步 官方跑 60s 生成默认配置
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          $p = Start-Process -FilePath "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru
+          Start-Sleep -Seconds 60
+          if (-not $p.HasExited) { $p.Kill(); Start-Sleep -Seconds 3 }
+          Get-ChildItem "$env:APPDATA\AirExplorer" -ErrorAction SilentlyContinue | Format-Table Name,Length | Out-String | Write-Host
+          if (Test-Path "$env:APPDATA\AirExplorer\airexplorer.xml") {
+            Copy-Item "$env:APPDATA\AirExplorer\airexplorer.xml" C:\out\seed_airexplorer.xml
+            Write-Host "SEED-OK"
+          } else {
+            Write-Host "官方未生成 airexplorer.xml，列出实际生成的内容:"; Get-ChildItem "$env:APPDATA\AirExplorer" -Recurse -ErrorAction SilentlyContinue | Format-Table FullName,Length | Out-String | Write-Host
+          }
+
+      - name: 第2步 清配置 → 官方(带种子配置)启动 45s
+        shell: pwsh
+        run: |
+          Remove-Item "$env:APPDATA\AirExplorer" -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path "$env:APPDATA\AirExplorer" | Out-Null
+          Copy-Item C:\out\seed_airexplorer.xml "$env:APPDATA\AirExplorer\airexplorer.xml" -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru
+          $t0 = Get-Date
+          $shown = $false
+          for ($i = 3; $i -le 45; $i += 3) {
+            Start-Sleep -Seconds 3
+            if ($p.HasExited) { Write-Host "OFFICIAL exited code=$($p.ExitCode)"; break }
+            $wins = @(Get-Process -Id $p.Id -ErrorAction SilentlyContinue | ForEach-Object { $_.MainWindowTitle }) | Where-Object { $_ }
+            if ($wins) { Write-Host ("OFFICIAL 主窗口出现于 t={0}s title={1}" -f $i, ($wins -join "|")); $shown = $true; break }
+          }
+          if (-not $shown -and -not $p.HasExited) { Write-Host "OFFICIAL 45s 无主窗口" }
+          if (-not $p.HasExited) { $p.Kill(); Start-Sleep -Seconds 3 }
+
+      - name: 第3步 换 v139 + 同一配置 → 启动 60s
+        shell: pwsh
+        run: |
+          $cand = "${{ github.event.inputs.candidate }}"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/$cand" -OutFile "app\AirExplorer.exe"
+          Write-Host "v139 md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
+          Remove-Item "$env:APPDATA\AirExplorer" -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path "$env:APPDATA\AirExplorer" | Out-Null
+          Copy-Item C:\out\seed_airexplorer.xml "$env:APPDATA\AirExplorer\airexplorer.xml" -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru
+          $shown = $false
+          for ($i = 3; $i -le 60; $i += 3) {
+            Start-Sleep -Seconds 3
+            if ($p.HasExited) { Write-Host "V139 exited code=$($p.ExitCode)"; break }
+            $wins = @(Get-Process -Id $p.Id -ErrorAction SilentlyContinue | ForEach-Object { $_.MainWindowTitle }) | Where-Object { $_ }
+            if ($wins) { Write-Host ("V139 主窗口出现于 t={0}s title={1}" -f $i, ($wins -join "|")); $shown = $true; break }
+          }
+          if (-not $shown -and -not $p.HasExited) {
+            Write-Host "V139(有配置) 60s 无主窗口 —— cdb attach 抓全线程托管栈"
+            $cdb = (Get-Content D:\wd\cdb.txt).Trim()
+            & $cdb -p $p.Id -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; .threads; ~*e !clrstack; qd" 2>&1 | Out-File C:\out\v139_stacks.log -Encoding utf8
+            Get-Content C:\out\v139_stacks.log -Tail 80
+          }
+          if (-not $p.HasExited) { $p.Kill() }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bootcfg-out
+          path: |
+            C:\out\v139_stacks.log
+            C:\out\seed_airexplorer.xml
