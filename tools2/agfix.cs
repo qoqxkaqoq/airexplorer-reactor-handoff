@@ -86,7 +86,16 @@ class AgFix {
             }
             if (end < 0) continue;
             for (int k = i; k < end; k++) il[k].OpCode = OpCodes.Nop;
-            il.Insert(end, new Instruction(OpCodes.Ldc_I4_0));
+            // 按目标局部变量类型发默认值(int→ldc.i4.0, 引用类型→ldnull) — 类型不符=InvalidProgram
+            Instruction def;
+            var loc = il[end].Operand as Local;
+            var lt = loc != null ? loc.Type : null;
+            var et = lt != null ? lt.GetElementType() : ElementType.Object;
+            if (lt == null) def = new Instruction(OpCodes.Ldc_I4_0);
+            else if (et == ElementType.I4 || et == ElementType.U4 || et == ElementType.I1 || et == ElementType.U1 || et == ElementType.I2 || et == ElementType.U2 || et == ElementType.Boolean || et == ElementType.Char) def = new Instruction(OpCodes.Ldc_I4_0);
+            else if (et == ElementType.I8 || et == ElementType.U8) def = new Instruction(OpCodes.Ldc_I4_0);
+            else def = new Instruction(OpCodes.Ldnull);
+            il.Insert(end, def);
             n++;
             i = end;
         }
