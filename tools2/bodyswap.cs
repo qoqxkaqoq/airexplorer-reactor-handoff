@@ -336,14 +336,32 @@ class BodySwap {
                     }
                     if (depth != 0) return null;
                     string block = s.Substring(i + 2, j - i - 4);
-                    int kdepth = 0, comma = -1;
+                    // 兼容两种泛型格式: 紧凑 [[A]][[B]]（每块一个参数）与
+                    // CLR 完整 [[A, asm],[B, asm]]（整块含多参数, 分隔符是平衡点上的 "]," + "["）
+                    var segs = new List<string>();
+                    int bal = 0, segStart = 0;
                     for (int k = 0; k < block.Length; k++) {
-                        if (block[k] == '[') kdepth++;
-                        else if (block[k] == ']') kdepth--;
-                        else if (block[k] == ',' && kdepth == 0) { comma = k; break; }
+                        if (block[k] == '[') bal++;
+                        else if (block[k] == ']') {
+                            if (bal == 0 && k + 2 < block.Length && block[k + 1] == ',' && block[k + 2] == '[') {
+                                segs.Add(block.Substring(segStart, k - segStart));
+                                k += 2; segStart = k + 1;
+                                continue;
+                            }
+                            bal--;
+                        }
                     }
-                    string typeName = comma > 0 ? block.Substring(0, comma).Trim() : block.Trim();
-                    args.Add(ParseType(typeName));
+                    segs.Add(block.Substring(segStart));
+                    foreach (var seg in segs) {
+                        int kdepth = 0, comma = -1;
+                        for (int k = 0; k < seg.Length; k++) {
+                            if (seg[k] == '[') kdepth++;
+                            else if (seg[k] == ']') kdepth--;
+                            else if (seg[k] == ',' && kdepth == 0) { comma = k; break; }
+                        }
+                        string typeName = comma > 0 ? seg.Substring(0, comma).Trim() : seg.Trim();
+                        args.Add(ParseType(typeName));
+                    }
                     i = j;
                 } else i++;
             }

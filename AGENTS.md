@@ -23,9 +23,11 @@
 | C 线脱壳重建 | 🗄️ **已归档**（`docs/ARCHIVE_c-line.md`；最高产物 v140：进程活、进消息循环、0 窗体） |
 | 窗体创建点之谜 | ✅ 已解并归档（InitializerReg=ApplicationContext，ctor 空壳是根因——重启 C 线先读归档文档第二节） |
 | **A 线：激活/便携/暗桩目标定位** | ✅ 详见 board/agents/wb-reverser.md（AssertValidLicense 明文、GetFolderPath 入口） |
-| A 线：三路扫描（xref/字符串/委托回调） | ⏳ 进行中 |
-| A 线：tamper 验证实验 | ⏳ 待做（官方 exe 改 1 字节 → CI 启动测试） |
-| A 线：出包 | ⏳ 扫描后 |
+| A 线：三路扫描（xref/字符串/委托回调） | ✅ dscan 全量扫 16598 真体完成：激活=3 布尔字段门控、BC/字符串路径证伪、GFP 9 点、暗桩清单（见 board） |
+| A 线：A1 激活包 | ✅ 出包成功 swapped=6 fail=0（`exes/AirExplorer_A1lic.exe`，tools2/a1patch.cs），⏳ 待 ui-probe CI 验证 |
+| A 线：tamper 验证实验 | ⏳ 待做（官方 exe 改 1 字节 → CI 启动测试；A1lic 本身就是官方派生改体，CI 结果同时回答 tamper 问题） |
+| A 线：A3 便携化 | ⏳ 待做（9 个 GetFolderPath 调用点重定向 exe\data，清单见 board） |
+| A 线：暗桩清理 | ⏳ 待做（DispatcherInitializer 8 Process 反射 + 06004194 Debugger + Timer，清单见 board） |
 
 **⚠️ 历史修正**：旧记录"v139 主窗口完整渲染 ✅ / Register account 对话框 ✅"**已证伪**——带截图的成功 run（40088489266）`_candidate.txt = candidate: official`（官方基线），v139 真实 ui-probe = windows=0。勿再引用。
 
@@ -46,6 +48,8 @@
 3. **验收只认 `tools/ci/probe.ps1`（ui-probe workflow）**——`ci/probe.ps1`（ui-verify 用）启动方式不同且不关对话框，v66/v59/v70 在它下面全显示"无窗"，**结论不可比**（对照实验 run 39882798316）。
 4. **nbjit 的 VMT hook 从未工作**——force 模式的 dump 全是 managed 层 forcedump 写的。抓"执行流方法"（forcedump failed 名单，如 `RequestVerifierTransformer::.ctor 06003909`）**只能靠 TTD**。
 5. **网络**：git 直连不通走 `https://p.xixky.eu.org/https://...`；API 直连可用但认证被掐时用 `GH_API_BASE=https://p.xixky.eu.org/https://api.github.com python3 scripts/gh_sync.py push`；artifact 下载需 302 location 原样拼代理 + `--path-as-is` + **不带** Authorization。
+6. **手工 IL 字节里的 token 是小端**：0x0A000188 → `{88 01 00 0A}`。写成 `{88 01 0A 0A}` = rid 越界 → bodyswap `[bad-operand]`。报 null operand 先查字节序。
+7. **bodyswap ParseType 兼容两种泛型格式**：紧凑 `Dict`2[[A]][[B]]` 与 CLR 运行时完整 `Dict`2[[A, asm],[B, asm]]`（块内多参数，分隔符=平衡点上的 `],[ `）→ loc_official.zip 的 .loc 可直接用。
 
 ## 🗺️ 路线图（A 线，按优先级）
 

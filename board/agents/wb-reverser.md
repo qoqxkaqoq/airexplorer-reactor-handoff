@@ -807,3 +807,31 @@ entry V_0=5 → state5: ServicePointManager.SecurityProtocol |= 3840 (TLS) → l
 - 无 ConfigurationManager/AppSettings 使用；无原生 portable 支持；无 CheckLicense 类联网方法名（是否联网校验待读 06000CEE IL 确认）
 - 方案定案：A2 公钥替换+自签（首选）→ A1 IL 直改（退路）；暗桩处理走「NOP 调用点/改分支」阶梯，只有必须理解加密体时才动用归档的 C 线资产
 - 下一步：①xref 06000CEE/枚举调用点 ②strmap 特征词 ③委托表 Timer 回调 ④tamper 验证实验 ⑤出包
+
+---
+
+## 2026-10-24 深夜 · dscan 全量扫描 + A1 激活包出包成功（6/6）
+
+**工具**：`tools2/dscan.cs`（dscan8.csproj）——扫 16598 官方真体 dump 的通用扫描器。四种模式：全量分类扫描 / `one`（单方法带符号反汇编）/ `enum`（枚举字段）/ `mrf`（MemberRef/TypeRef 名字搜索）。分类：BC/GFP/REG/TIMER/NET/PROC/DIAG/ENV/GATE/LICCALL/LICFLD/STRDEC/STR。
+
+**扫描结论（全部实证）**：
+1. **BouncyCastle 路径证伪**：16350 真体里 BC 仅 1 处引用（06003665 → Sha1Digest::.ctor，非 RSA）→ RSA 签名验证从未在 dump 会话中 JIT，靠 BC 找激活此路不通
+2. **字符串路径证伪**：license.xml(76744) 等 9 个激活特征 id 在真体中 0 命中（含 xor 链常量求值后）→ 字符串引用藏在加密资源绑定表，IL 层无迹
+3. **激活门控链全貌**：激活状态 = 3 个布尔实例字段（_IsDecoratorProvider 04000C3D / m_IsScopeModel 04000C4A / _IsModelRunner 04000C4B），不经过 IterableDicAggregator
+   - `06002127 AccessibleClient::TestCollector` = `_IsDecoratorProvider ? 1 : 0`；`06003AC8 IterableDicAggregator::TestCollector` = 永远 return 0；`06003AC9 SaveModularProcessor` = 官方就是 no-op
+   - 写者：06002133(@0x290 false→降级点, @0x2E5 字典命中 true)、06002145(@0x120 false→降级点)、06002144 Lock(@0x285 true)、0600217A(@0x30F/0x41A 从 Nullable<bool> 取)
+   - 纯 getter：0600212A=`return _IsDecoratorProvider`(7B)、06002157=`return _IsModelRunner`(7B)、0600215B=`return transformableModels`(7B)
+4. **代理桥发现（A1 关键）**：`060059C4 GlobalViewerValidator::ExecuteExplorer` = `arg1.Invoke(arg2)` 纯转发（10B、无 locals、无 EH），全 dump 仅 2 个调用点（0600217A 的两个许可字段写入 + 06003A7F 喂 StopNode(bool)）→ 补它一处即同时强制两个 AlphabeticModel 许可字段，绕开 0600217A 无 .loc 的问题
+5. **GFP 清单（A3 便携化目标，9 调用点）**：060028BF/C0/C1 DividedConsumerAggregator→UserProfile(40)；06002AF6/06001260→ApplicationData(26)；06002CC2→Desktop(0)；06002F2F→13；06003D01→17；060004AA→37
+6. **暗桩清单**：DispatcherInitializer 8 方法引用 Process 反射（FileVersionInfo/Modules/GetCurrentProcess/ModuleMemorySize/BaseAddress/Id/MainModule/ModuleName）；06004194 DefineActiveEvent 用 Debugger.get_IsAttached
+
+**A1 激活包（tools2/a1patch.cs + bodyswap）—— swapped=6 fail=0，产物 exes/AirExplorer_A1lic.exe**：
+- P1 06002133@0x290 ldc.i4.0→1（P2 06002145@0x120 同理）
+- P3 0600212A / P4 06002157 / P5 06002127 体替换 `{17 2A}`（恒 true / 1）
+- P6 060059C4 体替换 `{17 73 88 01 00 0A 2A}` = `ldc.i4.1; newobj Nullable<bool>::.ctor(0x0A000188); ret`（无 locals，直接返回 Nullable<bool>(true)）
+
+**两个新教训（防复踩）**：
+1. **手工 IL 字节里的 token 是小端**：0x0A000188 → `{88 01 00 0A}`。写成 `{88 01 0A 0A}` = 0x0A0A0188（rid 越界）→ bodyswap ResolveToken 返回 null → `[bad-operand]`。该症状先查字节序，别急着怀疑 dnlib
+2. **bodyswap ParseType 已升级**：现在同时兼容紧凑 `Dict`2[[A]][[B]]` 与 CLR 运行时完整格式 `Dict`2[[A, mscorlib, ...],[B, ...]]`（块内多参数，分隔符=平衡点上的 `],[ `）→ loc_official.zip 的 .loc 可直接用，无需手工转格式
+
+**下一步**：ui-probe CI 验证 A1lic 启动 → A3 便携化（9 个 GFP 调用点重定向 exe\data）→ 暗桩逐点处理 → 长稳验证
