@@ -27,7 +27,7 @@
 | A 线：A1 激活包 | ⛔ **补丁逻辑完成但宿主死刑**——a1patch 5+1 处全成功（swapped fail=0），但 CI 四连测证明 **nb_original 裸基座就 0 窗 CPU 100% 死循环**（与补丁无关），nb_original 族不可用（详见 board 2026-10-25 节） |
 | A 线：壳机制边界 | ✅ 已钉死：baseline 原位全是桩（真体运行时从 3.2MB 负载回填）；dnlib 重写必崩；唯一文件级路=负载密文 known-plaintext 重加密（需解 token→(offset,len,key) 表） |
 | A 线：tamper 验证实验 | ✅ 间接完成：nb_original+6 补丁存活 150s 无自毁（壳不杀文件改动，但也没用因为宿主本身 0 窗） |
-| A 线：A3 便携化 | 🔄 方向改为 launcher 环境重定向（不改 exe：设 USERPROFILE/APPDATA 后启动官方原版，零注入零布局破坏） |
+| A 线：A3 便携化 | ✅ **launcher 方案 CI 全验收通过**（run 40115006727）：`portable/AirExplorer_Portable.cmd` 重定向 USERPROFILE/APPDATA 等到 exe 旁 `data\`，官方 exe 零修改零注入；Accounts.xml 等用户数据落 data\、真实 profile 零残留、主窗完整渲染（MAIN_CONTENT=CONTENT）；依赖集固化 `portable/deps.zip` |
 | A 线：暗桩清理 | ⏳ 依赖负载重加密路线（暗桩在加密体里，文件级改不到） |
 
 **⚠️ 历史修正**：旧记录"v139 主窗口完整渲染 ✅ / Register account 对话框 ✅"**已证伪**——带截图的成功 run（40088489266）`_candidate.txt = candidate: official`（官方基线），v139 真实 ui-probe = windows=0。勿再引用。
@@ -52,7 +52,7 @@
 6. **手工 IL 字节里的 token 是小端**：0x0A000188 → `{88 01 00 0A}`。写成 `{88 01 0A 0A}` = rid 越界 → bodyswap `[bad-operand]`。报 null operand 先查字节序。
 7. **bodyswap ParseType 兼容两种泛型格式**：紧凑 `Dict`2[[A]][[B]]` 与 CLR 运行时完整 `Dict`2[[A, asm],[B, asm]]`（块内多参数，分隔符=平衡点上的 `],[ `）→ loc_official.zip 的 .loc 可直接用。
 8. **baseline(A12B5C57) 原位全是桩**：官方 exe 的保护方法原位 = `nop;nop;nop;ret` 族桩，真体运行时从 .text 0x620000~0x920000 的 3.2MB 加密负载解密回填内存。**dscan one 的反汇编来自 dump 不是 exe 原位**，别再被它骗。
-9. **nb_original 是塌缩坏宿主**：裸基座 CI 0 窗 CPU 100% 死循环（150s 不停）。它 + 任何补丁 = 全灭。唯一 CI 验证能出窗的官方 exe = `exes/AirExplorer_baseline_verified.exe`（A12B5C57）。官网 2026-10-24 当天更新了安装器，新安装器已解不出主程序——**别再指望从官网重下**。
+9. **nb_original 是塌缩坏宿主**：裸基座 CI 0 窗 CPU 100% 死循环（150s 不停）。它 + 任何补丁 = 全灭。唯一 CI 验证能出窗的官方 exe = `exes/AirExplorer_baseline_verified.exe`（A12B5C57）。**安装器误判已纠正**（board 10-25-II）：官网安装器（md5 1d1a829e）实测完整——解出 A12B5C57 主程序+全套依赖；之前"新安装器解不出主程序"是**下载截断**，官网下载路径仍可用（保险起见 deps 已固化 `portable/deps.zip`）。
 
 ## 🗺️ 路线图（A 线，按优先级）
 

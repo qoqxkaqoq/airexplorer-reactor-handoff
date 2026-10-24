@@ -877,3 +877,55 @@ entry V_0=5 → state5: ServicePointManager.SecurityProtocol |= 3840 (TLS) → l
 1. launcher 便携方案先落地（不改 exe，立即交付业主可用物）
 2. 投入"解负载表"：起点 = 对比多方法 dump 明文与负载熵区，找 (offset,len,key) 结构；或 TTD 抓回填时刻看运行时读表的指针
 3. 解出表后 → known-plaintext 重加密 → 在 baseline 上实现 A1 五补丁 + A3 + 暗桩清理
+
+---
+
+## 2026-10-25 凌晨 II · C线归档完成 + A3 launcher 落地 + 负载表第一探（负结果）+ 安装器误判纠正
+
+### 1. C 线归档完成（业主指令：只做 A，B/C 放弃，C 资料入库）
+
+- **全量官方真体 dump 入库**：`work/dump_official_16598.zip`（5.4MB，md5 62170494e4faed8e19879b83d6e146e5）
+  - 来源：run 39864750444 的 nbjit-dump artifact（id 12463277861），下载验证 16598×m_*.bin + 2218×m_*.eh，24B 头格式抽检通过（06002133=24+946/maxStack=6、06000CEE=24+581、06004196=24+446/ehCount=2）
+  - forcedump failed 名单（06002BD1 InitializerReg..ctor 等）**不在** dump 里，与归档文档"TTD 补抓"记载一致
+  - 包内 MANIFEST.txt 记录来源与格式；`docs/ARCHIVE_c-line.md` 资产表已更新
+
+### 2. 负载表第一探：XOR/keystream 假设证伪（payldscan，重要负结果）
+
+- 工具：`tools2/payldscan.cs`（滑动全负载 XOR 周期性检测，周期 1/2/4/8/16）
+- 输入：baseline(A12B5C57) 负载区 file[0x620000..0x920000] + dump 24 个最大方法体（IL 8970~66996B）
+- 结果：**熵 7.999 bits/byte（满熵），24 样本 × 3.2MB 全偏移零周期命中**
+- 结论：负载不是"重复 keystream 流密码"——**known-plaintext XOR 重加密路线证伪**。负载是块密码（AES 族）或逐体独立密钥。剩余唯一文件级路 = TTD 抓回填时刻的解密例程（定位算法+表指针），成本高，另立战役。
+
+### 3. 安装器误判纠正（推翻 board 昨日结论 2）
+
+- "官网当天更新、新安装器解不出主程序" **是误判**——16:35 UTC 那次是**下载截断**（NSIS solid 尾部截掉，AirExplorer.exe 在 solid 流后段）
+- 实证：19:26 UTC 下载的安装器（md5 1d1a829e7aceaee7113723d0d4a04dc6，9388096B）7z 解包 = **A12B5C57 主程序（与 baseline_verified 逐字节同 md5）+ 全套依赖**（20 DLL + config + Language 1.2MB + runtimes/WebView2Loader）
+- ui-probe 的官网下载路径仍然可用；deps 已固化入库 `portable/deps.zip`（3.7MB，md5 a78554909c045419c20042a4572f1389），CI 从此不依赖官网
+
+### 4. A3 launcher 落地（portable/）
+
+- `portable/AirExplorer_Portable.cmd`：重定向 USERPROFILE/HOMEDRIVE/HOMEPATH/APPDATA/LOCALAPPDATA/TEMP/TMP → exe 旁 `data\`，`start /wait` 保持进程树，官方 exe 零修改零注入
+- `tools/ci/probe.ps1` 兼容性扩展：Get-TreePids 子进程树枚举（直接启动 exe 行为不变）+ 收尾 taskkill /T /F + 显式 exit 0（否则 GH pwsh wrapper 把 taskkill 返回码当步骤退出码）
+- `.github/workflows/a3-portable.yml`：三验收 = 出窗（树枚举）+ app/data 落盘 + 真实 profile 无残留
+
+### 5. A3 CI 第一轮（run 40114472443）结果与根因
+
+- 进程树枚举生效、launcher 启动成功、**app 主动把数据写进 `data\profile\AppData\Roaming\AirExplorer`**（便携核心已验证）+ 真实 profile 零残留
+- 但 ~2s 后弹 "Error detected"：`FileNotFoundException: '...utral, PublicKeyToken=null'` @ `TreeFunction..ctor` ← `AdvancedClient.MergeRequest(OnLoad)`
+- 根因：**workflow 只放了裸 exe，没有官方依赖集**（老成功 run 的 app 目录含 20 个 DLL + config）；大概率是 BouncyCastle.Crypto（许可相关，token=null）
+- 修复：deps.zip 解包进 app → 重跑（见下轮）
+
+### 6. A3 launcher CI 第二轮（run 40115006727）—— 全验收通过 ✅
+
+| 验收点 | 结果 |
+|---|---|
+| 出窗 | **windows=20**，"Register account" 对话框正常出现（官方无账户标准行为），探针关闭后主窗完整渲染 **MAIN_CONTENT=CONTENT**（variance=3056, 945x788）：工具栏/Accounts 页/侧栏树齐全 |
+| data 落盘 | **`data\profile\AppData\Roaming\AirExplorer\Accounts.xml`（104B）** ← 账户数据真实写进 data\；系统 iconcache 也跟随 USERPROFILE 进 data\profile |
+| 真实 profile 残留 | **零**（PRE/POST 均空） |
+| Error detected | **消失**——依赖集修复完全对症 |
+
+**A3 业主交付物**：官方 `AirExplorer.exe`（A12B5C57，未动一字节）+ `portable/AirExplorer_Portable.cmd` + `portable/deps.zip`（解包到同目录）。删除 data\ = 干净重置，拷贝 data\ = 备份迁移。
+
+**激活直通（A1）与暗桩清理（A3-2）状态不变**：负载满熵 + XOR 假设证伪（见上第 2 节）→ 文件级路只剩 TTD 解密例程逆向；否则接受"官方原样 + 便携"为 A 线交付上限。
+
+**本轮提交链**：1dc787a0（边界文档+a1inplace）→ ec47a6f7（dump 归档）→ 6fcf4337（launcher 初版）→ ad4c172a（deps 修复）→ 本提交（验收结论+payldscan）。
