@@ -89,11 +89,12 @@ jobs:
         run: |
           $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
-          @"
-.load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll
-sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !pe; .echo ===END-EXC===; g" clr
-g
-"@ | Set-Content -Path D:\cdb_cmd.txt -Encoding ASCII
+          $lines = @(
+            '.load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll'
+            'sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !pe; .echo ===END-EXC===; g" clr'
+            'g'
+          )
+          Set-Content -Path D:\cdb_cmd.txt -Value $lines -Encoding ASCII
           Push-Location app
           $proc = Start-Process -FilePath $cdb -ArgumentList "-o AirExplorer.exe -G -y `"$sym`" -cf D:\cdb_cmd.txt -logo C:\out\official_exc.log" -PassThru -NoNewWindow
           Pop-Location
@@ -145,11 +146,12 @@ g
         run: |
           $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
-          @"
-.load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll
-sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !pe; .echo ===END-EXC===; g" clr
-g
-"@ | Set-Content -Path D:\cdb_cmd.txt -Encoding ASCII
+          $lines = @(
+            '.load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll'
+            'sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !pe; .echo ===END-EXC===; g" clr'
+            'g'
+          )
+          Set-Content -Path D:\cdb_cmd.txt -Value $lines -Encoding ASCII
           Push-Location app
           $proc = Start-Process -FilePath $cdb -ArgumentList "-o AirExplorer.exe -G -y `"$sym`" -cf D:\cdb_cmd.txt -logo C:\out\cand_exc.log" -PassThru -NoNewWindow
           Pop-Location
