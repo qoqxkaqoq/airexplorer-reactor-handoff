@@ -785,3 +785,25 @@ entry V_0=5 → state5: ServicePointManager.SecurityProtocol |= 3840 (TLS) → l
 2. cdb 命令行：**所有 cdb 选项必须在 debuggee 命令行之前**，`cdb -o app.exe -G -y ...` 会把 `-G -y ...` 当成 app.exe 的参数
 3. job logs API 302 到 blob 后带 Authorization 会 401 → 用 artifact 下载或 `curl redirect_url 拼代理`（同 artifact 纪律）
 4. workflow_dispatch 对新推 workflow 报 422 "does not have workflow_dispatch" = YAML 解析失败的伪装症状（本例=here-string 截断），本地 `python3 -c "import yaml; yaml.safe_load(...)"` 先验
+
+---
+
+## 2026-10-24 晚 · 窗体创建点之谜破解 + 工程方向变更（A 线启动，C 线归档）
+
+**窗体创建点之谜——已破解（bootcfg run 40102463958 注入日志实证）**：
+- ctor_log.txt：`VDYN×4 + INITREG×4`，其余 TAG 全 0；6s 主线程在 `RunMessageLoop(ApplicationContext)` 消息循环内空转，`!dumpheap -type AdvancedClient` = **0 实例**（官方 @2s = 1 实例）
+- **InitializerReg 继承 ApplicationContext** = `Application.Run(ctx)` 的 ctx 本体
+- `VDYN(06002BCE)` = 标准双检锁懒汉单例：`Monitor.TryEnter(obj, ref ok)` / `Monitor.Exit(obj)` 代理（0400241F/04002420）+ `if(_ParserModel==null) _ParserModel=new InitializerReg()`。SearchAdapter 调 4 次正常，**new 4 次 = 每次 ctor 都抛异常**（单例字段写不进）
+- **根因**：候选版 `InitializerReg..ctor(06002BD1)` = 5×nop+ret 空壳 → ①不初始化 `regRecommenderList`（MergeManager 首行 `.Add()` 即 NRE）→ ②不调 MergeManager → ③不设 MainForm → ApplicationContext 无窗体空转
+- **MergeManager(06002BD6) 状态机全解**（候选版明文真体）：`new AdvancedClient(false)` → `regRecommenderList.Add` → `FormClosed += OpenScheduledBuffer`（代理 VerifyAdvancedOrder）→ `FormClosing += OpenScalableWriter`（代理 PauseDispatcher）→ `Show()`（代理 ProcessPool=Control::Show）
+- 官方 ctor 真体（加密）必然 = `regRecommenderList=new List<>() + MergeManager() + MainForm=SaveIdentifiableAuthenticator()`（解释静态扫描 List<AdvancedClient>::.ctor 0 命中——在加密体里）
+- 重启 C 线第一步：bodyswap 官方 06002BD1 三件套 → v142
+
+**A 线启动（业主方向变更：只做官方 exe 静态改版；注入类/B 组放弃；C 组归档至 docs/ARCHIVE_c-line.md）**：
+- 需求三件：①激活恒通过 ②数据落 exe\data ③暗桩清理
+- **激活目标已定位**：`ExpandableCommand/<AssertValidLicense>d__8::MoveNext (06000CEE)` = **明文 150 条 IL、5 locals**（官方 nb_original 与候选版一致），基于 **Portable.Licensing** 库（XML license + RSA）；配套 `CommandVSLicenseStatus`(0200058B 枚举，None=0)、`ModelAccountLicenseSource`(020005D7)
+  - LicenseStatus 使用点 = 功能门控：`AccessibleClient/AlphabeticModel/IterableDicAggregator` 各有 `TestCollector(→CommandVSLicenseStatus)` + `SaveModularProcessor(←CommandVSLicenseStatus)` 共 6 方法（06002127/28、06002154/55、06003AC8/C9）
+- **便携目标已定位**：`Environment::GetFolderPath(SpecialFolder)` = MemberRef 0A000159；调用类 4 个（CustomizableAggregator/RandomAttributeAggregator/FilteredModel/ConcreteStubAggregator）；注册表 MemberRef 存在（CurrentUser/GetValue/SetValue），首轮不动
+- 无 ConfigurationManager/AppSettings 使用；无原生 portable 支持；无 CheckLicense 类联网方法名（是否联网校验待读 06000CEE IL 确认）
+- 方案定案：A2 公钥替换+自签（首选）→ A1 IL 直改（退路）；暗桩处理走「NOP 调用点/改分支」阶梯，只有必须理解加密体时才动用归档的 C 线资产
+- 下一步：①xref 06000CEE/枚举调用点 ②strmap 特征词 ③委托表 Timer 回调 ④tamper 验证实验 ⑤出包
