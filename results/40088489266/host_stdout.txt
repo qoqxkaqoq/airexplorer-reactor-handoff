@@ -1,0 +1,4 @@
+[ost] loaded AirExplorer, Version=5.11.0.0, Culture=neutral, PublicKeyToken=null
+[ost] entry CloudClient.Models.StatelessModel::SearchAdapter
+[resolve] ok=50 bad=0
+host still running (UI alive) - killed
