@@ -649,3 +649,25 @@ ITP(06004196) 使用的静态：`_ExtractorVisitors`(B64✓已恢复) / `_Recomm
 - **真 EVA 语义**（358B 全读通）：case0 `DefineTransferableRecord` 的**布尔值穿越两条 stloc 被 brfalse 消费**（业主"第 0 块布尔参与状态机推进"实证）；case1/2 取代理用户名/密码（PatchList+HandleFormatter）；case3 `new NetworkCredential(V_0,V_1)` → 全局代理安装。**case0 检查段不可伪造：true=跳过凭证安装，false=用空凭据继续，都是错语义**
 
 **refscan 模式已上线**（prep.cs）：官方引导后全量 IL 字节扫 `newobj ParserValidator::.ctor(06004719)`/`stsfld UpdateFunction`/`stsfld WatchSpec`，命中即抓真体——下一轮 v136 的数据源。
+
+### v136-v138 迭代（委托绑定机制全解，启动链逼近模板注册）
+
+| 版本 | 变化 | 结果 |
+|---|---|---|
+| v136 | 手工 BCL 委托注入(dginject) | 首版踩坑: net8 dnlib Import 产生 `System.Net.Requests 8.0.0.0` 坏引用 → FileNotFound。**铁律: 注入引用必须复用模块既有 MemberRef/AssemblyRef, 禁止跨运行时 Import** |
+| v136b | 复用既有 MemberRef(0A0009F0/0A0012C3/0A0012C4) | ParserValidator/GetAnnotation/ValidateCustomProvider 三委托通 → 推进到 TI ctor 内 ArrangeAggregator NRE |
+| v137 | v135+6 委托类型真 cctor | 与 v135 逐字节相同(cctor 本来就是真的 — 它们调 TrackCompiler, 不是赋值点) |
+| **v138** | **dlgmap: 官方 MapScan 绑定表全量静态注入 1022 静态 + 2244 trampoline** | **RequestWorker.cctor 完整通过!** TI 四个模板字段与官方逐字节一致；断点收敛到 globalTemplate 空表 |
+
+**TrackCompiler 机制（本轮最重要的架构发现）**：
+- 委托赋值点 = 各委托类型 cctor 调 `DispatcherInitializer::TrackCompiler(RuntimeTypeHandle)` (06004193, 真体已通)
+- TrackCompiler 从加密清单资源 `CollectorTransaction.ValidatorProject`(26128B, v135 在) 解密构建 `m_LogicalProcessorMap`(fieldTok→valTok)
+- 然后按 type.GetFields(1064) 逐静态字段: map 查 token → ResolveMethod → `Delegate.CreateDelegate`(静态目标) 或 **DynamicMethod trampoline**(实例目标, bit30=0x40000000 标记 callvirt) → SetValue
+- **所有失败被静默吞**(try/catch pop/leave) — v132 线资源解密在此断(官方运行时 map 有 3266 条, v132 推断解密失败字段全空)
+- MapScan(prep.cs) 已 dump 全表: 3266 条 = 全模块 delegate 静态字段数, token 与 v135 100% 对齐(04002160→0A0009F0=String::Concat 实证)
+
+**当前精确卡点（globalTemplate 空表 → DefineTransferableRecord unbox null NRE）**：
+- 官方 probe2 实证：`globalTemplate={DefailtProxyAuth:True}`；v138 四字段与官方一致但 `Count=0`
+- 官方 CHAIN 实测: `VerifyCentralLocator=False`(配置文件不存在) 但 `GenerateAdjustableAggregator=True` → GAA 走 `brfalse→GenerateSortedArgument(new CommandFactory(_FilteredTemplateContent))` → 注册发生在此链
+- v138: GAA 返回 True 但未注册 → **`CommandFactory::.ctor 06002B51` 是 4B 桩** + **`_ExtendedTemplate`(PropertyLoaded 事件, 实例委托) 无人订阅**(处理器在加密方法, 全模块无 (Object,CommandFactory)→Void 签名匹配)
+- 注册动作 = `_ExtendedTemplate.Invoke(this, new CommandFactory(_FilteredTemplateContent))` — 处理器真体 + CommandFactory.ctor 真体 + add_PropertyLoaded 订阅点, 三件都在官方内存里 → 已扩 prep(dlgscan 实例委托读 + refscan newobj 监视) 抓取 → v139 数据源
