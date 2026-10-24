@@ -15,7 +15,18 @@ class JitCheck {
         var groups = new Dictionary<string, int>();
         var samples = new List<string>();
 
-        foreach (var t in asm.GetTypes()) {
+        Type[] allTypes;
+        try { allTypes = asm.GetTypes(); }
+        catch (System.Reflection.ReflectionTypeLoadException rtle) {
+            allTypes = rtle.Types;
+            Console.WriteLine("[jitcheck] GetTypes 部分失败: 加载失败 " + rtle.LoaderExceptions.Length + " 个类型, 明细(前10):");
+            for (int i = 0; i < rtle.LoaderExceptions.Length && i < 10; i++) {
+                var le = rtle.LoaderExceptions[i];
+                Console.WriteLine("  [loadeex] " + le.GetType().Name + ": " + (le.Message ?? "").Split('\n')[0]);
+            }
+        }
+        foreach (var t in allTypes) {
+            if (t == null) continue;
             MethodBase[] ms;
             try {
                 ms = t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
