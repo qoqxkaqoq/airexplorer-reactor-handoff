@@ -97,6 +97,11 @@ class Prep {
             new[] { "06002B0E", "TI::DefineTransferableRecord" },
             new[] { "06002B2D", "TI::InstantiateSeparatedChooser" },
             new[] { "06002B4A", "AggregatorLogger::ParseFlexibleAuthorizer" },
+            new[] { "06002985", "AdvancedClient::.ctor(Boolean) — 主窗体构造桩根因" },
+            new[] { "060029C1", "AdvancedClient::RequestCommonObserver — InitializeComponent 3675" },
+            new[] { "0600299E", "AdvancedClient::RequestIntegratedRecord — OnShown 弹注册框" },
+            new[] { "06002995", "AdvancedClient::SplitSynchronizer" },
+            new[] { "06002BD6", "InitializerReg::MergeManager — 主窗体自举" },
         };
         var mod = asm.GetModules()[0];
         int mi = 0;
