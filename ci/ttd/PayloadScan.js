@@ -1,17 +1,13 @@
-// PayloadScan v7 — v6 P3 int32 位运算截断修复 + 驱动器内存真体全量提取
-// v6 战果:
-//   P1 实锤: 每方法回填 = fat hdr(12B)+体前8B 写入 exe 槽位(5 dword), 完整 IL 在驱动器内存
-//   寄存器: rbx=负载条目偏移(Viewer资源) r10=rbx+0xA 读游标(+4/dword) r9=0x56FE8(资源大小) rsi=0x6e51d6f8
-//   06003909 窗口实为 9 方法族 06003909..06003911 (0F/10/11 新发现: codesize 0x480/0x5AE/0x684)
-//   P3 败因: JS 位运算 int32 截断(0x7ffba50b7000 & mask → 0xa50b0000) → 基址变负数
-//   驱动器 = 无模块映射动态可执行内存(0x7ffba50b7000 区), k 栈 retaddr 0x7ffba50bb1ae
-// v7 阶段:
-//   P1 同 v6(照旧)
-//   P2 !tt 首事件 → k → 算术页对齐 → 驱动器区边界探测(上下 64 页) → !address/lm 区间
-//   P3 bp writerIP 命中#1 → regs + P6(ct 缓冲区定位: r13/r14/栈候选 base + r10/rbx 读内存对照)
-//      → TTD "e" 执行查询(1MB 区) → IP 直方图 top30 → 最热 IP !tt → regs + u 反汇编(解密循环!)
-//   P5 s -d 在 exe 全区 + r13/r14 邻域搜已知 fat hdr(1b300700 等) → db 提取 06003909 等完整真体
-//   P4 !tt ladder 到后段 → SOS name2ee(改 late pos 解决 "Failed to request module list")
+// PayloadScan v8 — A1 两字节补丁数据收集: 五桩 RVA 回填事件 → rbx(条目偏移) + ct 缓冲全读
+// v6/v7 已证:
+//   回填 = fat hdr(12B)+体前8B 写 exe 槽位(5 dword); rbx=条目偏移(Viewer资源) r10=rbx+0xA 游标(+4/dword)
+//   r9=0x56FE8=Viewer资源大小; rsi=0x6e51d6f8 恒定; 写循环每 dword 一次(读ct→解密→写)
+//   dump 库 = 纯 body 明文(0600390C 双向吻合); res 原文 @0x3E698 指纹:
+//     b0ee75fc6be38b411b56 314bb1c35e624c7258b088e75ce40606 (hdr10B + ct16B)
+// v8 目标:
+//   P2 校准: 06003909 首事件枚举候选基址, 比对 res 原文指纹 → 确认 CTBASE(驱动器 ct 缓冲基址)
+//   P3: 五目标(06002133/45/2A/57/27)首事件 → regs(rbx/r9/r10) → 读 CTBASE+rbx 全量(0x400B)
+//       → [V8] ENT tok rbx=0x.. ct=<hex> → 离线 ks=ct^dump明文 → A1 两字节重加密
 "use strict";
 
 function initializeScript() {
@@ -41,8 +37,8 @@ for (var m of proc.Modules) {
     } catch (e) { }
 }
 var BASE = mod ? Number(mod.BaseAddress) : 0;
-log("[V7] module AirExplorer base=0x" + BASE.toString(16) + " modules=" + modList.length);
-if (!BASE) { log("[V7] FATAL no AirExplorer module"); return; }
+log("[V8] module AirExplorer base=0x" + BASE.toString(16) + " modules=" + modList.length);
+if (!BASE) { log("[V8] FATAL no AirExplorer module"); return; }
 function modOf(a) { for (var x of modList) if (a >= x.base && a < x.end) return x.name; return "?"; }
 function ExecuteCommand2(cmd) {
     var out = "";
@@ -61,7 +57,7 @@ function ecStr(r) {
     } catch (e2) { }
     try { return JSON.stringify(r); } catch (e3) { return "[unprintable]"; }
 }
-function EC(cmd) { var out = ExecuteCommand2(cmd); log("[V7|CMD] " + cmd + "\n" + out); return out; }
+function EC(cmd) { var out = ExecuteCommand2(cmd); log("[V8|CMD] " + cmd + "\n" + out); return out; }
 function memReadable(a) {
     try { host.memory.readMemoryValues(a, 1, 1); return true; } catch (e) { return false; }
 }
@@ -80,7 +76,7 @@ function evPos(w) {
 }
 function dumpRegs() {
     var regs;
-    try { regs = host.currentThread.Registers.User; } catch (e2) { log("[V7] no regs"); return null; }
+    try { regs = host.currentThread.Registers.User; } catch (e2) { log("[V8] no regs"); return null; }
     var names = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rip"];
     var rd = {};
     for (var rn of names) {
@@ -88,35 +84,36 @@ function dumpRegs() {
     }
     var s = "";
     for (var k in rd) s += k + "=0x" + rd[k].toString(16) + " ";
-    log("[V7] REGS " + s);
+    log("[V8] REGS " + s);
     return rd;
 }
-// 整数安全: JS 位运算 int32 截断 — 一律算术
-function pageDown(a) { return Math.floor(a / 0x10000) * 0x10000; }
 function parseHexTok(s) {
     var t = String(s).replace(/`/g, "").replace(/^0x/, "");
     if (!/^[0-9a-f]+$/i.test(t) || t.length < 8) return 0;
     return parseInt(t, 16);
 }
 
+// res_ErrorReceiver.ValidatorViewer.bin 指纹: @0x3E698 (10B hdr) + @0x3E6A2 (16B ct)
+var FPRINT = "b0ee75fc6be38b411b56" + "314bb1c35e624c7258b088e75ce40606";
+
 var TARGETS = [
-    { tok: "06003909", rva: 0x00334EB0, win: 0x2000 },
-    { tok: "06002BD1", rva: 0x0024EA40, win: 0x800 },
-    { tok: "060042B0", rva: 0x0040EE88, win: 8 },
-    { tok: "060042B1", rva: 0x0040F2A4, win: 8 },
-    { tok: "0600212A", rva: 0x00195D18, win: 16 },
+    { tok: "06003909", rva: 0x00334EB0, win: 0x2000, read: 0x400 },  // 对照(已知 rbx=0x3E698)
+    { tok: "06002133", rva: 0x00196088, win: 0x400, read: 0x400 },   // P1: body[0x290] 16→17
+    { tok: "06002145", rva: 0x001997C4, win: 0x400, read: 0x400 },   // P2: body[0x120] 16→17
+    { tok: "0600212A", rva: 0x00195D18, win: 0x400, read: 0x100 },
+    { tok: "06002157", rva: 0x0019A510, win: 0x400, read: 0x100 },
+    { tok: "06002127", rva: 0x00195CD4, win: 0x400, read: 0x100 },
 ];
 
-// ---------------- P1 ----------------
-log("[V7] PHASE1 TTD.Memory");
+// ---------------- P1: 回填写事件 ----------------
+log("[V8] PHASE1 TTD.Memory write events");
 var allEvents = [];
-var writerIPs = [];
 var firstPos = {};
 for (var t of TARGETS) {
     var va = BASE + t.rva;
     var cnt = 0;
     var evs = null;
-    try { evs = session.TTD.Memory(va, va + t.win, "w"); } catch (e) { log("[V7] query fail " + t.tok + ": " + e); continue; }
+    try { evs = session.TTD.Memory(va, va + t.win, "w"); } catch (e) { log("[V8] query fail " + t.tok + ": " + e); continue; }
     for (var w of evs) {
         cnt++;
         try {
@@ -124,264 +121,118 @@ for (var t of TARGETS) {
             var v = Number(w.Value) & 0xFFFFFFFF;
             var ip = Number(w.IP);
             allEvents.push({ tok: t.tok, addr: a, val: v, ip: ip });
-            if (writerIPs.indexOf(ip) < 0) writerIPs.push(ip);
             if (firstPos[t.tok] === undefined) firstPos[t.tok] = evPos(w);
-            if (cnt <= 60) log("[V7] EVT " + t.tok + " i=" + cnt + " addr=0x" + a.toString(16) + " val=" + hexW(v) + " ip=0x" + ip.toString(16) + " pos=" + evPos(w));
+            if (cnt <= 60) log("[V8] EVT " + t.tok + " i=" + cnt + " addr=0x" + a.toString(16) + " val=" + ("00000000" + (v >>> 0).toString(16)).slice(-8) + " ip=0x" + ip.toString(16) + " pos=" + evPos(w));
         } catch (e) { }
         if (cnt > 400) break;
     }
-    log("[V7] " + t.tok + " events=" + cnt);
-}
-function hexW(v) { return ("00000000" + (v >>> 0).toString(16)).slice(-8); }
-
-// 重建(同 v6)
-for (var t3 of TARGETS) {
-    if (t3.tok !== "06003909" && t3.tok !== "06002BD1") continue;
-    var tw3 = t3.win;
-    var bytes = {};
-    for (var ev2 of allEvents) {
-        if (ev2.tok !== t3.tok) continue;
-        var off = ev2.addr - (BASE + t3.rva);
-        if (off < 0 || off >= tw3) continue;
-        var v = ev2.val >>> 0;
-        for (var b = 0; b < 4 && (off + b) < tw3; b++) bytes[off + b] = (v >>> (8 * b)) & 0xFF;
-    }
-    var known3 = 0;
-    for (var k3 in bytes) known3++;
-    log("[V7] IL " + t3.tok + " reconstructed=" + known3 + "/" + tw3);
-    for (var row = 0; row < tw3; row += 256) {
-        var has = false;
-        for (var j3 = row; j3 < row + 256 && j3 < tw3; j3++) if (bytes[j3] !== undefined) { has = true; break; }
-        if (!has) continue;
-        var hexr = "";
-        for (var j4 = row; j4 < row + 256 && j4 < tw3; j4++) hexr += (bytes[j4] === undefined ? "??" : hexB(bytes[j4]));
-        log("[V7] IL " + t3.tok + " @" + row.toString(16) + " " + hexr);
-    }
+    log("[V8] " + t.tok + " events=" + cnt);
 }
 
-// ---------------- P2: 首事件 → 驱动器区边界 ----------------
-log("[V7] PHASE2 driver region discovery");
-var pos0909 = firstPos["06003909"];
-var natBase = 0, natEnd = 0;
-if (pos0909 && pos0909 !== "undef") {
-    EC("!tt " + pos0909);
-    var rd = dumpRegs();
-    var kOut = ExecuteCommand2("k 15");
-    log("[V7|CMD] k 15\n" + kOut);
+// 候选基址枚举
+function collectCands(rd) {
     var cands = [];
-    var lkArr = kOut.split("\n");
-    for (var lk of lkArr) {
-        var cols = lk.trim().split(/\s+/);
-        for (var ci = 1; ci < cols.length && ci <= 3; ci++) {
-            var vv = parseHexTok(cols[ci]);
-            if (vv > 0x7ff000000000 && modOf(vv) === "?") cands.push(vv);
-        }
-    }
-    cands.sort(function (a, b) { return a - b; });
-    log("[V7] P2 driver addrs from k: " + cands.map(function (x) { return "0x" + x.toString(16); }).join(", "));
-    if (cands.length > 0) {
-        var lo = pageDown(cands[0]);
-        natBase = lo;
-        for (var down = 1; down <= 64; down++) {
-            var probe = lo - down * 0x10000;
-            if (!memReadable(probe)) { natBase = probe + 0x10000; break; }
-            natBase = probe;
-        }
-        var hi = pageDown(cands[cands.length - 1]) + 0x10000;
-        natEnd = hi;
-        for (var up = 1; up <= 64; up++) {
-            var probe2 = hi + up * 0x10000;
-            if (!memReadable(probe2)) { natEnd = probe2; break; }
-            natEnd = probe2;
-        }
-    }
-    log("[V7] P2 driver region = 0x" + natBase.toString(16) + " - 0x" + natEnd.toString(16) + " (0x" + (natEnd - natBase).toString(16) + " bytes)");
-    if (natBase) {
-        EC("ln 0x" + natBase.toString(16));
-        EC("!address 0x" + Math.floor((natBase + natEnd) / 2).toString(16));
-        var mz2 = readBytesSafe(natBase, 16);
-        log("[V7] P2 first16 = " + (mz2 ? mz2 : "<unreadable>"));
-    }
-}
-
-// ---------------- P6 helper: ct 缓冲区定位 ----------------
-function probeBuffers(rd, tag) {
-    if (!rd) return;
-    var bases = [];
-    var rnames = ["r13", "r14", "r12", "r15", "rsi", "rdi"];
-    for (var rn of rnames) {
+    var names = ["r13", "r14", "r12", "r15", "rbp", "rsi", "rdi", "r8", "r9"];
+    for (var rn of names) {
         var v = rd[rn];
-        if (v > 0x10000 && v < 0x7ff000000000) bases.push({ n: rn, b: v });
+        if (v > 0x10000 && v < 0x7ff000000000 && modOf(v) === "?") cands.push({ n: rn, b: v });
     }
-    // 栈上 qword 候选 (rsp..rsp+0x100)
     var spStr = ExecuteCommand2("dqs @rsp L40");
     var sl = spStr.split("\n");
     for (var ln of sl) {
         var mm = ln.match(/^\w+`(\w+)\s+([0-9a-f`]+)/i);
         if (mm) {
             var pv = parseHexTok(mm[2]);
-            if (pv > 0x10000 && pv < 0x7ff000000000 && modOf(pv) === "?") bases.push({ n: "stk", b: pv });
+            if (pv > 0x10000 && pv < 0x7ff000000000 && modOf(pv) === "?") cands.push({ n: "stk", b: pv });
         }
     }
-    var seen = {};
-    for (var cand of bases) {
-        if (seen[cand.b]) continue;
-        seen[cand.b] = 1;
-        // 读 base+r10 与 base+rbx 的内存
-        var h1 = readBytesSafe(cand.b + rd.r10, 16);
-        var h2 = readBytesSafe(cand.b + rd.rbx, 16);
-        if (h1 || h2) {
-            log("[V7] P6 " + tag + " base=" + cand.n + ":0x" + cand.b.toString(16) +
-                " +r10(0x" + rd.r10.toString(16) + ")=" + (h1 || "<unread>") +
-                " +rbx(0x" + rd.rbx.toString(16) + ")=" + (h2 || "<unread>"));
-        }
-    }
-    // rbx/r10 直接当地址试
-    var h3 = readBytesSafe(rd.r10, 16), h4 = readBytesSafe(rd.rbx, 16);
-    log("[V7] P6 " + tag + " direct r10=0x" + rd.r10.toString(16) + "->" + (h3 || "<unread>") + " rbx->" + (h4 || "<unread>"));
+    return cands;
 }
 
-// ---------------- P3: bp writerIP → 执行热图 + 反汇编 ----------------
-log("[V7] PHASE3 native execute heatmap");
-var heapBufs = [];
-function collectBufs(rd) {
-    if (!rd) return;
-    var rnames = ["r13", "r14", "r12", "r15"];
-    for (var rn of rnames) {
-        var v = rd[rn];
-        if (v > 0x10000 && v < 0x7ff000000000 && heapBufs.indexOf(v) < 0) heapBufs.push(v);
-    }
-}
-if (writerIPs.length > 0) {
-    var wip = writerIPs[0];
-    ExecuteCommand2("bp 0x" + wip.toString(16));
-    try { ExecuteCommand2("g"); } catch (e) { log("[V7] P3 g#1 threw: " + e); }
-    log("[V7] P3 ---- HIT#1 ----");
-    var rd3 = dumpRegs();
-    collectBufs(rd3);
-    if (rd3) probeBuffers(rd3, "hit1");
-    // 执行查询
-    if (natBase && natEnd > natBase) {
-        var hist = {};
-        var eCnt = 0;
-        try {
-            var es = session.TTD.Memory(natBase, natEnd, "e");
-            for (var ee of es) {
-                eCnt++;
-                var ipE = Number(ee.IP);
-                if (hist[ipE] === undefined) hist[ipE] = 0;
-                hist[ipE]++;
-                if (eCnt > 300000) break;
-            }
-        } catch (e) { log("[V7] TTD exec query failed: " + e); }
-        log("[V7] P3 exec events=" + eCnt + " uniqueIPs=" + Object.keys(hist).length);
-        var pairs = [];
-        for (var ipH in hist) pairs.push({ ip: Number(ipH), c: hist[ipH] });
-        pairs.sort(function (a, b) { return b.c - a.c; });
-        for (var pi = 0; pi < Math.min(40, pairs.length); pi++)
-            log("[V7] HOT 0x" + pairs[pi].ip.toString(16) + " (drv+0x" + (pairs[pi].ip - natBase).toString(16) + ") count=" + pairs[pi].c);
-        if (pairs.length > 0) {
-            var hot = pairs[0].ip;
-            try {
-                var es2 = session.TTD.Memory(hot, hot + 1, "e");
-                var firstE = null, lastE = null, nE = 0;
-                for (var e2 of es2) {
-                    nE++;
-                    if (!firstE) firstE = evPos(e2);
-                    lastE = evPos(e2);
-                    if (nE >= 150000) break;
+// ---------------- P2: 06003909 校准 → CTBASE ----------------
+log("[V8] PHASE2 calibrate ct buffer base via 06003909");
+var CTBASE = 0;
+var pos0909 = firstPos["06003909"];
+if (pos0909 && pos0909 !== "undef") {
+    EC("!tt " + pos0909);
+    var rd = dumpRegs();
+    if (rd) {
+        log("[V8] P2 expected rbx=0x3e698 r10=0x3e6a2 r9=0x56fe8");
+        var cands = collectCands(rd);
+        var seen = {};
+        for (var cand of cands) {
+            if (seen[cand.b]) continue;
+            seen[cand.b] = 1;
+            // 读 base+0x3E698 L32 比对 res 原文指纹
+            var h = readBytesSafe(cand.b + 0x3E698, 32);
+            if (!h) continue;
+            var hit = h.toLowerCase().indexOf(FPRINT) >= 0;
+            log("[V8] P2 cand " + cand.n + ":0x" + cand.b.toString(16) + " @+0x3e698=" + h + (hit ? "  <<< FPRINT MATCH" : ""));
+            if (hit && !CTBASE) CTBASE = cand.b;
+        }
+        // 兜底: res 原文可能在别处 — 用 ct16B 片段短指纹在候选±0x400000 范围 s 搜
+        if (!CTBASE) {
+            log("[V8] P2 no direct fingerprint match, fallback: search 8B fragment near cands");
+            var frag = FPRINT.substr(20, 16); // ct[0:8] = 314bb1c35e624c72
+            for (var cand2 of cands) {
+                var plo = Math.floor((cand2.b - 0x400000) / 0x10000) * 0x10000;
+                var out = ExecuteCommand2("s -b 0x" + plo.toString(16) + " L0x800000 " + frag.match(/../g).join(" "));
+                var ol = out.split("\n");
+                for (var o of ol) {
+                    var aa = parseHexTok(o.split(" ")[0]);
+                    if (aa > 0x10000) { log("[V8] P2 fragment hit: 0x" + aa.toString(16) + " (" + cand2.n + " +0x" + (aa - cand2.b).toString(16) + ")"); if (!CTBASE) CTBASE = aa - 0x3E6A2; }
                 }
-                log("[V7] P3 hotIP 0x" + hot.toString(16) + " execCount=" + nE + " firstPos=" + firstE + " lastPos=" + lastE);
-                if (lastE) {
-                    EC("!tt " + lastE);
-                    var rd4 = dumpRegs();
-                    collectBufs(rd4);
-                    if (rd4) probeBuffers(rd4, "hot");
-                    EC("u @rip-0x100 L80");
-                    EC("u @rip L20");
-                    EC("k 15");
-                }
-            } catch (e) { log("[V7] hotIP pos query failed: " + e); }
-            // 热区全反汇编
-            if (pairs.length > 3) {
-                var lo2 = pairs[0].ip, hi2 = pairs[0].ip;
-                for (var p6 of pairs) { if (p6.c < 10) continue; if (p6.ip < lo2) lo2 = p6.ip; if (p6.ip > hi2) hi2 = p6.ip; }
-                log("[V7] P3 hot range 0x" + lo2.toString(16) + " - 0x" + hi2.toString(16) + " span=0x" + (hi2 - lo2).toString(16));
-                EC("u 0x" + (lo2 - 0x40).toString(16) + " L" + Math.min(300, Math.floor((hi2 - lo2) / 4) + 120));
+                if (CTBASE) break;
             }
         }
-        ExecuteCommand2("bc *");
-    } else {
-        log("[V7] P3 no driver region, skip exec query");
+        log("[V8] P2 CTBASE = " + (CTBASE ? "0x" + CTBASE.toString(16) : "<not found>"));
     }
 }
 
-// ---------------- P5: 驱动器内存搜已知 fat hdr → 全量真体提取 ----------------
-log("[V7] PHASE5 memory search for decrypted bodies");
-// 已知 fat hdr word1 (LE bytes): 06003909=1b300700 06002BD1=1b300600 0600390F=1b300700(同)
-// 搜索值用 dword (s -d 按调试器 hex): 0x0007301b / 0x0006301b
-var searches = [];
-if (natBase && natEnd > natBase) searches.push({ n: "drv", s: natBase, c: natEnd - natBase });
-searches.push({ n: "exe", s: BASE, c: 0x93A000 });
-// 堆缓冲区: r13/r14 等 ±0x400000, 按可读 64KB 页分块搜
-var bufChunks = [];
-for (var hb of heapBufs) {
-    var plo = Math.floor((hb - 0x400000) / 0x10000) * 0x10000;
-    var phi = hb + 0x400000;
-    var run = 0, start = 0;
-    for (var pg = plo; pg <= phi; pg += 0x10000) {
-        var rdok = memReadable(pg);
-        if (rdok) { if (run === 0) start = pg; run++; }
-        else { if (run > 0) bufChunks.push({ n: "buf@0x" + hb.toString(16), s: start, c: run * 0x10000 }); run = 0; }
+// ---------------- P3: 五目标条目数据 ----------------
+log("[V8] PHASE3 five targets entry dump");
+for (var t2 of TARGETS) {
+    if (t2.tok === "06003909") continue;
+    var p2 = firstPos[t2.tok];
+    if (!p2 || p2 === "undef") { log("[V8] " + t2.tok + " no events, skip"); continue; }
+    EC("!tt " + p2);
+    var rd2 = dumpRegs();
+    if (!rd2) continue;
+    var rbx2 = rd2.rbx, r92 = rd2.r9;
+    log("[V8] " + t2.tok + " rbx=0x" + rbx2.toString(16) + " r9=0x" + r92.toString(16) + " r10=0x" + rd2.r10.toString(16) + " rsi=0x" + rd2.rsi.toString(16));
+    if (rbx2 < 0x1000 || rbx2 > 0x10000000) { log("[V8] " + t2.tok + " rbx implausible, skip"); continue; }
+    var got = false;
+    // 首选: CTBASE(若同资源 r9==0x56FE8)
+    if (CTBASE && r92 === 0x56FE8) {
+        var h1 = readBytesSafe(CTBASE + rbx2, t2.read);
+        if (h1) { log("[V8] ENT " + t2.tok + " rbx=0x" + rbx2.toString(16) + " base=CTBASE ct=" + h1); got = true; }
     }
-    if (run > 0) bufChunks.push({ n: "buf@0x" + hb.toString(16), s: start, c: run * 0x10000 });
-}
-for (var bc of bufChunks) { bc.n += "+0x" + (bc.s - 0).toString(16); searches.push(bc); log("[V7] P5 buf chunk " + bc.n + " len=0x" + bc.c.toString(16)); }
-for (var sc of searches) {
-    log("[V7] P5 search " + sc.n + " 0x" + sc.s.toString(16) + " L0x" + sc.c.toString(16));
-    var out1 = ExecuteCommand2("s -d 0x" + sc.s.toString(16) + " L0x" + sc.c.toString(16) + " 0007301b");
-    log("[V7] P5 hits(0007301b) " + sc.n + ":\n" + out1);
-    var hits1 = [];
-    var ol = out1.split("\n");
-    for (var o1 of ol) {
-        var a1 = parseHexTok(o1.split(" ")[0]);
-        if (a1 > 0x10000) hits1.push(a1);
+    if (!got) {
+        // 兜底: 本事件候选基址枚举
+        var cands2 = collectCands(rd2);
+        var seen2 = {};
+        for (var cd of cands2) {
+            if (seen2[cd.b]) continue;
+            seen2[cd.b] = 1;
+            var h2 = readBytesSafe(cd.b + rbx2, t2.read);
+            if (h2 && /[^0]/.test(h2)) {
+                log("[V8] ENT " + t2.tok + " rbx=0x" + rbx2.toString(16) + " base=" + cd.n + ":0x" + cd.b.toString(16) + " ct=" + h2);
+                got = true;
+                break;
+            }
+        }
     }
-    for (var hh of hits1.slice(0, 6)) {
-        EC("db 0x" + hh.toString(16) + " L900");
-    }
-    var out2 = ExecuteCommand2("s -d 0x" + sc.s.toString(16) + " L0x" + sc.c.toString(16) + " 0006301b");
-    log("[V7] P5 hits(0006301b) " + sc.n + ":\n" + out2);
-    var hits2 = [];
-    for (var o2 of out2.split("\n")) {
-        var a2 = parseHexTok(o2.split(" ")[0]);
-        if (a2 > 0x10000) hits2.push(a2);
-    }
-    for (var h5 of hits2.slice(0, 4)) {
-        EC("db 0x" + h5.toString(16) + " L800");
-    }
+    if (!got) log("[V8] ENT " + t2.tok + " <no buffer found>");
 }
 
-// ---------------- P4: ladder 到后段 → SOS ----------------
-log("[V7] PHASE4 sos at late position");
-var ladder = ["c0000", "80000", "60000", "50000", "40000", "38000", "30000", "28000", "24000", "20000", "1c000"];
-var lateSet = false;
-for (var ld of ladder) {
-    var r4 = ExecuteCommand2("!tt " + ld);
-    if (r4.indexOf("Setting position") >= 0) { log("[V7] P4 late pos = " + ld); lateSet = true; break; }
-    else log("[V7] P4 !tt " + ld + " failed");
+// ---------------- P4: 06003909 附近族条目(0600390A..06003911 槽位差已知) ----------------
+// 供离线交叉验证条目连续性: CTBASE + 0x3E698 起 L0x1000 (06003909..0600390A 区)
+if (CTBASE) {
+    var h3 = readBytesSafe(CTBASE + 0x3E698, 0x400);
+    log("[V8] CTBASE+0x3e698 L0x400 = " + (h3 || "<unread>"));
+    // 资源头(0x0)与资源尾(0x56FD0)抽查
+    log("[V8] CTBASE+0x0 L0x40 = " + (readBytesSafe(CTBASE, 0x40) || "<unread>"));
+    log("[V8] CTBASE+0x56fb0 L0x38 = " + (readBytesSafe(CTBASE + 0x56FB0, 0x38) || "<unread>"));
 }
-EC(".loadby sos clr");
-if (lateSet) {
-    var n2e = EC("!name2ee AirExplorer.exe CloudClient.Templating.DispatcherInitializer.VerifyCustomIteratorRunner");
-    var mdm = n2e.match(/MethodDesc:\s*([0-9a-f`]+)/i);
-    if (mdm) {
-        var md = mdm[1].replace(/`/g, "");
-        EC("!dumpil 0x" + md);
-    }
-    EC("!dumpmodule 0x" + BASE.toString(16));
-} else {
-    log("[V7] P4 no late position available");
-}
-log("[V7] done");
+log("[V8] done");
 }

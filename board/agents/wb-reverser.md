@@ -1216,3 +1216,41 @@ TTD 回放态限制：`!dumpheap`/`!clrstack` 需要 GC heap（回放态 GC in p
 ### 2. dump 头格式最终确认
 
 24B = tok u32 / ilSize u32 / maxStack u32 / ehCount u32 / preExtra u32 / localsTok u32，之后裸 IL（无 EH 尾表？06004282 eh=0 确认 2B 体直接 `00 2A`）。
+
+## X. v6 artifact 全文重析 + A1 缩减为两字节补丁 + v8 出征（10-25）
+
+### 1. dump 库 = 纯 body 明文（第四重验证 + 结构修正）
+
+v6 artifact（run 40141500463）全文重析（cdb.log 在 /tmp/v6art/cdb.log，GitHub artifact id 12579685514）：
+
+- **0600390C 双向吻合**：TTD @0x335858 五 dword = `00043013 000000E2 11000001 7d412f20 000efe10` → bytes `13 30 04 00 | e2 00 00 00 | 01 00 00 11 | 20 2f 41 7d | 10 fe 0e 00` = fat(0x3013) codesize 0xE2 locals 0x11000001 + body[0:8]；dump 库 `m_0600390C.bin` body[0:8] = `20 2f 41 7d 10 fe 0e 00` **逐字节相同** → **dump 库 = 纯 body（无 header），TTD 回填 = header(来自条目头/驱动器合成) + body 前段**
+- 0600212A 回填 = `1e 02 7b 3d 0c 00 04 2a`（tiny hdr 0x1E + `{ldarg.0; ldfld 0x04000C3D; ret}`）= dump body 完全一致 ✓；同窗还抓到 0x195D20（下一方法槽位，fld 0x04000C3B 同款 getter）
+- **9 方法族槽位 RVA 全表**：06003909=0x334EB0 / 0600390A=0x335778 / 0600390B=0x335798 / 0600390C=0x335858 / 0600390D=0x335948 / 0600390E=0x335A78 / 0600390F=0x336224 / 06003910=0x3366CC / 06003911=0x336CA4（0F/10/11 locals tok = 0x11000AEA/B/C）
+- 写循环寄存器语义钉死：**rax=明文 dword、r10=ct 读游标(+4/dword)、rdi=写目标、rsi=0x6e51d6f8 全程恒定（是 key 常量不是链状态）**；k 栈直接躺 rbx/rax 值（JIT stub 汇编无帧）
+
+### 2. A1 缩减为两字节补丁（激活直通最小化）
+
+重读 06002133/06002145 dump 后确认：
+- `06002133 body[0x290] = 0x16`（**全文唯一 ldc.i4.0**），上下文 `02 16 7d 3d 0c 00 04` = `ldarg.0; ldc.i4.0; stfld 0x04000C3D`（写 _IsDecoratorProvider=false 的降级点）→ **改 16→17 一字节**
+- `06002145 body[0x120] = 0x16`（全文唯一），同款上下文 → **改 16→17 一字节**
+- 06002133 body[0x2E4] = 0x17（字典命中 true 分支）与 board 830 行吻合
+- **P3/P4/P5 getter 替换省略**：P1/P2 改完后 _IsDecoratorProvider 恒 true，`0600212A`（`return _IsDecoratorProvider`）、`06002157`（`return _IsModelRunner`）、`06002127 TestCollector`（`?:` 读字段）自然恒 true——不再动它们，重加密面从 5 条目缩到 2 条目
+- **重加密需求**：每条目只需该字节的 ks。ks = ct(条目内) ^ pt(dump 库)，byte-level（0x290 所在 dword = `16 7d 3d 0c`，同 dword 其余 3B 不动）→ 若解密是 dword 独立（TTD 每 dword 一次写事件强烈暗示），1 字节密文改动破坏范围 ≤ 4B 且其余 3B 不变
+
+### 3. 密码侧排除（本轮全灭清单，勿重试）
+
+- ksver4.py 的 numpy `prng_vec` 是**残缺版 prng_round**（漏了 `+v41`、`^>>29`、`+v42`、`+((v39<<4)-v40)^v38`、`+v9` 后段链，返回值语义错）→ 其 passA "命中"是伪命中。教训：**任何向量化 PRNG 必须先与 decrypt_prng.prng_round 对拍**（kschain3.py selfcheck 0/50000 已建立正确版）
+- Viewer 资源流（06003909 条目 @0x3E698，ct=0x3E6A2 起）**不是** prng_round 链状态（H1 全灭）、不是 seed0 环、条目头 10B 高熵非明文
+- 结论：Viewer 资源用独立密码，真身在驱动器 native 解密循环（v7 P3 反汇编在抓）
+
+### 4. 工具新增
+
+- `work/mdrva.py`：纯 Python PE/CLI 元数据解析，打印 MethodDef 桩 RVA（dnlib `MethodDefMD.Rva` internal 不可达的替代）；5 已知值全部验证吻合。用法 `python3 work/mdrva.py <exe> <tok>...`
+- **A1 五补丁桩 RVA 表**：06002133=0x196088 / 06002145=0x1997C4 / 0600212A=0x195D18 / 06002157=0x19A510 / 06002127=0x195CD4
+- `ci/ttd/PayloadScan.js` → **v8**（v7 存档于 git 历史 e78ca94）：P1 六窗写事件（06003909 对照 + 五桩 win=0x400）→ P2 06003909 校准（候选基址读 base+0x3E698 比对 res 原文指纹 `b0ee75fc6be38b411b56 314bb1c35e624c7258b088e75ce40606` → CTBASE）→ P3 五目标首事件 regs + CTBASE+rbx 全读（0x400B）→ `[V8] ENT tok rbx=0x.. ct=<hex>` → 离线 ks=ct^dump → 两字节重加密
+
+### 5. 下一步
+
+1. v7 artifact（run 40143160905）→ P3 解密循环反汇编（密码算法）+ P5 驱动器内存真体
+2. v8 artifact → 五目标 rbx + ct → 两字节补丁重加密 → 重组 exe → ui-probe + soak 7min
+3. 若 v8 校准失败（驱动器 ct 缓冲 ≠ res 原文）→ 依据 v7 反汇编离线复刻变换再定位
