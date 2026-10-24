@@ -1,0 +1,15 @@
+[ost] loaded AirExplorer, Version=5.11.0.0, Culture=neutral, PublicKeyToken=null
+[ost] entry CloudClient.Models.StatelessModel::SearchAdapter
+[resolve] ok=1034 bad=0
+=== ENTRY-INVOCATION 01:33:22.887 ===
+EX System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Object[] arguments, Signature sig, Boolean constructor)
+   at System.Reflection.RuntimeMethodInfo.UnsafeInvokeInternal(Object obj, Object[] parameters, Object[] arguments)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at Host.<>c__DisplayClass5.<Main>b__2()
+-- inner --
+EX System.InvalidProgramException: Common Language Runtime detected an invalid program.
+   at AirExplorer.Values.ArgumentGateway.EvaluateVisibleAttribute()
+   at CloudClient.Models.StatelessModel.SearchAdapter(String[] info)
+-- inner --
+host exit code: 1
