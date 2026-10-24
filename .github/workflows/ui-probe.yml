@@ -34,7 +34,7 @@ jobs:
           Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
           & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
           if (-not (Test-Path "app\AirExplorer.exe")) { throw "installer extract failed" }
-          Copy-Item -LiteralPath $cand -Destination "app\AirExplorer.exe" -Force
+          if ($cand -ne "official") { Copy-Item -LiteralPath $cand -Destination "app\AirExplorer.exe" -Force } else { Write-Host "official 基线: 不覆盖" }
           Get-ChildItem app | Select-Object Name,Length | Format-Table | Out-String | Write-Host
           Write-Host "md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
           "# candidate: $cand  md5: $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)" | Out-File -Encoding utf8 app/_candidate.txt

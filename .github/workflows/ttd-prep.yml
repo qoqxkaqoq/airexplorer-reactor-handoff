@@ -12,6 +12,55 @@ on:
         default: '20'
 
 jobs:
+  stacks:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: 下载解包 WinDbg
+        shell: pwsh
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          Invoke-WebRequest -Uri "https://aka.ms/windbg/download" -OutFile "D:\wd.appinstaller"
+          [xml]$x = Get-Content D:\wd.appinstaller
+          $u = $x.AddOns.Package.Uri; $h = $x.AddOns.Package.Hash
+          Invoke-WebRequest -Uri $u -OutFile "D:\wd.msix"
+          if ((Get-FileHash D:\wd.msix -Algorithm SHA256).Hash -ne $h) { Write-Host "hash mismatch"; exit 1 }
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\wd D:\wd.msix | Out-Null
+          $ttd = Get-ChildItem -Recurse D:\wd -Filter TTD.exe | Select-Object -First 1
+          $cdb = Get-ChildItem -Recurse D:\wd -Filter cdb.exe | Select-Object -First 1
+          if (-not $ttd -or -not $cdb) { exit 1 }
+          "$($ttd.FullName)", "$($cdb.FullName)" | Set-Content D:\wd\paths.txt
+      - name: 官方安装包 + v139
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\out, app | Out-Null
+          Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/exes/AirExplorer_v139.exe" -OutFile "app\AirExplorer.exe"
+          Write-Host "md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
+      - name: TTD 录制真实 GUI 40s
+        shell: pwsh
+        run: |
+          $ttdExe = (Get-Content D:\wd\paths.txt)[0].Trim()
+          $ae = (Resolve-Path "app\AirExplorer.exe").Path
+          $tt = Start-Process -FilePath $ttdExe -ArgumentList "-accepteula","-out","C:\ttd\gui.run","$ae" -WorkingDirectory (Resolve-Path "app").Path -PassThru -NoNewWindow
+          Start-Sleep -Seconds 45
+          if (-not $tt.HasExited) { Get-Process AirExplorer -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 5; try { $tt.Kill() } catch {} }
+          Get-ChildItem C:\ttd | Format-Table | Out-String | Write-Host
+      - name: cdb SOS 全线程托管栈
+        shell: pwsh
+        run: |
+          $cdbExe = (Get-Content D:\wd\paths.txt)[1].Trim()
+          & $cdbExe -z C:\ttd\gui.run `
+            -y "srv*C:\symbols*https://msdl.microsoft.com/download/symbols" `
+            -c "!tt 100; .reload; .load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q" 2>&1 | Tee-Object -FilePath C:\out\stacks.log | Select-Object -Last 60
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stacks-out
+          path: C:\out\stacks.log
+
   managed:
     runs-on: windows-latest
     timeout-minutes: 30
