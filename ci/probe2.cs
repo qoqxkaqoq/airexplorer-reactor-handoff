@@ -126,14 +126,17 @@ class Probe2 {
                     string label = (string)sorter.GetType().GetField("literalTemplateLabel", flagsI).GetValue(sorter);
                     Log("[probe2] CHAIN dir=" + dir + " label=" + label);
                     try { Log("[probe2] CHAIN File.Exists(combined)=" + System.IO.File.Exists(System.IO.Path.Combine(dir ?? "", label ?? ""))); } catch (Exception e2) { Log("[probe2] CHAIN File.Exists EX " + e2.Message); }
-                    Type vsT = null; foreach (var t in asm.GetTypes()) if (t.Name == "ValidatorSchema") { vsT = t; break; }
-                    if (vsT == null) throw new Exception("ValidatorSchema type not found");
+                    Type vsT = null; Type gvT = null;
+                    try { foreach (var t in asm.GetTypes()) { if (t.Name == "ValidatorSchema" && vsT == null) vsT = t; if (t.Name == "GroupedValidator" && gvT == null) gvT = t; } }
+                    catch (System.Reflection.ReflectionTypeLoadException rtle) {
+                        foreach (var le in rtle.LoaderExceptions.Take(5)) Log("[probe2] LOADEX: " + le.Message + " @ " + (le.StackTrace == null ? "" : le.StackTrace.Split('\n')[0]));
+                        foreach (var t in rtle.Types) { if (t != null && t.Name == "ValidatorSchema" && vsT == null) vsT = t; if (t != null && t.Name == "GroupedValidator" && gvT == null) gvT = t; }
+                    }
+                    if (vsT == null || gvT == null) throw new Exception("ValidatorSchema/GroupedValidator not found: " + (vsT == null) + "/" + (gvT == null));
                     var cct = vsT.GetField("CheckCustomizableTransmitter", flagsS).GetValue(null);
                     var sBridge = vsT.GetMethod("ExecuteExplorer", flagsS);
                     var s = (string)sBridge.Invoke(null, new[] { (object)dir, label, cct });
                     Log("[probe2] CHAIN CheckCustomizableTransmitter(dir,label) = " + (s == null ? "NULL" : "\"" + s + "\" len=" + s.Length));
-                    Type gvT = null; foreach (var t in asm.GetTypes()) if (t.Name == "GroupedValidator") { gvT = t; break; }
-                    if (gvT == null) throw new Exception("GroupedValidator type not found");
                     var vcl = gvT.GetField("VerifyCentralLocator", flagsS).GetValue(null);
                     var gBridge = gvT.GetMethod("ExecuteExplorer", flagsS);
                     var b1 = (bool)gBridge.Invoke(null, new[] { (object)s, vcl });
