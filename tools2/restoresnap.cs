@@ -99,22 +99,10 @@ class RestoreSnap {
                     nList++;
                     continue;
                 }
-                // 官方可解析 Class(TypeSpecMD) + 封闭签名(官方签名含 !0 泛型Var, CLR 绑定失败 → MissingMethod)
-                var officialAdd = FindOfficialAdd(mod, elSig);
-                IMemberRefParent addClass;
-                MemberRefUser addRef;
-                if (officialAdd != null) {
-                    addClass = officialAdd.Class;
-                    addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), addClass);
-                } else {
-                    addClass = new TypeSpecUser(f.FieldType);
-                    addRef = new MemberRefUser(mod, "Add", MethodSig.CreateInstance(mod.CorLibTypes.Void, elSig), addClass);
-                }
-                var officialCtor = FindOfficialNewobj(mod, f.FieldType.FullName);
-                MemberRefUser ctor2;
-                if (officialCtor != null)
-                    ctor2 = new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), officialCtor.Class);
-                else
+                // 直接复用官方 MemberRef(含原 sig) — sigclose 会统一克隆触发重编码(VAR)
+                var addRef = FindOfficialAdd(mod, elSig);
+                var ctor2 = FindOfficialNewobj(mod, f.FieldType.FullName);
+                if (ctor2 == null)
                     ctor2 = new MemberRefUser(mod, ".ctor", MethodSig.CreateInstance(mod.CorLibTypes.Void), new TypeSpecUser(f.FieldType));
                 ins.Add(new Instruction(OpCodes.Newobj, ctor2));
                 for (int k2 = li + 1; k2 < allLines.Length; k2++) {
@@ -177,7 +165,7 @@ class RestoreSnap {
         Console.WriteLine("[restore] B64=" + nB64 + " INT=" + nInt + " STR=" + nStr + " LIST=" + nList + " skip=" + skip);
         Console.WriteLine("[restore] IGC now " + il.Count + " instrs");
         var opts = new ModuleWriterOptions(mod);
-        opts.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.PreserveAll;
+        opts.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.PreserveAll | dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack;
         mod.Write(a[2], opts);
         Console.WriteLine("[restoresnap] wrote " + a[2]);
     }
@@ -190,7 +178,9 @@ class RestoreSnap {
                 if (oi.OpCode.Code != Code.Callvirt) continue;
                 var mr = oi.Operand as MemberRef;
                 if (mr == null || mr.Name != "Add" || mr.MethodSig == null || mr.MethodSig.Params.Count != 1) continue;
-                if (mr.MethodSig.Params[0].FullName == elSig.FullName && mr.Class != null && mr.Class.FullName.Contains("List`1")) return mr;
+                var p0 = mr.MethodSig.Params[0];
+                bool p0ok = p0 is GenericVar || p0 is GenericMVar || p0.FullName == elSig.FullName;
+                if (p0ok && mr.Class != null && mr.Class.FullName.Contains("List`1")) return mr;
             }
         }
         return null;
