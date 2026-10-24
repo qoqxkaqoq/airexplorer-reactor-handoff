@@ -100,15 +100,17 @@ jobs:
             Start-Sleep -Seconds 3
             if (Test-Path C:\out\v139.dmp) {
               Write-Host ("dump 大小: " + (Get-Item C:\out\v139.dmp).Length)
-              $cdb = (Get-Content D:\wd\cdb.txt).Trim()
+              # cdb 自查找(不依赖跨 step 文件传递)
+              $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+              if (-not $cdb) { $cdb = Get-ChildItem -Recurse D:\wd -Filter "cdb.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName }
               Write-Host "cdb 路径 = [$cdb]"
               $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
-              $cmd = ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; .load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q"
-              try {
+              $cmd = ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q"
+              if ($cdb) {
                 $out = & $cdb -z C:\out\v139.dmp -y $sym -c $cmd 2>&1
                 $out | Tee-Object -FilePath C:\out\v139_stacks.log | Select-Object -Last 70
-              } catch { Write-Host "cdb EX: $_" }
-              Write-Host "cdb exit=$LASTEXITCODE"
+                Write-Host "cdb exit=$LASTEXITCODE"
+              } else { Write-Host "cdb 找不到, dmp 已保留" }
             } else { Write-Host "dump 失败" }
           }
           if (-not $p.HasExited) { $p.Kill() }
