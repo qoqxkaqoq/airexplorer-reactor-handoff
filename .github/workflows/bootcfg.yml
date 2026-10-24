@@ -93,14 +93,16 @@ jobs:
             if ($wins) { Write-Host ("V139 主窗口出现于 t={0}s title={1}" -f $i, ($wins -join "|")); $shown = $true; break }
           }
           if (-not $shown -and -not $p.HasExited) {
-            Write-Host "V139(有配置) 60s 无主窗口 —— cdb 两段式: attach→dump→SOS 栈"
-            $cdb = (Get-Content D:\wd\cdb.txt).Trim()
-            $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
-            & $cdb -p $p.Id -y $sym -c ".dump /ma C:\out\v139.dmp; qd" 2>&1 | Select-Object -Last 8
+            Write-Host "V139(有配置) 60s 无主窗口 —— procdump 抓 dump → SOS 栈"
+            Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile D:\pd.zip
+            & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\pd D:\pd.zip | Out-Null
+            & D:\pd\procdump64.exe -accepteula -ma $p.Id C:\out\v139.dmp 2>&1 | Select-Object -Last 6
             Start-Sleep -Seconds 3
             if (Test-Path C:\out\v139.dmp) {
               Write-Host ("dump 大小: " + (Get-Item C:\out\v139.dmp).Length)
-              & $cdb -z C:\out\v139.dmp -y $sym -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q" 2>&1 | Tee-Object -FilePath C:\out\v139_stacks.log | Select-Object -Last 60
+              $cdb = (Get-Content D:\wd\cdb.txt).Trim()
+              $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
+              & $cdb -z C:\out\v139.dmp -y $sym -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q" 2>&1 | Tee-Object -FilePath C:\out\v139_stacks.log | Select-Object -Last 70
             } else { Write-Host "dump 失败" }
           }
           if (-not $p.HasExited) { $p.Kill() }
