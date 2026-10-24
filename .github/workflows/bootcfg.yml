@@ -101,8 +101,14 @@ jobs:
             if (Test-Path C:\out\v139.dmp) {
               Write-Host ("dump 大小: " + (Get-Item C:\out\v139.dmp).Length)
               $cdb = (Get-Content D:\wd\cdb.txt).Trim()
+              Write-Host "cdb 路径 = [$cdb]"
               $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
-              & $cdb -z C:\out\v139.dmp -y $sym -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q" 2>&1 | Tee-Object -FilePath C:\out\v139_stacks.log | Select-Object -Last 70
+              $cmd = ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; .load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q"
+              try {
+                $out = & $cdb -z C:\out\v139.dmp -y $sym -c $cmd 2>&1
+                $out | Tee-Object -FilePath C:\out\v139_stacks.log | Select-Object -Last 70
+              } catch { Write-Host "cdb EX: $_" }
+              Write-Host "cdb exit=$LASTEXITCODE"
             } else { Write-Host "dump 失败" }
           }
           if (-not $p.HasExited) { $p.Kill() }
