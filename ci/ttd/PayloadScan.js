@@ -24,11 +24,13 @@ function mainImpl() {
 
     // target stub RVAs (tokrva on exes/AirExplorer_baseline_verified.exe)
     // 0600212A: known plaintext (validation); 06003909/06002BD1/06004204: forcedump-failed bodies (new intel)
+    // 06004282 DirectDefinition (win 0x2000): FULL body backfill capture = string-pool key source (0600418B caller)
     const TARGETS = [
-        { tok: "0600212A", rva: 0x00195D18 },
-        { tok: "06003909", rva: 0x00334EB0 },
-        { tok: "06002BD1", rva: 0x0024EA40 },
-        { tok: "06004204", rva: 0x00407A00 },
+        { tok: "0600212A", rva: 0x00195D18, win: 16 },
+        { tok: "06003909", rva: 0x00334EB0, win: 16 },
+        { tok: "06002BD1", rva: 0x0024EA40, win: 16 },
+        { tok: "06004204", rva: 0x00407A00, win: 16 },
+        { tok: "06004282", rva: 0x00407F38, win: 0x2000 },
     ];
     const WIN = 16;
 
@@ -62,14 +64,16 @@ function mainImpl() {
         return null;
     }
 
-    // ---- 1) write events per target (16B window) ----
+    // ---- 1) write events per target (per-target window) ----
     var allEvents = [];
     var writerIPs = [];
     for (var t of TARGETS) {
         var va = base + t.rva;
+        var tw = t.win || WIN;
+        var cap = 8 + tw / 4;
         var cnt = 0;
         try {
-            var ws = session.TTD.Memory(va, va + WIN, "w");
+            var ws = session.TTD.Memory(va, va + tw, "w");
             for (var w of ws) {
                 cnt++;
                 if (cnt === 1) {
@@ -80,30 +84,43 @@ function mainImpl() {
                 var addr = (w.Address !== undefined && w.Address !== null) ? Number(w.Address) : (va + (cnt - 1) * 4);
                 var ev = { tok: t.tok, addr: addr, size: Number(w.Size), ip: Number(w.IP), val: Number(w.Value), pos: evPos(w) };
                 allEvents.push(ev);
-                log("[PS] EVT tok=" + ev.tok + " i=" + cnt + " addr=0x" + ev.addr.toString(16) + " size=" + ev.size
-                    + " val=0x" + (ev.val >>> 0).toString(16) + " ip=0x" + ev.ip.toString(16) + " pos=" + ev.pos);
+                if (tw <= 64)
+                    log("[PS] EVT tok=" + ev.tok + " i=" + cnt + " addr=0x" + ev.addr.toString(16) + " size=" + ev.size
+                        + " val=0x" + (ev.val >>> 0).toString(16) + " ip=0x" + ev.ip.toString(16) + " pos=" + ev.pos);
                 var known = false;
                 for (var ip2 of writerIPs) if (ip2 === ev.ip) known = true;
                 if (!known) writerIPs.push(ev.ip);
-                if (cnt > 8) break;
+                if (cnt > cap) break;
             }
         } catch (e) { log("[PS] TTD.Memory failed for " + t.tok + ": " + e); }
         log("[PS] " + t.tok + " events=" + cnt);
     }
 
-    // ---- 2) reconstruct first WIN bytes per target from events (chronological, LE dwords) ----
+    // ---- 2) reconstruct first N bytes per target from events (chronological, LE dwords) ----
     for (var t3 of TARGETS) {
+        var tw3 = t3.win || WIN;
         var bytes = {};
         for (var ev2 of allEvents) {
             if (ev2.tok !== t3.tok) continue;
             var off = ev2.addr - (base + t3.rva);
-            if (off < 0 || off >= WIN) continue;
+            if (off < 0 || off >= tw3) continue;
             var v = ev2.val >>> 0;
-            for (var b = 0; b < ev2.size && (off + b) < WIN; b++) bytes[off + b] = (v >>> (8 * b)) & 0xFF;
+            for (var b = 0; b < ev2.size && (off + b) < tw3; b++) bytes[off + b] = (v >>> (8 * b)) & 0xFF;
         }
-        var hex = "";
-        for (var i3 = 0; i3 < WIN; i3++) hex += (bytes[i3] === undefined ? "??" : hexByte(bytes[i3]));
-        log("[PS] IL " + t3.tok + " first" + WIN + "=" + hex);
+        var known3 = 0;
+        for (var k3 in bytes) known3++;
+        log("[PS] IL " + t3.tok + " reconstructed=" + known3 + "/" + tw3 + " bytes");
+        if (tw3 <= 64) {
+            var hex = "";
+            for (var i3 = 0; i3 < tw3; i3++) hex += (bytes[i3] === undefined ? "??" : hexByte(bytes[i3]));
+            log("[PS] IL " + t3.tok + " first" + tw3 + "=" + hex);
+        } else {
+            for (var row = 0; row < tw3; row += 256) {
+                var hexr = "";
+                for (var j3 = row; j3 < row + 256 && j3 < tw3; j3++) hexr += (bytes[j3] === undefined ? "??" : hexByte(bytes[j3]));
+                log("[PS] IL " + t3.tok + " @" + row.toString(16) + " " + hexr);
+            }
+        }
     }
 
     // ---- 3) static identification of writer IPs ----
