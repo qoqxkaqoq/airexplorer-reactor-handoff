@@ -1,6 +1,7 @@
-// host6.cs — 官方运行时状态快照抓取器 v4
+// host6.cs — 官方运行时状态快照抓取器 v5
 // 加载官方原版正常启动(引导完整), 反射 dump 引导类全部静态状态 → snapshot.txt
 // 恢复对象: int/string/bool/byte[](base64)/List/enum; 复杂对象展开一层实例字段; 不可恢复标记 SKIP
+// v5 诊断增强: 程序集版本/MD5/官方基座核对、AG/RW 类型解析显式落盘、字段读取异常不吞、EntryPoint 线程异常落盘
 // 用法: host6.exe <exe> <out.txt> <delaySec>
 using System;
 using System.Collections;
@@ -55,10 +56,19 @@ class Host6 {
         int delay = a.Length > 2 ? int.Parse(a[2]) : 15;
         Directory.SetCurrentDirectory(Path.GetDirectoryName(exePath));
         W = new StreamWriter(outFile);
-        File.AppendAllText(TraceFile, "=== host6 v4 snapshot start ===\n");
+        File.AppendAllText(TraceFile, "=== host6 v5 snapshot start ===\n");
         try {
             var asm = Assembly.LoadFrom(exePath);
+            // 诊断1: 程序集版本 + 样本 MD5 + 官方基座核对
+            string md5s;
+            using (var md5 = System.Security.Cryptography.MD5.Create())
+            using (var fs = File.OpenRead(exePath))
+                md5s = BitConverter.ToString(md5.ComputeHash(fs)).Replace("-", "");
+            const string OfficialMd5 = "A12B5C573E1B54E98CCCC29351EAA066"; // v5.11.0.0 官方原版
             Console.WriteLine("[h6] loaded " + asm.FullName);
+            Log("# assembly=" + asm.FullName);
+            Log("# md5=" + md5s + (md5s == OfficialMd5 ? "  [OFFICIAL-MATCH]" : "  [NOT-OFFICIAL expected=" + OfficialMd5 + "]"));
+            Log("# clr=" + Environment.Version + " started=" + DateTime.UtcNow.ToString("o"));
 
             Exception entryEx = null;
             var worker = new Thread(delegate() {
@@ -77,7 +87,9 @@ class Host6 {
             worker.Start();
             Console.WriteLine("[h6] entry launched, waiting " + delay + "s");
             Thread.Sleep(delay * 1000);
-            Console.WriteLine("[h6] snapshot start");
+            // 诊断2: EntryPoint 线程异常落盘(空数据不能解释成"不需要恢复")
+            Log("# entryEx=" + (entryEx == null ? "none" : entryEx.GetType().FullName + ": " + entryEx.Message));
+            Console.WriteLine("[h6] snapshot start, entryEx=" + (entryEx == null ? "none" : entryEx.GetType().Name));
 
             var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
             int dumped = 0;
@@ -116,22 +128,32 @@ class Host6 {
             }
             // 目标4: ArgumentGateway 静态字段(cctor 解密后的明文终值 — agfix 用)
             var ag = asm.GetType("AirExplorer.Values.ArgumentGateway");
+            // 诊断3: AG/RW 类型解析结果显式落盘(AG=0 时能区分"类型没找到"和"字段读取失败")
+            Log("# agType=" + (ag == null ? "RESOLVE-FAIL" : "OK " + ag.FullName));
             if (ag != null) {
+                int agOk = 0, agErr = 0;
                 foreach (var f in ag.GetFields(flags)) {
-                    object v = null; try { v = f.GetValue(null); } catch { continue; }
+                    object v = null; string err = null;
+                    try { v = f.GetValue(null); } catch (Exception ex) { err = ex.GetType().Name + ":" + (ex.InnerException ?? ex).Message; }
+                    if (err != null) { Log("AGERR AG." + f.Name + " " + err); agErr++; continue; }
                     DumpObject("AG." + f.Name, v, 1);
-                    dumped++;
+                    agOk++;
                 }
+                Log("# agFields ok=" + agOk + " err=" + agErr);
+                dumped += agOk;
             }
             // 目标5: RequestWorker 单例 m_RequestClient → 实例字段(_RequestSorter 等)
             var rw = asm.GetType("AirExplorer.Networking.RequestWorker");
+            Log("# rwType=" + (rw == null ? "RESOLVE-FAIL" : "OK " + rw.FullName));
             if (rw != null) {
                 var mf = rw.GetField("m_RequestClient", flags);
-                object inst = null; try { inst = mf.GetValue(null); } catch { }
+                object inst = null; string ferr = null;
+                try { inst = mf.GetValue(null); } catch (Exception ex) { ferr = ex.GetType().Name; }
+                Log("# rw.m_RequestClient=" + (ferr != null ? "READ-FAIL " + ferr : inst == null ? "NULL" : "inst " + inst.GetType().FullName));
                 if (inst != null) {
                     Log("OBJ RW.m_RequestClient " + inst.GetType().FullName);
                     foreach (var f in inst.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
-                        object v = null; try { v = f.GetValue(inst); } catch { continue; }
+                        object v = null; try { v = f.GetValue(inst); } catch (Exception ex) { Log("RWERR RW.m_RequestClient." + f.Name + " " + ex.GetType().Name); continue; }
                         DumpObject("RW.m_RequestClient." + f.Name, v, 1);
                     }
                     dumped++;

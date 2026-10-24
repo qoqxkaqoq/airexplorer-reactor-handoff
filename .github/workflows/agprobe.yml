@@ -1,0 +1,59 @@
+name: agprobe
+# v132 反射探针: AG.cctor + EvaluateVisibleAttribute + ITP 语义验证
+# 普通托管异常只说明 JIT 通过, 本探针抓完整异常链定位功能断点
+on:
+  workflow_dispatch:
+    inputs:
+      exes:
+        description: 'candidate list (JSON array; short name like "v132")'
+        required: false
+        default: '["v132"]'
+      mode:
+        description: 'probe mode: ag | itp'
+        required: false
+        default: 'ag'
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        exe: ${{ fromJSON(inputs.exes) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 取候选 exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path app | Out-Null
+          if ("${{ matrix.exe }}" -eq "official") {
+            Invoke-WebRequest -Uri "https://www.airexplorer.net/downloads/AirExplorer-OnlineInstaller.exe" -OutFile ae_installer.exe
+            & "C:\Program Files\7-Zip\7z.exe" x -y -oapp ae_installer.exe | Out-Null
+          } else {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/exes/AirExplorer_${{ matrix.exe }}.exe" -OutFile "app\AirExplorer.exe"
+          }
+          Write-Host ("md5 = " + (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)
+
+      - name: 编译并运行探针
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /nologo /target:exe /out:probe2.exe /r:System.dll ci\probe2.cs 2>&1 | Out-String | Write-Host
+          Set-Location app
+          $out = & ..\probe2.exe AirExplorer.exe "${{ inputs.mode }}" 90 2>&1 | Out-String
+          $out | Tee-Object -FilePath "..\out_probe2.${{ matrix.exe }}.log"
+          Write-Host $out
+
+      - name: 上传
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe2-${{ matrix.exe }}
+          path: |
+            out_probe2.${{ matrix.exe }}.log
+            app\probe2.log
