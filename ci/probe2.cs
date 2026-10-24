@@ -97,7 +97,20 @@ class Probe2 {
                     Log("[probe2] _RequestSorter = " + (sorter == null ? "NULL" : sorter.GetType().FullName));
                     if (sorter != null) {
                         var gt = sorter.GetType().GetField("globalTemplate", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-                        Log("[probe2] sorter.globalTemplate = " + (gt.GetValue(sorter) == null ? "NULL" : "ok"));
+                        var ht = gt.GetValue(sorter) as System.Collections.IDictionary;
+                        if (ht == null) Log("[probe2] sorter.globalTemplate = NULL");
+                        else {
+                            Log("[probe2] sorter.globalTemplate = Hashtable Count=" + ht.Count);
+                            int i = 0;
+                            foreach (System.Collections.DictionaryEntry e in ht) {
+                                Log("[probe2] TI.key[" + i + "]=" + e.Key + " val=" + (e.Value == null ? "null" : e.Value.GetType().FullName + " " + e.Value));
+                                if (++i > 50) { Log("[probe2] TI.key... (truncated)"); break; }
+                            }
+                        }
+                        foreach (var fn in new[] { "_DividedTemplateTitle", "literalTemplateLabel", "statelessTemplateName", "listenerPublisherNote" }) {
+                            var ff = sorter.GetType().GetField(fn, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                            if (ff != null) Log("[probe2] TI." + fn + " = " + (ff.GetValue(sorter) ?? "NULL"));
+                        }
                     }
                 }
             } catch (Exception ex) { Log("[probe2] RW check FAIL: " + Chain(ex)); }
