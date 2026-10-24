@@ -167,7 +167,7 @@ class Prep {
     }
 
     static void RefScan(Assembly asm, Module mod) {
-        // ① 委托字段侦察: 读运行时值, 拿 Method.Name/MetadataToken, 直接 dump 目标真体
+        // ① 委托字段侦察: RunClassConstructor 暴露 cctor 真异常 → 读值拿目标 → 并抓全部委托类型 .cctor 真体(赋值点就在 cctor 里)
         var dlgFields = new[] {
             "ParserValidator::UpdateFunction",
             "AutomatedRunnerValidator::WatchSpec",
@@ -183,6 +183,15 @@ class Prep {
             try {
                 var ty = allT.FirstOrDefault(t => t.Name == parts[0]);
                 if (ty == null) { Log("[dlgscan] type missing " + parts[0]); continue; }
+                // 先强制触发 cctor(官方里未执行过的, 执行时 Reactor 会原地解密), 无论成败都让真体暴露在内存里
+                try { RuntimeHelpers.RunClassConstructor(ty.TypeHandle); Log("[dlgscan] RunClassConstructor OK " + parts[0]); }
+                catch (Exception e2) { Log("[dlgscan] RunClassConstructor EX " + parts[0] + ": " + Chain(e2)); }
+                // cctor 真体无条件抓取 — 赋值点就在 cctor 里
+                var cctor = ty.GetConstructor(BindingFlags.Static | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+                if (cctor != null) {
+                    Log("[dlgscan] cctor of " + parts[0] + " tok=0x" + cctor.MetadataToken.ToString("X8"));
+                    FreshDumpIfChanged(mod, (uint)cctor.MetadataToken, ty.FullName + "::.cctor", OutDir);
+                }
                 var f = ty.GetField(parts[1], BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
                 if (f == null) { Log("[dlgscan] field missing " + spec); continue; }
                 var v = f.GetValue(null);
@@ -192,7 +201,7 @@ class Prep {
                 var tgt = d.Method;
                 Log("[dlgscan] " + spec + " -> " + tgt.DeclaringType.FullName + "::" + tgt.Name + " tok=0x" + tgt.MetadataToken.ToString("X8"));
                 FreshDumpIfChanged(mod, (uint)tgt.MetadataToken, tgt.DeclaringType.FullName + "::" + tgt.Name + " (delegate target of " + spec + ")", OutDir);
-            } catch (Exception ex) { Log("[dlgscan] " + spec + " EX " + ex.GetType().Name + ": " + ex.Message); }
+            } catch (Exception ex) { Log("[dlgscan] " + spec + " EX " + Chain(ex)); }
         }
 
         // ② IL 字节扫描: newobj ParserValidator::.ctor(0x73) / stsfld(0x80) 各观察字段
