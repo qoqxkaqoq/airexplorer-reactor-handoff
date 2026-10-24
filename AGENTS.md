@@ -11,19 +11,21 @@
 程序启动后 UI 截图中出现网盘内容（云盘文件列表等）才算成功。
  alive but no window == FAIL；300×300 空白窗体 == FAIL（v84b 假阳性教训）。
 
-## 📍 当前状态（2026-10-24 · wb-c2 轮）
+## 📍 当前状态（2026-10-24 · v139 突破）
 
 | 里程碑 | 状态 |
 |---|---|
-| 文本模式 `help`（16 命令） | ✅ PASS，与官方逐字节一致（v59 起） |
-| 主窗口框架（标题栏/图标正确） | ✅ v65 起 |
-| v132 引导链：ITP(06004196)/AG.cctor/IGC/DEP/DirectDefinition | ✅ 快照恢复线（v114→v132） |
-| ITP 字符串解密语义 | ✅ **实证通过**（probe2 run 40064028391：ITP(0)="{{ alg = {0}, typ = {1} }}"、ITP(1000)="calendarTriggerUI1"，6 ok/0 null） |
-| UI 初始化 OnLoad → ArgumentGateway.EvaluateVisibleAttribute | ❌ **根因已实证闭环**：NRE 来自 `RequestWorker::.ctor`(06002AF0) 仍是 nop;nop;nop;ret 桩 → `m_RequestClient._RequestSorter` = NULL（probe2 run 40064015971：WriteRequest()=inst, _RequestSorter=NULL, EVA 抛 NRE）。全模块 307 处 `_RequestSorter` 全是 ldfld、零 stsfld、零 newobj TemplateInitializer —— 真实构造逻辑只存在于官方加密真体内，**必须 C2/TTD 抓取** |
-| 网盘业务功能 | ❌ 未开始 |
+| 文本模式 `help`（16 命令） | ✅ PASS（v59 起） |
+| v132 引导链：ITP/AG.cctor/IGC/DEP | ✅ 快照恢复线 |
+| ITP 字符串解密语义 | ✅ 实证通过（probe2） |
+| **EvaluateVisibleAttribute 全链** | ✅ **v139 实证 OK**（RequestWorker.ctor/TemplateInitializer.ctor/AggregatorLogger.ctor 真体 + 官方委托绑定表 3266 条静态注入） |
+| **主窗口完整渲染** | ✅ **v139 visible=True**：Ribbon 工具栏 + 导览树 + Accounts 子工具栏（mainwindow.png） |
+| **Register account 对话框** | ✅ **visible=True**：40+ 云服务图标网格全部加载（截图存证） |
+| 网盘文件列表 | ⏳ 需登录云账户（官方语义：无账户时主窗口内容区为空） |
+| **当前最高水位产物** | **`exes/AirExplorer_v139.exe`**（v132→v135 双ctor→v138 委托表→v139 AggregatorLogger.ctor） |
 
-**当前最高水位产物**：`exes/AirExplorer_v132.exe`（v133/v134 全类 NOP 路线已证伪：InvalidProgramException，不得作为基线）。
-**在途**：C2 最小链（ttd-prep workflow：managed/agcall/ttd 三路并行，官方引导后 PrepareMethod + DynamicMethod 唯一 ilSize 标记夹逼 + 新鲜体 dump；JitScan2.js 标记窗口抓 compileMethod 真体）。
+**v139 关键技术**：C2 抓取链（prep.cs：官方引导→新鲜读体→marker 夹逼；dlgscan 读官方运行时委托目标；MapScan dump `m_LogicalProcessorMap` 全表 3266 条）+ bodyswap 三件套恢复。TrackCompiler 委托绑定机制全解见 board/agents/wb-reverser.md。
+**在途**：jitcheck v139 零回归确认、official 基线 ui-probe 对照、Explore 页签内容初始化。
 
 ## 🧰 数据资产（史上最全，直接可用）
 
