@@ -29,6 +29,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path app | Out-Null
           Copy-Item exes/AirExplorer_baseline_verified.exe app/AirExplorer.exe -Force
           Copy-Item portable/AirExplorer_Portable.cmd app/ -Force
+          # 依赖集: 官方安装器(md5 1d1a829e)解包的 DLL/config/Language/runtimes, 与基线 exe(A12B5C57) 配套
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp portable/deps.zip | Out-Null
+          if (-not (Test-Path "app\BouncyCastle.Crypto.dll")) { throw "deps extract failed" }
+          Get-ChildItem app -File | Select-Object Name,Length | Format-Table | Out-String | Write-Host
           $md5 = (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash
           Write-Host "base md5 = $md5"
           "# base: exes/AirExplorer_baseline_verified.exe  md5: $md5  launcher: portable/AirExplorer_Portable.cmd" | Out-File -Encoding utf8 app/_candidate.txt

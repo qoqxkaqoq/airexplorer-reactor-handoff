@@ -186,3 +186,5 @@ try {
 } catch { L "eventlog: $($_.Exception.Message)" }
 
 L "done"
+# 显式退出 0: 探针结论只看日志; 否则 GH pwsh wrapper 会把最后一个 native 命令(taskkill)的返回码当步骤退出码
+exit 0
