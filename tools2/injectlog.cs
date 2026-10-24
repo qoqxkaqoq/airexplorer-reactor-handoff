@@ -41,6 +41,8 @@ class InjectLog {
             new[] { "06002995", "SPLIT" },
             new[] { "06002BD1", "INITREG" },
             new[] { "06002BCE", "VDYN" },
+            new[] { "060029C1", "RCOMMON" },
+            new[] { "0600299E", "ONSHOWN" },
         };
         int swapped = 0;
         foreach (var t in targets) {
@@ -48,19 +50,16 @@ class InjectLog {
             var m = mod.ResolveToken(0x06000000u | tok) as MethodDef;
             if (m == null || !m.HasBody) { Console.WriteLine("[injectlog] skip " + t[0]); continue; }
             var il = m.Body.Instructions;
-            var first = il[0];
             var ins = new List<Instruction> {
+                Instruction.Create(OpCodes.Ldstr, logFile),          // path 先压栈
                 Instruction.Create(OpCodes.Ldstr, "TAG" + t[1] + "|"),
                 Instruction.Create(OpCodes.Call, mStack),
-                Instruction.Create(OpCodes.Call, mConcat),
-                Instruction.Create(OpCodes.Ldstr, logFile),
-                Instruction.Create(OpCodes.Call, mAppend),
+                Instruction.Create(OpCodes.Call, mConcat),           // contents = TAG|stack
+                Instruction.Create(OpCodes.Call, mAppend),           // AppendAllText(path, contents)
             };
-            // 日志调用插到最前, 原第一条跟在后面
             for (int i = ins.Count - 1; i >= 0; i--) il.Insert(0, ins[i]);
-            // 修正: 插入后 ins[0]..ins[4] 在最前, 原first跟在 ins[4] 后 — 无需再处理
             swapped++;
-            Console.WriteLine("[injectlog] " + t[0] + " " + m.FullName.Split(' ').Last() + " TAG=" + t[1]);
+            Console.WriteLine("[injectlog] " + t[0] + " TAG=" + t[1]);
         }
         Console.WriteLine("[injectlog] swapped=" + swapped);
         var opts = new ModuleWriterOptions(mod);
