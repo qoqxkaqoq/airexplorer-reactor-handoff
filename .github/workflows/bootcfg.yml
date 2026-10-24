@@ -1,22 +1,23 @@
 name: bootcfg-probe
-# 复现真机"有配置"启动路径: 官方跑一次生成默认配置 → 用该配置分别启动 官方/v139 对比
-# 若 v139(有配置) 卡死/无窗而官方秒开 → cdb attach 抓全线程托管栈定位撞桩点
+# 复现真机"有配置"启动路径: 官方跑一次生成默认配置 → 用该配置分别启动 官方/候选 exe 对比
+# v2 诊断: ① 6s 早期 dump + !dumpheap 数 AdvancedClient 实例(主窗体 ctor 是否执行)
+#          ② cdb 全程第一现场异常日志(sxe clr + !pe)——专抓被 Reactor try/catch 吞掉的异常
 on:
   workflow_dispatch:
     inputs:
       candidate:
-        description: '对比对象 exe（默认 v139）'
+        description: '对比对象 exe（默认 v140）'
         required: false
-        default: 'exes/AirExplorer_v139.exe'
+        default: 'exes/AirExplorer_v140.exe'
 
 jobs:
   bootcfg:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
-      - name: 下载解包 WinDbg(cdb)
+      - name: 下载解包 WinDbg(cdb) + Procdump
         shell: pwsh
         run: |
           $ProgressPreference = "SilentlyContinue"
@@ -33,6 +34,9 @@ jobs:
           Write-Host "cdb = $cdb"
           if (-not $cdb) { Get-ChildItem -Recurse D:\wd -Filter "cdb.exe" | Select-Object -First 3 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
           Set-Content -Path D:\wd\cdb.txt -Value $cdb.FullName
+          Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile D:\pd.zip
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\pd D:\pd.zip | Out-Null
+          Write-Host "procdump = $(Test-Path D:\pd\procdump64.exe)"
 
       - name: 官方安装包解压
         shell: pwsh
@@ -45,7 +49,6 @@ jobs:
       - name: 第1步 官方跑 60s 生成默认配置
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.Windows.Forms
           $p = Start-Process -FilePath "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru
           Start-Sleep -Seconds 60
           if (-not $p.HasExited) { $p.Kill(); Start-Sleep -Seconds 3 }
@@ -57,72 +60,108 @@ jobs:
             Write-Host "官方未生成 airexplorer.xml，列出实际生成的内容:"; Get-ChildItem "$env:APPDATA\AirExplorer" -Recurse -ErrorAction SilentlyContinue | Format-Table FullName,Length | Out-String | Write-Host
           }
 
-      - name: 第2步 清配置 → 官方(带种子配置)启动 45s（并抓官方 3s 主窗体创建栈）
+      - name: 第2步 清配置 → 官方(带种子配置)启动（2s dump：栈 + AdvancedClient 实例计数）
         shell: pwsh
         run: |
           Remove-Item "$env:APPDATA\AirExplorer" -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path "$env:APPDATA\AirExplorer" | Out-Null
           Copy-Item C:\out\seed_airexplorer.xml "$env:APPDATA\AirExplorer\airexplorer.xml" -ErrorAction SilentlyContinue
-          Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile D:\pd.zip
-          & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\pd D:\pd.zip | Out-Null
           $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
           $p = Start-Process -FilePath "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru
           Start-Sleep -Seconds 2
           & D:\pd\procdump64.exe -accepteula -ma $p.Id C:\out\official_2s.dmp 2>&1 | Select-Object -Last 2
-          & $cdb -z C:\out\official_2s.dmp -y $sym -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !clrstack; q" 2>&1 | Tee-Object -FilePath C:\out\official_2s_stacks.log | Select-Object -Last 40
-          if (-not (Test-Path C:\out\official_2s.dmp)) { Write-Host "official 2s dump 失败，继续" }
+          & $cdb -z C:\out\official_2s.dmp -y $sym -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; !dumpheap -type AdvancedClient; q" 2>&1 | Tee-Object -FilePath C:\out\official_2s_stacks.log | Select-Object -Last 60
           $t0 = Get-Date
           $shown = $false
-          for ($i = 3; $i -le 45; $i += 3) {
+          for ($i = 3; $i -le 30; $i += 3) {
             Start-Sleep -Seconds 3
             if ($p.HasExited) { Write-Host "OFFICIAL exited code=$($p.ExitCode)"; break }
             $wins = @(Get-Process -Id $p.Id -ErrorAction SilentlyContinue | ForEach-Object { $_.MainWindowTitle }) | Where-Object { $_ }
             if ($wins) { Write-Host ("OFFICIAL 主窗口出现于 t={0}s title={1}" -f $i, ($wins -join "|")); $shown = $true; break }
           }
-          if (-not $shown -and -not $p.HasExited) { Write-Host "OFFICIAL 45s 无主窗口" }
+          if (-not $shown -and -not $p.HasExited) { Write-Host "OFFICIAL 30s 无主窗口" }
           if (-not $p.HasExited) { $p.Kill(); Start-Sleep -Seconds 3 }
           exit 0
 
-      - name: 第3步 换 v139 + 同一配置 → 启动 60s
+      - name: 第2.5步 官方 cdb 第一现场异常日志（基线，40s）
+        shell: pwsh
+        run: |
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
+          @"
+.load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll
+sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !pe; .echo ===END-EXC===; g" clr
+g
+"@ | Set-Content -Path D:\cdb_cmd.txt -Encoding ASCII
+          Push-Location app
+          $proc = Start-Process -FilePath $cdb -ArgumentList "-o AirExplorer.exe -G -y `"$sym`" -cf D:\cdb_cmd.txt -logo C:\out\official_exc.log" -PassThru -NoNewWindow
+          Pop-Location
+          Start-Sleep -Seconds 40
+          if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 2
+          Get-Process AirExplorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          if (Test-Path C:\out\official_exc.log) {
+            $n = (Select-String -Path C:\out\official_exc.log -Pattern '===CLR-EXC===').Count
+            Write-Host "官方第一现场 CLR 异常总数: $n"
+            Select-String -Path C:\out\official_exc.log -Pattern '===CLR-EXC===' -Context 0,3 | Select-Object -First 40 | Out-String | Write-Host
+          } else { Write-Host "official_exc.log 未生成" }
+          exit 0
+
+      - name: 第3步 换候选 exe + 同一配置 → 启动（6s dump + 60s 轮询）
         shell: pwsh
         run: |
           $cand = "${{ github.event.inputs.candidate }}"
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/qoqxkaqoq/airexplorer-reactor-handoff/main/$cand" -OutFile "app\AirExplorer.exe"
-          Write-Host "v139 md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
+          Write-Host "候选 md5 = $((Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash)"
           Remove-Item "$env:APPDATA\AirExplorer" -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path "$env:APPDATA\AirExplorer" | Out-Null
           Copy-Item C:\out\seed_airexplorer.xml "$env:APPDATA\AirExplorer\airexplorer.xml" -ErrorAction SilentlyContinue
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $cdb) { $cdb = Get-ChildItem -Recurse D:\wd -Filter "cdb.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName }
+          $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
           $p = Start-Process -FilePath "app\AirExplorer.exe" -WorkingDirectory "app" -PassThru
+          # 6s 早期 dump: 栈 + 主窗体实例计数（不用等 60s）
+          Start-Sleep -Seconds 6
+          if (-not $p.HasExited) {
+            & D:\pd\procdump64.exe -accepteula -ma $p.Id C:\out\cand_6s.dmp 2>&1 | Out-Null
+            if ((Test-Path C:\out\cand_6s.dmp) -and $cdb) {
+              & $cdb -z C:\out\cand_6s.dmp -y $sym -c ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; !dumpheap -type AdvancedClient; q" 2>&1 | Tee-Object -FilePath C:\out\cand_6s_stacks.log | Select-Object -Last 70
+            } else { Write-Host "6s dump 失败或 cdb 缺失" }
+          }
           $shown = $false
-          for ($i = 3; $i -le 60; $i += 3) {
+          for ($i = 9; $i -le 60; $i += 3) {
             Start-Sleep -Seconds 3
-            if ($p.HasExited) { Write-Host "V139 exited code=$($p.ExitCode)"; break }
+            if ($p.HasExited) { Write-Host "CAND exited code=$($p.ExitCode)"; break }
             $wins = @(Get-Process -Id $p.Id -ErrorAction SilentlyContinue | ForEach-Object { $_.MainWindowTitle }) | Where-Object { $_ }
-            if ($wins) { Write-Host ("V139 主窗口出现于 t={0}s title={1}" -f $i, ($wins -join "|")); $shown = $true; break }
+            if ($wins) { Write-Host ("CAND 主窗口出现于 t={0}s title={1}" -f $i, ($wins -join "|")); $shown = $true; break }
           }
-          if (-not $shown -and -not $p.HasExited) {
-            Write-Host "V139(有配置) 60s 无主窗口 —— procdump 抓 dump → SOS 栈"
-            Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile D:\pd.zip
-            & "C:\Program Files\7-Zip\7z.exe" x -y -oD:\pd D:\pd.zip | Out-Null
-            & D:\pd\procdump64.exe -accepteula -ma $p.Id C:\out\v139.dmp 2>&1 | Select-Object -Last 6
-            Start-Sleep -Seconds 3
-            if (Test-Path C:\out\v139.dmp) {
-              Write-Host ("dump 大小: " + (Get-Item C:\out\v139.dmp).Length)
-              # cdb 自查找(不依赖跨 step 文件传递)
-              $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-              if (-not $cdb) { $cdb = Get-ChildItem -Recurse D:\wd -Filter "cdb.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName }
-              Write-Host "cdb 路径 = [$cdb]"
-              $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
-              $cmd = ".load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll; !threads; ~*e !clrstack; q"
-              if ($cdb) {
-                $out = & $cdb -z C:\out\v139.dmp -y $sym -c $cmd 2>&1
-                $out | Tee-Object -FilePath C:\out\v139_stacks.log | Select-Object -Last 70
-                Write-Host "cdb exit=$LASTEXITCODE"
-              } else { Write-Host "cdb 找不到, dmp 已保留" }
-            } else { Write-Host "dump 失败" }
-          }
-          if (-not $p.HasExited) { $p.Kill() }
+          if (-not $shown -and -not $p.HasExited) { Write-Host "CAND(有配置) 60s 无主窗口" }
+          if (-not $p.HasExited) { $p.Kill(); Start-Sleep -Seconds 3 }
+          exit 0
+
+      - name: 第3.5步 候选 exe cdb 第一现场异常日志（40s）
+        shell: pwsh
+        run: |
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
+          @"
+.load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll
+sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !pe; .echo ===END-EXC===; g" clr
+g
+"@ | Set-Content -Path D:\cdb_cmd.txt -Encoding ASCII
+          Push-Location app
+          $proc = Start-Process -FilePath $cdb -ArgumentList "-o AirExplorer.exe -G -y `"$sym`" -cf D:\cdb_cmd.txt -logo C:\out\cand_exc.log" -PassThru -NoNewWindow
+          Pop-Location
+          Start-Sleep -Seconds 40
+          if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 2
+          Get-Process AirExplorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          if (Test-Path C:\out\cand_exc.log) {
+            $n = (Select-String -Path C:\out\cand_exc.log -Pattern '===CLR-EXC===').Count
+            Write-Host "候选第一现场 CLR 异常总数: $n"
+            Select-String -Path C:\out\cand_exc.log -Pattern '===CLR-EXC===' -Context 0,3 | Out-String | Write-Host
+          } else { Write-Host "cand_exc.log 未生成" }
           exit 0
 
       - uses: actions/upload-artifact@v4
@@ -130,6 +169,8 @@ jobs:
         with:
           name: bootcfg-out
           path: |
-            C:\out\v139_stacks.log
+            C:\out\cand_6s_stacks.log
             C:\out\official_2s_stacks.log
+            C:\out\official_exc.log
+            C:\out\cand_exc.log
             C:\out\seed_airexplorer.xml
