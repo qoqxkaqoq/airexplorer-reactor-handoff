@@ -155,10 +155,10 @@ class Prep {
         return 0;
     }
 
-    // PrepareMethod 后新鲜读体; 变为真体(>4B)则 dump
+    // PrepareMethod 后新鲜读体; 变为真体(>4B)则 dump。用 MethodBase — .ctor 是 RuntimeConstructorInfo, 强转 MethodInfo 会失败
     static bool FreshDumpIfChanged(Module mod, uint tok, string name, string outDir) {
         try {
-            var m = (MethodInfo)mod.ResolveMethod((int)tok);
+            var m = mod.ResolveMethod((int)tok);
             if (m == null) { Log("[prep] resolve fail " + name); return false; }
             MethodBody b = null;
             try { b = m.GetMethodBody(); } catch { }
@@ -173,7 +173,7 @@ class Prep {
 
     static void ForceAndDump(Module mod, uint tok, string name, string outDir) {
         try {
-            var m = (MethodInfo)mod.ResolveMethod((int)tok);
+            var m = mod.ResolveMethod((int)tok);
             if (m == null) { Log("[prep] resolve fail " + name); return; }
             MethodBody b0 = null; int sz0 = -1;
             try { b0 = m.GetMethodBody(); sz0 = b0 == null ? -1 : b0.GetILAsByteArray().Length; } catch { }
@@ -185,7 +185,7 @@ class Prep {
         } catch (Exception ex) { Log("[prep] forcedump fail " + name + ": " + ex.Message); }
     }
 
-    static void Dump(Module mod, uint tok, MethodInfo m, MethodBody b, byte[] il, string outDir) {
+    static void Dump(Module mod, uint tok, MethodBase m, MethodBody b, byte[] il, string outDir) {
         var bout = new byte[24 + il.Length];
         Put(bout, 0, tok); Put(bout, 4, (uint)il.Length); Put(bout, 8, (uint)b.MaxStackSize);
         Put(bout, 12, (uint)b.ExceptionHandlingClauses.Count); Put(bout, 16, 0); Put(bout, 20, 0);
