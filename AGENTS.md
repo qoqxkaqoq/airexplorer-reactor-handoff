@@ -11,15 +11,19 @@
 程序启动后 UI 截图中出现网盘内容（云盘文件列表等）才算成功。
  alive but no window == FAIL；300×300 空白窗体 == FAIL（v84b 假阳性教训）。
 
-## 📍 当前状态（2026-10-23）
+## 📍 当前状态（2026-10-24 · wb-c2 轮）
 
 | 里程碑 | 状态 |
 |---|---|
 | 文本模式 `help`（16 命令） | ✅ PASS，与官方逐字节一致（v59 起） |
-| 主窗口框架（标题栏/图标正确） | ✅ v65 起（内容区黑屏） |
-| UI 初始化 OnLoad | ❌ ANE：`GenerateAdaptableExtractor` 的 `m_ProjectDecorators` null |
-| 网盘业务功能 | ❌ 未开始（OnLoad 之后的层） |
-| **当前最高水位产物** | **`exes/AirExplorer_v70.exe`** = v66 + 53 方法官方三件套（零回归） |
+| 主窗口框架（标题栏/图标正确） | ✅ v65 起 |
+| v132 引导链：ITP(06004196)/AG.cctor/IGC/DEP/DirectDefinition | ✅ 快照恢复线（v114→v132） |
+| ITP 字符串解密语义 | ✅ **实证通过**（probe2 run 40064028391：ITP(0)="{{ alg = {0}, typ = {1} }}"、ITP(1000)="calendarTriggerUI1"，6 ok/0 null） |
+| UI 初始化 OnLoad → ArgumentGateway.EvaluateVisibleAttribute | ❌ **根因已实证闭环**：NRE 来自 `RequestWorker::.ctor`(06002AF0) 仍是 nop;nop;nop;ret 桩 → `m_RequestClient._RequestSorter` = NULL（probe2 run 40064015971：WriteRequest()=inst, _RequestSorter=NULL, EVA 抛 NRE）。全模块 307 处 `_RequestSorter` 全是 ldfld、零 stsfld、零 newobj TemplateInitializer —— 真实构造逻辑只存在于官方加密真体内，**必须 C2/TTD 抓取** |
+| 网盘业务功能 | ❌ 未开始 |
+
+**当前最高水位产物**：`exes/AirExplorer_v132.exe`（v133/v134 全类 NOP 路线已证伪：InvalidProgramException，不得作为基线）。
+**在途**：C2 最小链（ttd-prep workflow：managed/agcall/ttd 三路并行，官方引导后 PrepareMethod + DynamicMethod 唯一 ilSize 标记夹逼 + 新鲜体 dump；JitScan2.js 标记窗口抓 compileMethod 真体）。
 
 ## 🧰 数据资产（史上最全，直接可用）
 

@@ -592,3 +592,44 @@ ITP(06004196) 使用的静态：`_ExtractorVisitors`(B64✓已恢复) / `_Recomm
 - **gh_sync push 会静默失败**（约 1/3 概率）——**必须看到 commit URL 才算成功**；dispatch 与 push
   间隔需 >10 秒（main 传播延迟），否则 CI 跑旧代码（**看 size/md5 是否匹配**判断）
 - 官方安装包下载偶发 500/不完整——重跑即过
+
+---
+
+## 2026-10-24 · wb-c2 轮（C2 最小链 + 根因实证闭环）
+
+### 探针重建（业主指定的 3 个探针全部恢复并实证）
+
+| 探针 | 位置 | 结果 |
+|---|---|---|
+| EvaluateVisibleAttribute 调用探针 | `ci/probe2.cs` mode=ag + `agprobe.yml` | **run 40064015971（成功）**：AG.cctor OK → AG 4 字段=明文版本 URL → `WriteRequest()` 返回实例 → **`_RequestSorter = NULL`** → EVA 抛 NullReferenceException。根因实证闭环 |
+| ITP 调用探针 | `ci/probe2.cs` mode=itp | run 40064028391：module cctor OK；ITP(0)="{{ alg = {0}, typ = {1} }}"、ITP(1000)="calendarTriggerUI1"，6 ok/0 null/2 预期越界异常。**v132 字符串解密层语义级健康**（已知缺陷：GetTypes() 全量遍历会抛 ReflectionTypeLoadException，数据采集在抛之前已完成，不影响） |
+| ArgumentGateway IL 转储 | `tools2/agscan.cs`(本地 dnlib) | EVA(06002F81)=84 指令 4 态 switch 状态机已完全读通；语义=读代理设置→NetworkCredential→全局写入 |
+
+### EVA NRE 根因（静态+动态双确认，与业主第 0 块结论完全吻合）
+
+- v132 仍是桩的坏链：`RequestWorker::.ctor 06002AF0`、`TemplateInitializer::.ctor 06002AF7`（均 nop;nop;nop;ret）
+- `RequestWorker.cctor`(明文 il=8) 调 `new RequestWorker()` → 桩体什么都没做 → `m_RequestClient` 是空壳 → `_RequestSorter` 永远 NULL
+- 全模块 `_RequestSorter` **307 处 ldfld / 0 处 stsfld**；`TemplateInitializer..ctor` **0 处 newobj** → 真实构造只存在于官方加密真体内 → **这是 C2 的铁证依据**
+- EVA case0 语义：`WriteRequest()._RequestSorter.DefineTransferableRecord(ITP(2109338706^1165523088^容器.m_c1d686055a))` → bool 参与状态机推进（业主"第 0 块不能用 false 替代"的正确性再次确认）；case1/2 读 ProxyUser/ProxyPass；case3 `new NetworkCredential(V_0,V_1)` 写全局代理
+- TemplateInitializer 包装方法已是真体：`DefineTransferableRecord`=`(bool)globalTemplate[str]`；`PatchList`=`ValidatorMatcher.ExecuteExplorer(globalTemplate[str],CallConfig)`；`InstantiateRandomIterator`=globalTemplate 惰性建 `AggregatorLogger(key,null)`+`ParseFlexibleAuthorizer()` 回填——**但 globalTemplate 的初始化在被加密的 TemplateInitializer::.ctor 里**
+- v132 剩余桩 1740（官方 5709）
+
+### C2 最小链（本轮新增，已跑通故障排除两轮）
+
+- `ci/ttd/prep.cs`：官方样本 Assembly.LoadFrom→module cctor→STA 线程入口引导 N 秒→逐目标 `marker(唯一 ilSize DynamicMethod)→PrepareMethod→新鲜 GetMethodBody()`（修复 forcedump 的"先读后 JIT"时机缺陷）→ >4B 则 dump forcedump 同格式 .bin/.loc/.eh；mode=agcall 用反射自然执行夹逼（首次触碰触发整条 JIT 链，含 RequestWorker.ctor/TemplateInitializer.ctor）；phase C 全量桩复查（skipwalk 可关）
+- `ci/ttd/JitScan2.js`：扫全部 compileMethod，按 marker ilSize(50000+/60000+/99999) 切窗，窗口内全量抓 IL+maxStack+ehCount+localsTok+localsSig；输出=JSON 文件 + **行式 JS2DATA 打 debugLog（cdb.log 兜底可解析）**
+- `.github/workflows/ttd-prep.yml`：managed（纯托管新鲜读体）/ agcall（自然夹逼）/ ttd（TTD 录制+cdb 扫描）三 job 并行
+- **首轮故障与修复**（记住，别重踩）：
+  1. TTD 子进程 cwd 不可靠 → 相对路径 `app\AirExplorer.exe` 在 `SetCurrentDirectory` 就崩，且崩点在日志建立之前（trace 只有 2 次 JIT、prep.log 缺失的真相）→ 修：绝对路径 + Main 首行建 Log_ + 全包裹 FATAL 日志
+  2. JitScan2/v5 共有 bug：x64 上 `esp` 是 `rsp` 别名，`esp!==undefined` 探测恒真 → x64 被当 x86 → 修：rax 优先判定
+  3. JS 文件写 API 不稳（Write/WriteLine 均可抛）→ 修：行式 JS2DATA 输出到 debugLog 兜底
+- **agfix 已修**（业主指定三处）：stloc.0-3 无操作数按 opcode 推导局部索引；I8/U8 用 ldc.i8.0；其余值类型 ldloca+initobj+ldloc（`tools2/agfix8.csproj` 建好，编译通过）
+
+### host6 v5 诊断（业主指定四项全落实）
+
+`tools/ci/host6.cs`：程序集版本+样本 MD5+官方基座核对（A12B5C573E1B54E98CCCC29351EAA066 显式落盘）、AG/RW 类型解析结果显式落盘（区分"类型没找到"与"字段读取失败"）、字段读取异常不再吞（AGERR/RWERR 行）、EntryPoint 线程异常落盘（entryEx 行）。注：仓库根 `snapshot.txt`(4566 行) 是 host6 v4 时代产物（只有 DI+TA），AG=0/RW=0 的首要嫌疑即此。
+
+### 基建记录
+
+- 旧 token（xixka）对原仓库无写权限（不能 push/dispatch）；fork 方案被 GitHub 自动删除（仓库内容触发审查）；**owner token 可用**，wb-c2 已快进合并 main（ebeef02→05e0652，纯增量：新探针/C2 链/host6 v5/agscan/agfix 修复，无覆盖）
+- ttd-prep 首轮完整验证 run：40064657856（origin/main）
