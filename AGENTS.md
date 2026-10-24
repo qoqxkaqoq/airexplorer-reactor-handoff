@@ -24,10 +24,11 @@
 | 窗体创建点之谜 | ✅ 已解并归档（InitializerReg=ApplicationContext，ctor 空壳是根因——重启 C 线先读归档文档第二节） |
 | **A 线：激活/便携/暗桩目标定位** | ✅ 详见 board/agents/wb-reverser.md（AssertValidLicense 明文、GetFolderPath 入口） |
 | A 线：三路扫描（xref/字符串/委托回调） | ✅ dscan 全量扫 16598 真体完成：激活=3 布尔字段门控、BC/字符串路径证伪、GFP 9 点、暗桩清单（见 board） |
-| A 线：A1 激活包 | ✅ 出包成功 swapped=6 fail=0（`exes/AirExplorer_A1lic.exe`，tools2/a1patch.cs），⏳ 待 ui-probe CI 验证 |
-| A 线：tamper 验证实验 | ⏳ 待做（官方 exe 改 1 字节 → CI 启动测试；A1lic 本身就是官方派生改体，CI 结果同时回答 tamper 问题） |
-| A 线：A3 便携化 | ⏳ 待做（9 个 GetFolderPath 调用点重定向 exe\data，清单见 board） |
-| A 线：暗桩清理 | ⏳ 待做（DispatcherInitializer 8 Process 反射 + 06004194 Debugger + Timer，清单见 board） |
+| A 线：A1 激活包 | ⛔ **补丁逻辑完成但宿主死刑**——a1patch 5+1 处全成功（swapped fail=0），但 CI 四连测证明 **nb_original 裸基座就 0 窗 CPU 100% 死循环**（与补丁无关），nb_original 族不可用（详见 board 2026-10-25 节） |
+| A 线：壳机制边界 | ✅ 已钉死：baseline 原位全是桩（真体运行时从 3.2MB 负载回填）；dnlib 重写必崩；唯一文件级路=负载密文 known-plaintext 重加密（需解 token→(offset,len,key) 表） |
+| A 线：tamper 验证实验 | ✅ 间接完成：nb_original+6 补丁存活 150s 无自毁（壳不杀文件改动，但也没用因为宿主本身 0 窗） |
+| A 线：A3 便携化 | 🔄 方向改为 launcher 环境重定向（不改 exe：设 USERPROFILE/APPDATA 后启动官方原版，零注入零布局破坏） |
+| A 线：暗桩清理 | ⏳ 依赖负载重加密路线（暗桩在加密体里，文件级改不到） |
 
 **⚠️ 历史修正**：旧记录"v139 主窗口完整渲染 ✅ / Register account 对话框 ✅"**已证伪**——带截图的成功 run（40088489266）`_candidate.txt = candidate: official`（官方基线），v139 真实 ui-probe = windows=0。勿再引用。
 
@@ -50,6 +51,8 @@
 5. **网络**：git 直连不通走 `https://p.xixky.eu.org/https://...`；API 直连可用但认证被掐时用 `GH_API_BASE=https://p.xixky.eu.org/https://api.github.com python3 scripts/gh_sync.py push`；artifact 下载需 302 location 原样拼代理 + `--path-as-is` + **不带** Authorization。
 6. **手工 IL 字节里的 token 是小端**：0x0A000188 → `{88 01 00 0A}`。写成 `{88 01 0A 0A}` = rid 越界 → bodyswap `[bad-operand]`。报 null operand 先查字节序。
 7. **bodyswap ParseType 兼容两种泛型格式**：紧凑 `Dict`2[[A]][[B]]` 与 CLR 运行时完整 `Dict`2[[A, asm],[B, asm]]`（块内多参数，分隔符=平衡点上的 `],[ `）→ loc_official.zip 的 .loc 可直接用。
+8. **baseline(A12B5C57) 原位全是桩**：官方 exe 的保护方法原位 = `nop;nop;nop;ret` 族桩，真体运行时从 .text 0x620000~0x920000 的 3.2MB 加密负载解密回填内存。**dscan one 的反汇编来自 dump 不是 exe 原位**，别再被它骗。
+9. **nb_original 是塌缩坏宿主**：裸基座 CI 0 窗 CPU 100% 死循环（150s 不停）。它 + 任何补丁 = 全灭。唯一 CI 验证能出窗的官方 exe = `exes/AirExplorer_baseline_verified.exe`（A12B5C57）。官网 2026-10-24 当天更新了安装器，新安装器已解不出主程序——**别再指望从官网重下**。
 
 ## 🗺️ 路线图（A 线，按优先级）
 

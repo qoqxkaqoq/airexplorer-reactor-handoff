@@ -835,3 +835,45 @@ entry V_0=5 → state5: ServicePointManager.SecurityProtocol |= 3840 (TLS) → l
 2. **bodyswap ParseType 已升级**：现在同时兼容紧凑 `Dict`2[[A]][[B]]` 与 CLR 运行时完整格式 `Dict`2[[A, mscorlib, ...],[B, ...]]`（块内多参数，分隔符=平衡点上的 `],[ `）→ loc_official.zip 的 .loc 可直接用，无需手工转格式
 
 **下一步**：ui-probe CI 验证 A1lic 启动 → A3 便携化（9 个 GFP 调用点重定向 exe\data）→ 暗桩逐点处理 → 长稳验证
+
+---
+
+## 2026-10-25 凌晨 · A1 出包四连测 + Reactor 壳机制边界钉死（本轮最重要交付）
+
+**CI 实验矩阵（ui-probe, candidate 全部真跑）**：
+
+| run | candidate | 结果 |
+|---|---|---|
+| 40110092485 | A1lic (nb基座+6补丁, 含P6代理桥) | windows=0, CPU 100%×35s, threads=3 |
+| 40110730135 | A1lic_v2 (同上去P6) | windows=0, CPU 100%×35s |
+| 40111158840 | A1lic_min (仅P1/P2字节补丁) | windows=0, CPU 100%×35s |
+| 40111162066 | **nb_original 裸基座（无任何补丁）** | **windows=0, CPU 100%×35s** |
+| 40111702805 | nb_original 裸基座 wait=150 | windows=0, CPU 100%×150s |
+| 40088489266 | **baseline_verified 官方原装** | **windows=20 ✅ CPU 2.75s 完美出窗** |
+| 40112236920 | official（重跑） | ❌ 官网安装器当天已变，解不出主程序 |
+
+**结论 1：0 窗死循环与 A1 补丁无关**——nb_original 裸基座就 0 窗。它就是 rootcause 10-22 预言的"30 秒 CPU 吃满"（board 早有记录），今天 CI 复现 150 秒不停。**A 线所有基于 nb_original 的产物全部继承死刑**。
+
+**结论 2：官网当天更新**——11:05 UTC 老安装器还能解出 9668976B 主程序（md5 A12B5C57）；16:35 UTC 新安装器只解出 $PLUGINSDIR/Language/runtimes。新主程序 = 仓库里已有的 `AirExplorer_baseline_verified.exe`（A12B5C57，与 e8runnable 同 md5）。
+
+**结论 3：dscan "静态明文"是错觉**——dscan one 的反汇编来自 dump 的 m_*.bin，不是 exe 原位字节。python 直读 baseline 原位：
+- 06002133 @RVA = tiny(4B) `{nop;nop;nop;ret}` 标准空壳
+- 06000CEE MoveNext @RVA = tiny(4B) `{nop;nop;ldc.i4.1;ret}` 桩
+- 06003AC8 = tiny(2B) `{ldc.i4.0;ret}` 桩
+- **baseline 全部 Reactor 保护方法原位都是桩，真体在 .text 0x620000~0x920000 的 3.2MB 加密负载里，运行时解密回填内存**（rootcause BROADCAST 机制描述逐字验证成立）
+
+**结论 4：A 线技术边界（最终版）**：
+- ❌ baseline 文件级原位补丁——桩被回填覆盖，无效（hook 确定存在）
+- ❌ dnlib 全量重写——丢负载必崩（resave 阴性对照都崩）
+- ❌ nb_original 族——塌缩+死循环，126 轮证伪
+- ✅ **未试的唯一文件级路：负载密文 known-plaintext 重加密**——dump 有明文 P_old（16598 真体），负载有密文 C_old，keystream = P_old⊕C_old → 新明文 P_new ⊕ keystream = C_new 等长写回负载原位。布局/RVA/长度全不变，壳无感。**前置：解出负载里 token→(offset,len,key) 表**（rootcause 报告 §5.B 也指向这里，尚未有人做）
+- ✅ 数据便携可以不改 exe：launcher 设置 USERPROFILE/APPDATA 等环境变量后启动官方原版（零注入、无杀软风险、天然免疫壳完整性）——A3 的新实现方向
+
+**结论 5（P6 定罪有效但已不重要）**：060059C4 有 3 个调用点（0600217A×2 + 06003A7F@0xC5 喂 StopNode=JSON 状态机布尔读取），恒 true 会破坏配置解析——a1patch 已注释废弃。若未来在"能跑的宿主"上做 A1，用 5 补丁集（P1/P2/P3/P4/P5）。
+
+**工具沉淀**：tools2/a1inplace.cs（PE 原位补丁框架：dnlib 只读定位 RVA + File.WriteAllBytes 原位写字节，布局零破坏）——当前目标方法全是桩所以无目标可补，但框架留作负载重加密时代的写回工具。
+
+**建议下一步（按性价比）**：
+1. launcher 便携方案先落地（不改 exe，立即交付业主可用物）
+2. 投入"解负载表"：起点 = 对比多方法 dump 明文与负载熵区，找 (offset,len,key) 结构；或 TTD 抓回填时刻看运行时读表的指针
+3. 解出表后 → known-plaintext 重加密 → 在 baseline 上实现 A1 五补丁 + A3 + 暗桩清理
