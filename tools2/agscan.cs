@@ -29,6 +29,84 @@ class AgScan {
             case "type": CmdType(a[2]); break;
             case "stubs": CmdStubs(); break;
             case "refs": CmdRefs(a[2]); break;
+            case "sig2loc": CmdSig2Loc(a[2], a[3]); break;
+        }
+    }
+    // sig2loc <hex> <out.loc> — JIT localsSig(LocalVarSig blob) → bodyswap 兼容 .loc(index|isPinned|TypeFullName)
+    static void CmdSig2Loc(string hex, string outPath) {
+        hex = hex.Replace("|", "").Trim();
+        var b = new byte[hex.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
+        if (b.Length < 2 || b[0] != 0x07) { Console.WriteLine("[sig2loc] not a LocalVarSig (first byte 0x" + (b.Length > 0 ? b[0].ToString("X2") : "?") + ")"); return; }
+        int p = 1, count;
+        // 压缩整数
+        if ((b[p] & 0x80) == 0) { count = b[p]; p += 1; }
+        else if ((b[p] & 0xC0) == 0x80) { count = ((b[p] & 0x3F) << 8) | b[p + 1]; p += 2; }
+        else { count = ((b[p] & 0x1F) << 24) | (b[p + 1] << 16) | (b[p + 2] << 8) | b[p + 3]; p += 4; }
+        var sb = new StringBuilder();
+        for (int idx = 0; idx < count && p < b.Length; idx++) {
+            bool pinned = false;
+            // pinned 是自定义修饰符(cmod_opt 0x20 + token)，实际编码: ELEMENT_TYPE_PINNED(0x45) 出现在类型后? CLR 里 pinned 在 sig 里是前缀 custom mod
+            // 实测 forcedump/.loc 由运行时产生, 这里按标准 LocalVarSig: [pinned]? type; pinned 以 0x45 前缀出现
+            while (p < b.Length && b[p] == 0x45) { pinned = true; p++; }
+            var sig = ParseSigType(b, ref p, "");
+            if (sig == null) { Console.WriteLine("[sig2loc] parse fail at local " + idx + " offset " + p); return; }
+            sb.Append(idx).Append('|').Append(pinned ? 1 : 0).Append('|').Append(sig).Append('\n');
+        }
+        File.WriteAllText(outPath, sb.ToString());
+        Console.WriteLine("[sig2loc] wrote " + outPath + " locals=" + count);
+    }
+    static string Compressed(uint v) { return v.ToString(); }
+    static string ParseSigType(byte[] b, ref int p, string ctx) {
+        if (p >= b.Length) return null;
+        byte t = b[p++];
+        switch (t) {
+            case 0x02: return "System.Boolean"; case 0x03: return "System.Char";
+            case 0x04: return "System.SByte"; case 0x05: return "System.Byte";
+            case 0x06: return "System.Int16"; case 0x07: return "System.UInt16";
+            case 0x08: return "System.Int32"; case 0x09: return "System.UInt32";
+            case 0x0A: return "System.Int64"; case 0x0B: return "System.UInt64";
+            case 0x0C: return "System.Single"; case 0x0D: return "System.Double";
+            case 0x0E: return "System.String"; case 0x1C: return "System.Object";
+            case 0x18: return "System.IntPtr"; case 0x19: return "System.UIntPtr";
+            case 0x1D: { var e = ParseSigType(b, ref p, ctx); return e == null ? null : e + "[]"; }
+            case 0x10: { var e = ParseSigType(b, ref p, ctx); return e == null ? null : e + "&"; }
+            case 0x0F: { var e = ParseSigType(b, ref p, ctx); return e == null ? null : e + "*"; }
+            case 0x45: return ParseSigType(b, ref p, ctx); // pinned 修饰符, 当作前缀跳过
+            case 0x11: case 0x12: {
+                // TypeDefOrRefEncoded = 压缩整数 v; 低2位: 0=TypeDef 1=TypeRef 2=TypeSpec; rid = v >> 2
+                if (p >= b.Length) return null;
+                uint v;
+                byte c = b[p++];
+                if ((c & 0x80) == 0) v = c;
+                else if ((c & 0xC0) == 0x80) { v = (uint)(((c & 0x3F) << 8) | b[p++]); }
+                else { v = (uint)(((c & 0x1F) << 24) | (b[p] << 16) | (b[p + 1] << 8) | b[p + 2]); p += 3; }
+                uint table = (v & 0x3) == 0 ? 0x02u : (v & 0x3) == 1 ? 0x01u : 0x1Bu;
+                uint mdTok = (table << 24) | (v >> 2);
+                var tr = mod.ResolveToken((int)mdTok) as ITypeDefOrRef;
+                return tr != null ? tr.FullName : "?0x" + mdTok.ToString("X8");
+            }
+            case 0x15: { // GENERICINST
+                bool isVal = b[p] == 0x11; p++;
+                var baseT = ParseSigType(b, ref p, ctx); // CLASS/VALUETYPE
+                if (baseT == null) return null;
+                if (p >= b.Length) return null;
+                int argc; { byte c = b[p++]; argc = (c & 0x80) == 0 ? c : ((c & 0x3F) << 8) | b[p++]; }
+                var args = new List<string>();
+                for (int i2 = 0; i2 < argc; i2++) { var a = ParseSigType(b, ref p, ctx); if (a == null) return null; args.Add(a); }
+                // 还原 List`1[[T]] 运行时格式
+                int bt = baseT.IndexOf('`');
+                if (bt > 0) {
+                    var arity = baseT.Substring(bt + 1);
+                    int n; int.TryParse(arity.TrimEnd(new[] { '\0' }), out n);
+                    var inner = string.Join(",", args.Select(x => "[[" + x + "]]"));
+                    return baseT + "[[" + inner + "]]";
+                }
+                return baseT + "<" + string.Join(",", args) + ">";
+            }
+            case 0x13: return "!!" + b[p++];  // VAR
+            case 0x1E: return "!" + b[p++];   // MVAR
+            default: return null;
         }
     }
     // refs <kw> — 扫全模块指令里引用了名字含 kw 的字段/方法(newobj)的位置
