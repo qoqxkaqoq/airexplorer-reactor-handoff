@@ -39,17 +39,22 @@ var BASE = mod ? Number(mod.BaseAddress) : 0;
 log("[V4] module AirExplorer base=0x" + BASE.toString(16) + " modules=" + modList.length);
 if (!BASE) { log("[V4] FATAL no AirExplorer module"); return; }
 function modOf(a) { for (var x of modList) if (a >= x.base && a < x.end) return x.name; return "?"; }
-function memReadable(a) {
-    try {
-        var out = ExecuteCommand2("db 0x" + a.toString(16) + " L1");
-        return out.indexOf("??") < 0;
-    } catch (e) { return false; }
-}
 function ExecuteCommand2(cmd) {
     var out = "";
     try { out = host.namespace.Debugger.Utility.Control.ExecuteCommand(cmd); }
     catch (e) { return "ERR: " + e; }
-    return out;
+    return ecStr(out);
+}
+function ecStr(r) {
+    if (r === null || r === undefined) return "";
+    if (typeof r === "string") return r;
+    try { var s = r.toString(); if (s !== "[object Object]") return s; } catch (e) { }
+    try {
+        var lines = [];
+        for (var line of r) lines.push(String(line));
+        return lines.join("\n");
+    } catch (e2) { }
+    try { return JSON.stringify(r); } catch (e3) { return "[unprintable]"; }
 }
 function EC(cmd) { var out = ExecuteCommand2(cmd); log("[V4|CMD] " + cmd + "\n" + out); return out; }
 function readBytes(addr, n) {
@@ -59,6 +64,9 @@ function readBytes(addr, n) {
         for (var v of vals) out.push(Number(v) & 0xFF);
     } catch (e) { }
     return out;
+}
+function memReadable(a) {
+    try { host.memory.readMemoryValues(a, 1, 1); return true; } catch (e) { return false; }
 }
 function dumpMem(tag, addr, n) {
     var bs = readBytes(addr, n);
@@ -172,8 +180,8 @@ for (var tk of ttTargets) {
         dumpNonStackMem(rd);
         EC("k 15");
         EC("dps @rsp L30");
-        EC("u @rip-0x80 L34");
-        EC("u @rip L20");
+        EC("u @rip-0x100 L80");
+        EC("u @rip L30");
     }
 }
 
@@ -202,8 +210,8 @@ if (writerIPs.length > 0) {
             try { ExecuteCommand2("g"); } catch (e) { log("[V4] P3 g#" + hit + " threw: " + e); break; }
             log("[V4] P3 ---- HIT#" + hit + " ----");
             EC("ln @rip");
-            EC("u @rip-0xA0 L60");
-            EC("u @rip L10");
+            EC("u @rip-0x140 L90");
+            EC("u @rip L30");
             var rd3 = dumpRegs();
             if (rd3) { dumpNonStackMem(rd3); EC("k 15"); EC("dps @rsp L30"); }
         }
