@@ -1086,3 +1086,40 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 - **TTD 双 run 回来**：① 写 IP 模块归属 + 反汇编（回填循环指令形态）② bp 命中的寄存器/栈 → 解密例程源缓冲 ③ **06004282 DirectDefinition 全 body IL** → key 来源 → 离线解 FactoryValidator → 3288 字符串全明
 - 池明文后：激活相关字符串（trial/expired/license/pro）xref 全部 3288 调用点 → 门控布尔写入点定位 → A1 直改或 A2 公钥替换落地
 - kw>1 时 brute_pool_k0 需扩展（k0 仍可得，k1..kn 待 TTD 或逐词暴力）
+
+## 第 VII 段（2026-10-25 · v3 run 解读 + 负载非 seed-0 链实证 + v4 全输出版）
+
+### 1. v3 run 40125259583 / 40125651490 解读（两 run 交叉印证）
+
+- **TTD.Memory 事件对象带 `TimeStart`（Sequence:Step）**：`evPos()` 拿到 `pos=0x1657e:0xcd` 形态位置 → `!tt` 可用（trace 自动被 Memory 查询索引）；**且 Memory 查询扫全 trace 与当前位置无关**（v5 战术基石）
+- **写 IP 统一 `0x7ffb0e350801`**（run2=0x7ffa9e9b0801，ASLR 不同但相对位置一致）；模块归属 `readable=false`/`module=?`——在动态分配的可执行内存里（Reactor 运行时解密器），不是 CLR 也不是主模块
+- **bp 命中 14 次寄存器全抓**：`rax`=明文 dword、`rcx`/`rdi`=目标地址（逐次 +4）、`rbx` 阶梯递增（方法内偏移/游标）、**`rsi=0x6e51d6f8` 与 `r9=0x56FE8` 两次 run 完全相同**（ASLR 都变了值不变 → 构建常量，疑似 key/状态，非指针；读它 0x60 字节不可读）
+- 06003909/06002BD1 前 16B = fat 头（flags=0x301B/0x3007，locals tok 0x0008009D/0x00080331）——Reactor 私有元数据表（0x08 族），非标准 0x11 standalone sig
+- **回填是惰性逐方法**：06004204/06004282 在 30s+30s 窗口 **0 次写**（从未被调用）；窗口内回填的都是启动路径方法
+
+### 2. 负载密钥方案负结果（全部本地零成本，别再重试）
+
+- **scan_payload_ks0.py**：6 资源 × 3 个已知明文（TTD 拿的 0600212A/06003909/06002BD1 首 4 dword）× seed-0 keystream 对齐扫描 = 0 命中
+- **scan_payload_ks0b.py**：ct 位置 i 与 ks 索引 j 解耦假设（dict 反查 4M 词）= 0 命中
+- **scan_payload_ks0c.py**：24B 记录头假设（明文首 word=token）+ 全周期 keystream = 仅随机碰撞级命中，无 4-word 确认
+- **keystream 链是环**：seed-0 起跑 4M 步仅 **36819 个唯一状态**（尾 6377 + 环 30442）——整环已覆盖仍无命中 → **负载解密用不同常量/算法**（per-build key），必须拿反汇编
+- **brute_pool_k0.py 完成：survivors=0**——kw=1 假设全 2³² 空间（`[len,0,0,0]` 已知明文 + plain1 双验证）全灭
+
+### 3. v4（PayloadScan.js 全重写，run 40126787841）——v3 两致命伤修掉
+
+- v3 伤①：`ln`/`u`/`k`/`dps` 的 ExecuteCommand **输出进返回值不进 cdb.log** → v4 一律 `log(EC(cmd))`
+- v3 伤②：06004282 大窗口空等（0 事件）→ v4 目标表换血：0600418B（池解密器 0x400）/06004196（0x800）/060042B0（0x600）/060042B1（0x200）——但池惰性初始化，启动窗口大概率同样 0 事件，**主力=P2/P3**：
+  - P2 `!tt` 到 4 个关键回填时刻（06003909/06004282/0600418B/060042B1 首事件）→ 寄存器/栈/`u @rip-0x80` 反汇编
+  - P3 writerIP bp + 6 次 g → `ln`+`u @rip-0xA0 L60`（解密循环完整形态）+ 数据寄存器内存 dump
+  - P4 SOS：`.loadby sos clr` + `!bpmd`（GenerateAlphabeticVerifier/GenerateModularInitializer/DirectDefinition）+ `!dumparray` 参数（抓 key）
+  - P5 末态：`!dumpheap -type CloudClient.Models.AlphabeticModel` → `!dumpobj`（**3 门控布尔实例值**）+ TemplateArgument `!dumpclass` → `_ExtractorVisitors` 静态 → 池 byte[] 全量 db
+
+### 4. v5 战术（v4 之后，零 CI 成本发现）
+
+- **门控布尔写入点抓法**：TTD.Memory 查询与位置无关 → 先 P5 拿 AlphabeticModel 实例地址 + `!dumpobj` 字段偏移 → 对 3 个布尔字段 VA 开 **"w" 写查询** → 直接抓到原生气码给 `false` 的写 IP + 时刻（原生气码=Reactor license runtime，IL 无 stfld）→ `!tt` 到写点看气码上下文
+- 字符串池：启动窗口不初始化（06004282 未被调）→ 要么延长录制窗口（+2min 再 finalize）要么 v5 加 `!bpmd` 后多 `g` 等它触发
+
+### 5. 结论修正
+
+- "A 线唯一路 = TTD 抓回填例程" 不变，但 **06004282 全 body IL 目标作废**（它根本不在启动窗口回填）——key 来源改从 P3 解密循环反汇编直接读（rsi=0x6e51d6f8 恒定值优先怀疑）
+
