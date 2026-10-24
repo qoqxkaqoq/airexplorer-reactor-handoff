@@ -93,7 +93,7 @@ jobs:
           $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
           $lines = @(
             '.load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll'
-            'sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !pe; .echo ===END-EXC===; g" clr'
+            'sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !clrstack; kb 15; !pe; .echo ===END-EXC===; g" clr'
             'g'
           )
           Set-Content -Path D:\cdb_cmd.txt -Value $lines -Encoding ASCII
@@ -150,7 +150,7 @@ jobs:
           $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
           $lines = @(
             '.load C:\Windows\Microsoft.NET\Framework64\v4.0.30319\sos.dll'
-            'sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !pe; .echo ===END-EXC===; g" clr'
+            'sxe -c ".echo ===CLR-EXC===; .loadby sos clr; !clrstack; kb 15; !pe; .echo ===END-EXC===; g" clr'
             'g'
           )
           Set-Content -Path D:\cdb_cmd.txt -Value $lines -Encoding ASCII
@@ -174,7 +174,7 @@ jobs:
           $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
           $lines = @(
-            'sxe -c ".loadby sos clr; .echo SOS-OK; !bpmd AirExplorer 06002985; .echo BPMD-SET; g" ld:clr'
+            'sxe -c ".loadby sos clr; .echo SOS-OK; !bpmd AirExplorer 0x06002985; .echo BPMD-SET; g" ld:clr'
             'g'
           )
           Set-Content -Path D:\cdb_cmd2.txt -Value $lines -Encoding ASCII
@@ -198,7 +198,7 @@ jobs:
           $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
           $lines = @(
-            'sxe -c ".loadby sos clr; .echo SOS-OK; !bpmd AirExplorer 06002985; .echo BPMD-SET; g" ld:clr'
+            'sxe -c ".loadby sos clr; .echo SOS-OK; !bpmd AirExplorer 0x06002985; .echo BPMD-SET; g" ld:clr'
             'g'
           )
           Set-Content -Path D:\cdb_cmd2.txt -Value $lines -Encoding ASCII
