@@ -153,6 +153,9 @@ class Prep {
         // RefScan: 官方引导后 — ① 直接读委托静态字段的运行时目标(最直接) ② 全量 IL 字节扫赋值点
         RefScan(asm, mod);
 
+        // MapScan: dump m_LogicalProcessorMap 全表 — Reactor 委托绑定的 ground truth (fieldTok→methodTok)
+        MapScan(asm);
+
         Marker(99999);
         Log("[prep] ALL DONE");
         Log_.Close();
@@ -164,6 +167,37 @@ class Prep {
         try { ts = asm.GetTypes(); }
         catch (System.Reflection.ReflectionTypeLoadException ex) { ts = ex.Types; }
         foreach (var t in ts) if (t != null) yield return t;
+    }
+
+    static void MapScan(Assembly asm) {
+        try {
+            var di = AllTypes(asm).First(t => t.FullName != null && t.FullName.EndsWith("DispatcherInitializer"));
+            var mf = di.GetField("m_LogicalProcessorMap", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (mf == null) { Log("[mapscan] field missing"); return; }
+            var map = mf.GetValue(null);
+            if (map == null) { Log("[mapscan] map = NULL (从未构建)"); return; }
+            var cnt = (int)map.GetType().GetProperty("Count").GetValue(map, null);
+            Log("[mapscan] entries=" + cnt);
+            // 全模块静态委托字段 token 集合 — 只打印这些 key 的绑定
+            var dlgFieldToks = new System.Collections.Generic.HashSet<int>();
+            foreach (var ty in AllTypes(asm)) {
+                if (ty.BaseType == null || ty.BaseType.FullName != "System.MulticastDelegate") continue;
+                foreach (var f in ty.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)) dlgFieldToks.Add(f.MetadataToken);
+            }
+            Log("[mapscan] delegate static fields module-wide=" + dlgFieldToks.Count);
+            var ie = map.GetType().GetMethod("GetEnumerator");
+            var e = (System.Collections.IEnumerator)ie.Invoke(map, null);
+            var kProp = e.GetType().GetProperty("Current").PropertyType.GetProperty("Key");
+            var vProp = e.GetType().GetProperty("Current").PropertyType.GetProperty("Value");
+            int hit = 0, total = 0;
+            while (e.MoveNext()) {
+                total++;
+                var cur = e.Current;
+                int k = (int)kProp.GetValue(cur, null), v = (int)vProp.GetValue(cur, null);
+                if (dlgFieldToks.Contains(k)) { Log("MAPENTRY|" + k.ToString("X8") + "|" + v.ToString("X8")); hit++; }
+            }
+            Log("[mapscan] done total=" + total + " delegateFieldHits=" + hit);
+        } catch (Exception ex) { Log("[mapscan] EX " + Chain(ex)); }
     }
 
     static void RefScan(Assembly asm, Module mod) {
