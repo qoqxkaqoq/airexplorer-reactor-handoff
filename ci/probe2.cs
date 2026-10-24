@@ -129,7 +129,10 @@ class Probe2 {
                     Type vsT = null; Type gvT = null;
                     try { foreach (var t in asm.GetTypes()) { if (t.Name == "ValidatorSchema" && vsT == null) vsT = t; if (t.Name == "GroupedValidator" && gvT == null) gvT = t; } }
                     catch (System.Reflection.ReflectionTypeLoadException rtle) {
-                        foreach (var le in rtle.LoaderExceptions.Take(5)) Log("[probe2] LOADEX: " + le.Message + " @ " + (le.StackTrace == null ? "" : le.StackTrace.Split('\n')[0]));
+                        for (int li = 0; li < rtle.LoaderExceptions.Length && li < 5; li++) {
+                            var le = rtle.LoaderExceptions[li];
+                            Log("[probe2] LOADEX: " + le.Message + " @ " + (le.StackTrace == null ? "" : le.StackTrace.Split('\n')[0]));
+                        }
                         foreach (var t in rtle.Types) { if (t != null && t.Name == "ValidatorSchema" && vsT == null) vsT = t; if (t != null && t.Name == "GroupedValidator" && gvT == null) gvT = t; }
                     }
                     if (vsT == null || gvT == null) throw new Exception("ValidatorSchema/GroupedValidator not found: " + (vsT == null) + "/" + (gvT == null));
