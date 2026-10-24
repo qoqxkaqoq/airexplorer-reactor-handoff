@@ -36,8 +36,11 @@ function getSession() {
     return null;
 }
 var regsObj = getRegsUser();
-var isX86 = false;
-try { isX86 = regsObj !== null && regsObj.esp !== undefined; } catch (e) { }
+var isX86 = true;
+try {
+    // x64 优先: rax/rcx/rdx 存在即为 x64 (esp 在 x64 上是 rsp 的别名, 不能用它判定)
+    isX86 = !(regsObj !== null && regsObj.rax !== undefined);
+} catch (e) { }
 log("[JS2] arch = " + (isX86 ? "x86 (WoW64)" : "x64"));
 
 var session = getSession();
@@ -135,11 +138,24 @@ out.scanned = scanned;
 log("[JS2] done scanned=" + scanned + "/" + out.total + " markers=" + out.markers.length + " windows=" + out.windows.length);
 var topSizes = Object.keys(out.sizeHistogram).sort(function(a,b){ return out.sizeHistogram[b]-out.sizeHistogram[a]; }).slice(0, 40);
 out.topSizes = topSizes.map(function(k){ return { ilSize: Number(k), count: out.sizeHistogram[k] }; });
+
+// 输出策略: ① 行式 JS2DATA 打到 debugLog (cdb.log 兜底, 文件写失败也能解析)
+//           ② 同时尝试写 jitscan2.json
+log("===JITSCAN2_META===" + JSON.stringify({arch: out.arch, total: out.total, scanned: scanned, markers: out.markers, topSizes: out.topSizes}));
+for (var wi = 0; wi < out.windows.length; wi++) {
+    var w = out.windows[wi];
+    log("===JITSCAN2_WINDOW===" + w.afterMarker + "|" + w.calls.length);
+    for (var ci = 0; ci < w.calls.length; ci++) {
+        var c = w.calls[ci];
+        log("JS2DATA|" + w.afterMarker + "|" + c.callIndex + "|" + c.ilSize + "|" + (c.maxStack||0) + "|" + (c.ehCount||0) + "|" + (c.localsTok||"0") + "|" + (c.localsSig||"") + "|" + (c.il||""));
+    }
+}
+log("===JITSCAN2_END===");
 var txt = JSON.stringify(out);
-var f = host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\jitscan2.json");
 var written = false;
-try { f.Write(txt); written = true; } catch (e1) { }
-if (!written) { try { f.WriteLine(txt); written = true; } catch (e2) { } }
-if (!written) { try { f.WriteAllText(txt); written = true; } catch (e3) { log("[JS2] write err " + e3); } }
-log("[JS2] jitscan2.json bytes=" + txt.length + " written=" + written);
+try {
+    var f = host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\jitscan2.json");
+    try { f.Write(txt); written = true; } catch (e1) { try { f.WriteLine(txt); written = true; } catch (e2) { } }
+} catch (e0) { log("[JS2] createfile err " + e0); }
+log("[JS2] jitscan2.json bytes=" + txt.length + " written=" + written + " (行式输出已打到 cdb.log, 可兜底解析)");
 }

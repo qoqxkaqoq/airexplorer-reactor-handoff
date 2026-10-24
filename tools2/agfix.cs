@@ -70,7 +70,7 @@ class AgFix {
         Console.WriteLine("[agfix] wrote " + a[2]);
     }
 
-    // call WriteRequest → 首个 stloc(含) 整段 NOP, stloc 前补 ldc.i4.0
+    // call WriteRequest → 首个 stloc(含) 整段 NOP, stloc 前补类型匹配的默认值
     static int FixBlocks(CilBody body) {
         var il = body.Instructions;
         int n = 0;
@@ -86,20 +86,45 @@ class AgFix {
             }
             if (end < 0) continue;
             for (int k = i; k < end; k++) il[k].OpCode = OpCodes.Nop;
-            // 按目标局部变量类型发默认值(int→ldc.i4.0, 引用类型→ldnull) — 类型不符=InvalidProgram
-            Instruction def;
-            var loc = il[end].Operand as Local;
+            // stloc.0-3 无 Local 操作数 — 按 opcode 推导局部索引
+            Local loc = il[end].Operand as Local;
+            if (loc == null) {
+                int idx = il[end].OpCode.Code == Code.Stloc_0 ? 0 : il[end].OpCode.Code == Code.Stloc_1 ? 1 : il[end].OpCode.Code == Code.Stloc_2 ? 2 : il[end].OpCode.Code == Code.Stloc_3 ? 3 : -1;
+                if (idx >= 0 && idx < body.Variables.Count) loc = body.Variables[idx];
+            }
             var lt = loc != null ? loc.Type : null;
             var et = lt != null ? lt.GetElementType() : ElementType.Object;
-            if (lt == null) def = new Instruction(OpCodes.Ldc_I4_0);
-            else if (et == ElementType.I4 || et == ElementType.U4 || et == ElementType.I1 || et == ElementType.U1 || et == ElementType.I2 || et == ElementType.U2 || et == ElementType.Boolean || et == ElementType.Char) def = new Instruction(OpCodes.Ldc_I4_0);
-            else if (et == ElementType.I8 || et == ElementType.U8) def = new Instruction(OpCodes.Ldc_I4_0);
-            else def = new Instruction(OpCodes.Ldnull);
-            il.Insert(end, def);
+            foreach (var ins in DefaultFor(lt, et, loc)) il.Insert(end++, ins);
             n++;
             i = end;
         }
         return n;
+    }
+    // 按局部类型生成栈类型匹配的默认值指令序列
+    static IEnumerable<Instruction> DefaultFor(TypeSig lt, ElementType et, Local loc) {
+        if (lt == null) { yield return new Instruction(OpCodes.Ldc_I4_0); yield break; }
+        switch (et) {
+            case ElementType.I4: case ElementType.U4: case ElementType.I1: case ElementType.U1:
+            case ElementType.I2: case ElementType.U2: case ElementType.Boolean: case ElementType.Char:
+                yield return new Instruction(OpCodes.Ldc_I4_0); yield break;
+            case ElementType.I8: case ElementType.U8:
+                yield return new Instruction(OpCodes.Ldc_I8) { Operand = 0L }; yield break; // 修复: 不能用 ldc.i4.0 冒充 I8
+            case ElementType.R4:
+                yield return new Instruction(OpCodes.Ldc_R4) { Operand = 0f }; yield break;
+            case ElementType.R8:
+                yield return new Instruction(OpCodes.Ldc_R8) { Operand = 0d }; yield break;
+            case ElementType.I: case ElementType.U:
+                yield return new Instruction(OpCodes.Ldc_I4_0); yield return new Instruction(OpCodes.Conv_I); yield break;
+        }
+        bool isRef = et == ElementType.Object || et == ElementType.String || et == ElementType.Class || et == ElementType.SZArray || et == ElementType.Array
+                  || et == ElementType.ByRef || et == ElementType.Ptr || et == ElementType.FnPtr || et == ElementType.GenericInst && lt.ToTypeDefOrRef() is TypeSpec;
+        // 类/数组/接口 → ldnull; 其余(值类型/泛型值类型) → ldloca+initobj+ldloc
+        if (isRef) yield return new Instruction(OpCodes.Ldnull);
+        else if (loc != null) {
+            yield return new Instruction(OpCodes.Ldloca) { Operand = loc };
+            yield return new Instruction(OpCodes.Initobj) { Operand = lt.ToTypeDefOrRef() };
+            yield return new Instruction(OpCodes.Ldloc) { Operand = loc };
+        } else yield return new Instruction(OpCodes.Ldnull);
     }
 
     // ldsfld ArrangeAggregator → nop; 其后 call ExecuteExplorer → pop+ldc.i4.0

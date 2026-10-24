@@ -122,8 +122,9 @@ jobs:
           $p = Get-Content D:\wd\paths.txt
           $ttdExe = $p[0].Trim()
           $exe = (Resolve-Path "C:\out\prep.exe").Path
-          # 录制宿主 prep.exe (它内部加载官方 AirExplorer 并引导)
-          $tt = Start-Process -FilePath $ttdExe -ArgumentList "-accepteula","-out","C:\ttd\trace.run","$exe","app\AirExplorer.exe","C:\out","${{ inputs.delay }}","agcall","skipwalk" -WorkingDirectory (Resolve-Path "app").Path -PassThru -NoNewWindow
+          $ae  = (Resolve-Path "app\AirExplorer.exe").Path
+          # 录制宿主 prep.exe (它内部加载官方 AirExplorer 并引导); 官方样本必须绝对路径(TTD 子进程 cwd 不可靠)
+          $tt = Start-Process -FilePath $ttdExe -ArgumentList "-accepteula","-out","C:\ttd\trace.run","$exe","$ae","C:\out","${{ inputs.delay }}","agcall","skipwalk" -PassThru -NoNewWindow
           $deadline = (Get-Date).AddMinutes(25)
           while (-not $tt.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 15 }
           if (-not $tt.HasExited) { try { $tt.Kill() } catch {} }
@@ -142,11 +143,19 @@ jobs:
           if (Test-Path C:\out\jitscan2.json) {
             $sz = (Get-Item C:\out\jitscan2.json).Length
             Write-Host "jitscan2.json = $sz 字节"
-            $j = Get-Content C:\out\jitscan2.json -Raw | ConvertFrom-Json
-            Write-Host ("markers=" + $j.markers.Count + " windows=" + $j.windows.Count)
-            $withIl = ($j.windows | ForEach-Object { $_.calls } | Where-Object { $_.il }).Count
-            Write-Host ("窗口内带 IL 的调用 = " + $withIl)
-          } else { Write-Host "JS 未产出结果"; Get-Content C:\out\cdb.log -Tail 40 }
+            if ($sz -gt 100) {
+              $j = Get-Content C:\out\jitscan2.json -Raw | ConvertFrom-Json
+              Write-Host ("markers=" + $j.markers.Count + " windows=" + $j.windows.Count)
+              $withIl = ($j.windows | ForEach-Object { $_.calls } | Where-Object { $_.il }).Count
+              Write-Host ("窗口内带 IL 的调用 = " + $withIl)
+            }
+          } else { Write-Host "JS 未产出 json, 用 cdb.log 行式输出兜底" }
+          # 兜底/统计: 从 cdb.log 提取行式 JS2DATA
+          $dataLines = (Select-String -Path C:\out\cdb.log -Pattern "^JS2DATA\|" -ErrorAction SilentlyContinue).Count
+          Write-Host "cdb.log 中 JS2DATA 行数 = $dataLines"
+          if ($dataLines -gt 0) {
+            Select-String -Path C:\out\cdb.log -Pattern "^===JITSCAN2_META===" | ForEach-Object { $_.Line.Substring(0, [Math]::Min(600, $_.Line.Length)) }
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
