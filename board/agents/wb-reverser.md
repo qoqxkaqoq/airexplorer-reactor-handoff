@@ -1123,3 +1123,70 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 
 - "A 线唯一路 = TTD 抓回填例程" 不变，但 **06004282 全 body IL 目标作废**（它根本不在启动窗口回填）——key 来源改从 P3 解密循环反汇编直接读（rsi=0x6e51d6f8 恒定值优先怀疑）
 
+
+## 第 VIII 段：v4c 战果 + v5 决定性战术（2026-10-25 06:5x）
+
+### 1. 回填写入方实锤（v4c P3 六次 HIT 反汇编）
+
+**写入方 = `Marshal.WriteInt32(IntPtr,int,int)` 的 NGEN 原生体**（`mscorlib_ni+0x570801`）。
+v3/v4b 时代"module=?/readable=false 在动态分配内存"的判断**错误**——当时是模块枚举失败。
+真实调用链（k 栈实锤）：
+
+```
+驱动器方法 (JIT 帧内 0x7ff9ecea3ab9)
+  → 060041FA VerifyCustomIteratorRunner (19B 转发壳, JIT 帧 retaddr 0x7ff9eceab1ae)
+      ldarg v0; ldarg v1; ldarg v2; call Marshal::WriteInt32(ptr,ofs,val); ret
+  → Marshal.WriteInt32 (mscorlib_ni+0x5707e0: movsxd rax,edx; add rcx,rax; mov [rcx],eax)
+```
+
+**回填例程是托管 IL**！它调 Marshal.WriteInt32 写桩 VA。HIT 时刻寄存器：
+`rcx=rdi=目标VA`(每次+4)、`rdx=0`(offset 参数恒 0)、`r8d=rax=明文 dword`。
+
+### 2. 寄存器行为模型（v4c 六 HIT 连续观测，060042B1）
+
+- `rbx` = 当前方法密文条目在负载流内的起始偏移（跨方法跳变：0x5358c→0x535a8）
+- `r10` = **密文流读游标**：首次写 = rbx+0xA（条目头 10 字节），每次写 +4
+- **跨段跳跃**：060042B1 off 0x10→0x1ac 之间（0x19C 字节）无写事件，r10 一步 +0xC
+  → **密文流对连续 0x00（nop 填充区）做了游程跳过**——负载内 IL 大部分是 0x00
+- 写入步长 164 steps/dword（TTD step 计数，两次 run 一致）
+- `rsi=0x6e51d6f8`、`r9=0x56FE8` = **Viewer 资源的大小**（可能纯属资源长度变量）
+
+### 3. 负载流定位全部负结果（零 CI，三连证伪）
+
+- 37 个已知明文 dword 在 6 个 res_*.bin 里 **0 命中**（任意字节对齐）
+- rbx 偏移同位置 XOR → keystream 非 prng_round 链（3 资源 × 2 方法全测）
+- 全偏移 numpy 向量化 prng 链扫描（ks[i+1]==prng(ks[i]) 双 dword 联合）**0 命中**
+- 结论：**负载流 ≠ 资源原文件**。资源先要过 0600428A 主库同款解密（非 seed0 直接对齐），
+  或者密文流是带游程编码的变换流。**不再盲试——等 v5 !dumpil 拿驱动器方法 IL 静态读算法。**
+
+### 4. 名字映射修正（disasm8 单查为准，之前 board 记录有错位）
+
+| tok | 真名 | dump 状态 |
+|---|---|---|
+| 0600212A | AccessibleClient::SendFlexibleAttribute() | dump 有，7B：`ldarg.0; ldfld 0x04000C3D(_IsDecoratorProvider); ret` —— 门控 getter 本体 |
+| 06003909 | RequestVerifierTransformer::.ctor | **MISSING**（TTD 抓到 fat 头：maxstack7/codesize 0x89D/locals 0x11000AE8 + call 06004194） |
+| 06002BD1 | （未知名） | **MISSING**（fat: maxstack6/codesize 0x331/locals 0x1100087D + call 06004194） |
+| 06004282 | FinderMap::DirectDefinition() | dump 2B 真体（无需回填，events=0 正常） |
+| 0600418B | DispatcherInitializer::GenerateAlphabeticVerifier(B[],B[],B[]) | dump 真体 920B |
+| 06004196 | DispatcherInitializer::InstantiateTransferableProgram(int) | dump 真体 446B eh=2 |
+| 060042B0 | TemplateArgument::GenerateModularInitializer(byte[]) | dump 真体 1040B（fat: maxstack6/codesize 0x410/locals 0x11000C38；IL_0000: ldc.i4 0x75BBE18F; stloc V_9） |
+| 060042B1 | TemplateArgument::EnableAuthorizer(BinaryReader) | dump 真体 414B 平坦化 7 分支（ldc.i4 0x79BDB41D 与 TTD 回填明文逐字节吻合 → **dump=真体明文库双重验证**） |
+| 060041FA | DispatcherInitializer::VerifyCustomIteratorRunner(IntPtr,int,int) | 19B WriteInt32 纯转发壳，**无静态调用方**（无 call/ldftn 字面量 → 驱动器在加密负载里） |
+| 06004198 | DispatcherInitializer::InstantiateSegmentedRunner(...) | 311B：反篡改调度分支（_IsRunnerParameter/Hashtable _RegFunction/DefinitionQueue/UpdatePredictor），**不是回填循环** |
+| 0600419C | （37KB 平坦化状态机 538 分支） | IL_0A52 call 060041FA；调用面=Type::GetField+反射写字段 → 反射写表方法，**不是驱动器** |
+
+### 5. v5 决定性战术（run 已 dispatch，a1work 9833f0f）
+
+TTD 回放态限制：`!dumpheap`/`!clrstack` 需要 GC heap（回放态 GC in plan phase → 不可用）。
+但 **`!ip2md` / `!dumpil` / `!dumpmd` 不需要 GC heap** → v5 布局：
+
+- P3：writerIP bp 命中 #1 → `.loadby sos clr` → 解析 k 栈全部裸 JIT 帧地址 →
+  逐个 `!ip2md` → `!dumpmd` + `!dumpil` → **060041FA 壳 + 驱动器方法的 MethodDesc 与完整 IL 直接到手**
+- P4：`!dumpil <BASE> <token>` 逐 token 直读回填后真体（06003909/06002BD1 这两个 MISSING 的完整 IL）
+- 桩 VA 运行时已回填 = SOS 读 RVA 处内存 = 解密明文。**不再抓写事件重建，直接读。**
+
+### 6. 下一步（v5 回来后）
+
+1. 驱动器方法 !dumpil → 静态读负载密文流结构（条目头 10B/游程跳零/解密 key 推导）→ 离线实现 decrypt/encrypt
+2. 06003909/06002BD1 真体 → 入 dump 库 → 检查是否含门控布尔写入（stfld _IsDecoratorProvider）
+3. 若驱动器 IL 里有解密 key 常量 → 负载流完全破解 → A1 五补丁重加密 → 单 exe 启动即 Pro
