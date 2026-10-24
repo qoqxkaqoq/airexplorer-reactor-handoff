@@ -12,9 +12,11 @@ using System.IO;
 //   P3 0600212A  体替换 {17 2A}                   (SendFlexibleAttribute => true)
 //   P4 06002157  体替换 {17 2A}                   (PlanRandomTag => true)
 //   P5 06002127  体替换 {17 2A}                   (AccessibleClient::TestCollector => 1)
-//   P6 060059C4  体替换 => Nullable<bool>(true)    (GlobalViewerValidator 代理桥,
-//              一处强制两个 AlphabeticModel 许可字段; 0600217A 无 .loc 故绕开)
-//   注意: newobj token 字节是小端, 0x0A000188 => {88 01 00 0A}, 别再写成 {88 01 0A 0A}
+//   [已废弃] 060059C4 恒 true —— CI 实测定罪（run 40110092485, windows=0 CPU 100%）:
+//     060059C4 有 3 个调用点, 除 0600217A 两个许可字段写入外, 06003A7F@0xC5
+//     (IterableDicAggregator 配置 JSON 状态机) 把它的返回值喂 StopNode(bool),
+//     恒 true 破坏 JSON 解析推进 => 启动死循环。许可直通只钉读取点(P3/P4/P5)即可。
+//   注意: 手工 IL 里的 token 是小端, 0x0A000188 => {88 01 00 0A}, 别写成 {88 01 0A 0A}
 class A1Patch {
     struct BP { public string tok; public int off; public byte[] from; public byte[] to; public string why; }
     static void Main(string[] a) {
@@ -27,7 +29,7 @@ class A1Patch {
             { "0600212A", new byte[] { 0x17, 0x2A } },                          // SendFlexibleAttribute => true
             { "06002157", new byte[] { 0x17, 0x2A } },                          // PlanRandomTag => true
             { "06002127", new byte[] { 0x17, 0x2A } },                          // AccessibleClient::TestCollector => 1
-            { "060059C4", new byte[] { 0x17, 0x73, 0x88, 0x01, 0x00, 0x0A, 0x2A } }, // 代理桥: ldc.i4.1; newobj Nullable<bool>::.ctor(0x0A000188); ret
+            // 060059C4 代理桥已废弃: 恒 true 会破坏 06003A7F 的 JSON 布尔读取(StopNode 调用点)
         };
         // 字节补丁目标
         var patches = new List<BP> {
