@@ -168,6 +168,54 @@ jobs:
           } else { Write-Host "cand_exc.log 未生成" }
           exit 0
 
+      - name: 第3.6步 候选 exe 首个 AdvancedClient 创建点追踪（bpmd 06002985 命中即停）
+        shell: pwsh
+        run: |
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
+          $lines = @(
+            'sxe -c ".loadby sos clr; .echo SOS-OK; !bpmd AirExplorer 06002985; .echo BPMD-SET; g" ld:clr'
+            'g'
+          )
+          Set-Content -Path D:\cdb_cmd2.txt -Value $lines -Encoding ASCII
+          Remove-Item "$env:APPDATA\AirExplorer" -Recurse -Force -ErrorAction SilentlyContinue
+          Push-Location app
+          $proc = Start-Process -FilePath $cdb -ArgumentList "-G -y `"$sym`" -cf D:\cdb_cmd2.txt -logo C:\out\cand_creator.log AirExplorer.exe" -PassThru -NoNewWindow
+          Pop-Location
+          Start-Sleep -Seconds 45
+          if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 2
+          Get-Process AirExplorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          if (Test-Path C:\out\cand_creator.log) {
+            Write-Host "=== cand creator log (tail) ==="
+            Get-Content C:\out\cand_creator.log -Tail 80
+          } else { Write-Host "cand_creator.log 未生成" }
+          exit 0
+
+      - name: 第4步 官方首个 AdvancedClient 创建点追踪（bpmd 06002985 命中即停）
+        shell: pwsh
+        run: |
+          $cdb = @("D:\wd\x\amd64\cdb.exe", "D:\wd\amd64\cdb.exe", "D:\wd\cdb.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $sym = "srv*C:\symbols*https://msdl.microsoft.com/download/symbols"
+          $lines = @(
+            'sxe -c ".loadby sos clr; .echo SOS-OK; !bpmd AirExplorer 06002985; .echo BPMD-SET; g" ld:clr'
+            'g'
+          )
+          Set-Content -Path D:\cdb_cmd2.txt -Value $lines -Encoding ASCII
+          Remove-Item "$env:APPDATA\AirExplorer" -Recurse -Force -ErrorAction SilentlyContinue
+          Push-Location app
+          $proc = Start-Process -FilePath $cdb -ArgumentList "-G -y `"$sym`" -cf D:\cdb_cmd2.txt -logo C:\out\official_creator.log AirExplorer.exe" -PassThru -NoNewWindow
+          Pop-Location
+          Start-Sleep -Seconds 45
+          if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 2
+          Get-Process AirExplorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          if (Test-Path C:\out\official_creator.log) {
+            Write-Host "=== official creator log (tail) ==="
+            Get-Content C:\out\official_creator.log -Tail 80
+          } else { Write-Host "official_creator.log 未生成" }
+          exit 0
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -177,6 +225,8 @@ jobs:
             C:\out\official_2s_stacks.log
             C:\out\official_exc.log
             C:\out\cand_exc.log
+            C:\out\official_creator.log
+            C:\out\cand_creator.log
             C:\out\seed_airexplorer.xml
 
 # reindex-20261024
