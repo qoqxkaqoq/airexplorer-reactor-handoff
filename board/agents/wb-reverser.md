@@ -691,3 +691,20 @@ ITP(06004196) 使用的静态：`_ExtractorVisitors`(B64✓已恢复) / `_Recomm
 - LOADEX(WebView2/DragDrop 缺程序集) 是 runner 无关噪声，官方同样有，不是注入问题
 - probe2 CHAIN（手动逐环节重放）是定位静默吞异常链的利器
 - 下一步：① jitcheck v139 确认零 JIT 回归 ② official 基线 ui-probe 对比 ③ Explore 页签内容初始化（SearchAdapter→OnLoad 之后的层）④ 登录后的真实文件列表
+
+### 官方基线对照 + 收尾记录（v139 轮）
+
+**official ui-probe（run 40088489266, md5 A12B5C573E1B54E98CCCC29351EAA066）**：
+- 官方在 runner 上：`Register account` 对话框 visible=True（150,164→950,720）→ 主窗口 MAIN visible=True rect=78,78,1023,866 → 20 窗口存活
+- **v139 与官方行为完全一致**（同对话框/同 rect/同 20 窗口/存活）——主窗口截图逐元素比对：Accounts 页选中、All 树、Pro Version 高亮、Accounts 子工具栏全部一致
+- 官方与 v139 内容区都是空 = 无账户初始态（官方语义）。**真实文件列表需登录云账户**——下一棒可走预置 FTP/本地账户配置的脚本化路线
+- jitcheck v139 在 GetTypes 后即崩（probe2 同程序集正常）— 疑似部分 trampoline 的 CLR 元数据问题，但 2244 个 trampoline 中活动路径全部工作正常（UI 全渲染为证），留作后续诊断
+- staticmerge（旧线 on:push 默认候选）依旧 2 秒崩 0xE0434352 —— 对照组，进一步确认 v139 的进步来自真体恢复而非环境差异
+
+**给下一棒的工具遗产**：
+- `tools2/dlgmap.cs`：官方绑定表 → 全量委托静态注入（支持实例 trampoline 静态化）
+- `tools2/dginject.cs`：小规模委托注入（复用既有 MemberRef 铁律）
+- `tools2/agscan.cs`：refs(带token)/il/m/type/stubs/sig2loc
+- `ci/probe2.cs`：ag 模式含 TI 快照 + CHAIN 手动重放（C#5 兼容）
+- `ci/ttd/prep.cs`：targets 列表（活动路径 10 个 token）/dlgscan 实例委托/refscan 字节扫描/MapScan
+- 新活动路径 token 出现新桩时：加进 prep targets → dispatch ttd-prep → bodyswap → 出新版
