@@ -90,8 +90,7 @@ jobs:
         with:
           name: ttd-payloadscan
           path: |
-            C:\out\payloadscan.json
-            C:\out\code_at_rip.*
-            C:\out\payload_at_ptr*
             C:\out\cdb.log
+            C:\out\payloadscan.json
+          if-no-files-found: ignore
           retention-days: 14

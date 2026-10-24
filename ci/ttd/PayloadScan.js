@@ -1,7 +1,15 @@
-// PayloadScan.js — TTD: locate the in-place backfill write of protected method bodies.
-// Finds writes into the stub VA of target methods, prints TTD position/value/IP,
-// then at the LAST write event: seek there, dump regs/stack/code/pointers to files.
-// usage (cdb): .scriptrun <this.js>   after: !tt <pos> is handled inside via ExecuteCommand
+// PayloadScan.js v3 — TTD: capture the in-place backfill of protected method bodies.
+// v2 lessons (run 40123180425):
+//  - TTD.Memory WRITE events DO hit the stub VAs; writer IP is a single fixed address.
+//  - Written values are PLAINTEXT IL (tiny-header getters decoding to ldfld 04000C3B/C3D + ret).
+//  - w.Position was undefined (trace unindexed) => !tt <undefined> broke all deep dumps.
+//  - x64 process (AnyCPU ILONLY PE32 runs as native x64) => use rax/rsp/rip names.
+// v3 strategy (index-free):
+//  1) TTD.Memory 16B windows on 4 targets => writer IP + first 16B plaintext IL per body.
+//  2) Identify writer IP statically: module, ln, u (disasm) — works even at B:0.
+//  3) Set bp/bu on writer IP and replay FORWARD with g — at each hit dump full x64 regs,
+//     stack trace (k), stack pointers (dps), and memory around candidate data registers.
+//  Everything goes to cdb.log (debugLog) — no file writes needed.
 "use strict";
 function initializeScript() {
     return [new host.apiVersionSupport(1, 7)];
@@ -11,176 +19,167 @@ function invokeScript() {
 }
 function mainImpl() {
     const log = x => host.diagnostics.debugLog(x + "\n");
-    const read1 = (addr, n) => host.memory.readMemoryValues(addr, n, 1).map(v => Number(v));
+    const hexByte = b => ("0" + b.toString(16)).slice(-2);
+    const readBytes = (addr, n) => host.memory.readMemoryValues(addr, n, 1).map(v => Number(v));
 
-    // target method body RVAs (from peekil, exes/AirExplorer_baseline_verified.exe)
+    // target stub RVAs (tokrva on exes/AirExplorer_baseline_verified.exe)
+    // 0600212A: known plaintext (validation); 06003909/06002BD1/06004204: forcedump-failed bodies (new intel)
     const TARGETS = [
         { tok: "0600212A", rva: 0x00195D18 },
-        { tok: "06002133", rva: 0x00196088 },
-        { tok: "06002127", rva: 0x00195CD4 },
+        { tok: "06003909", rva: 0x00334EB0 },
+        { tok: "06002BD1", rva: 0x0024EA40 },
+        { tok: "06004204", rva: 0x00407A00 },
     ];
+    const WIN = 16;
 
     function getSession() {
         try { if (host.currentSession) return host.currentSession; } catch (e) { }
         return host.namespace.Debugger.Sessions.First();
     }
     var session = getSession();
-
-    // module base of AirExplorer
-    var base = 0;
     var proc = session.Processes.First();
+
+    var base = 0;
+    var modList = [];
     for (var m of proc.Modules) {
         var nm = String(m.Name);
-        if (nm.toLowerCase().indexOf("airexplorer") >= 0) {
-            base = Number(m.BaseAddress);
-            log("[PS] module " + nm + " base=0x" + base.toString(16));
-            break;
-        }
+        try { modList.push({ name: nm, base: Number(m.BaseAddress), end: Number(m.BaseAddress) + Number(m.Size) }); } catch (e) { }
+        if (nm.toLowerCase().indexOf("airexplorer") >= 0 && !base) base = Number(m.BaseAddress);
     }
+    log("[PS] module AirExplorer base=0x" + base.toString(16) + " modules=" + modList.length);
     if (!base) { log("[PS] FATAL: AirExplorer module not found"); return; }
 
-    var events = [];
-    for (var t of TARGETS) {
-        var va = base + t.rva;
-        log("[PS] target " + t.tok + " va=0x" + va.toString(16));
-        try {
-            var ws = session.TTD.Memory(va, va + 16, "w");
-            var cnt = 0;
-            for (var w of ws) {
-                cnt++;
-                var ev = {
-                    tok: t.tok, va: "0x" + va.toString(16),
-                    pos: w.Position ? (String(w.Position.Sequence) + ":" + String(w.Position.Steps)) : String(w.Position),
-                    size: Number(w.Size),
-                    ip: ("0x" + Number(w.IP).toString(16)),
-                    val: ("0x" + Number(w.Value).toString(16)),
-                };
-                events.push(ev);
-                log("[PS] WRITE " + t.tok + " pos=" + ev.pos + " size=" + ev.size + " ip=" + ev.ip + " val=" + ev.val);
-                if (cnt > 40) break;
-            }
-            log("[PS] " + t.tok + " writes=" + cnt);
-        } catch (e) {
-            log("[PS] TTD.Memory query failed for " + t.tok + ": " + e);
-        }
+    function modOf(addr) {
+        for (var mm of modList) if (addr >= mm.base && addr < mm.end) return mm.name;
+        return "?";
+    }
+    function memReadable(addr) {
+        try { host.memory.readMemoryValues(addr, 1, 1); return true; } catch (e) { return false; }
+    }
+    function evPos(w) {
+        try { if (w.Position) return String(w.Position); } catch (e) { }
+        try { if (w.TimeStart) return String(w.TimeStart.Sequence) + ":" + String(w.TimeStart.Steps); } catch (e2) { }
+        return null;
     }
 
-    // at the last event: seek + deep dump
-    if (events.length > 0) {
-        var last = events[events.length - 1];
-        log("[PS] seeking to " + last.pos);
+    // ---- 1) write events per target (16B window) ----
+    var allEvents = [];
+    var writerIPs = [];
+    for (var t of TARGETS) {
+        var va = base + t.rva;
+        var cnt = 0;
         try {
-            host.namespace.Debugger.Utility.Control.ExecuteCommand("!tt " + last.pos);
-            var regs = host.currentThread.Registers.User;
-            var regDump = {};
-            try {
-                for (var rn of ["eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "eip"]) {
-                    regDump[rn] = "0x" + Number(regs[rn]).toString(16);
+            var ws = session.TTD.Memory(va, va + WIN, "w");
+            for (var w of ws) {
+                cnt++;
+                if (cnt === 1) {
+                    var keys = "";
+                    try { for (var kk in w) keys += kk + ","; } catch (e0) { }
+                    log("[PS] EVT0 keys=" + keys + " typeofPos=" + (typeof w.Position) + " typeofTimeStart=" + (typeof w.TimeStart));
                 }
-            } catch (e) { log("[PS] regs x86 failed: " + e); try { for (var rn2 of ["rax", "rcx", "rdx", "rbx", "rsi", "rdi", "rsp", "rbp", "rip", "r8", "r9"]) regDump[rn2] = "0x" + Number(regs[rn2]).toString(16); } catch (e2) { } }
-            var out = { targets: TARGETS, events: events, regs: regDump };
-
-            // stack pointers that fall in payload VA window (base+0x620000-ish..base+0x920000)
-            var payLo = base + 0x620000, payHi = base + 0x920000;
-            var inPay = function (v) { return v >= payLo && v < payHi; };
-            try {
-                var sp = Number(regs.esp !== undefined ? regs.esp : regs.rsp);
-                var stackWords = read1(sp, 512);
-                var ptrs = [];
-                for (var i = 0; i + 3 < stackWords.length; i += 1) {
-                    var v = (stackWords[i] | (stackWords[i+1] << 8) | (stackWords[i+2] << 16) | (stackWords[i+3] << 24)) >>> 0;
-                    if (inPay(v) || (v >= base && v < base + 0x927BA4)) ptrs.push({ off: i * 4, val: "0x" + v.toString(16), inPayload: inPay(v) });
-                }
-                out.stackPtrs = ptrs.slice(0, 80);
-            } catch (e) { log("[PS] stack scan failed: " + e); }
-
-            // dump code at rip and data at each payload pointer (hex text — CreateFile().Write mangles raw bytes)
-            var files = [];
-            function dumpFile(name, addr, len) {
-                try {
-                    var bytes = read1(addr, len);
-                    var hex = bytes.map(b => b.toString(16).padStart(2, "0")).join("");
-                    var f = host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\" + name);
-                    f.Write(hex);
-                    files.push(name + " @" + ("0x" + addr.toString(16)) + " " + len + "B");
-                } catch (e) { log("[PS] dump " + name + " failed: " + e); }
+                var addr = (w.Address !== undefined && w.Address !== null) ? Number(w.Address) : (va + (cnt - 1) * 4);
+                var ev = { tok: t.tok, addr: addr, size: Number(w.Size), ip: Number(w.IP), val: Number(w.Value), pos: evPos(w) };
+                allEvents.push(ev);
+                log("[PS] EVT tok=" + ev.tok + " i=" + cnt + " addr=0x" + ev.addr.toString(16) + " size=" + ev.size
+                    + " val=0x" + (ev.val >>> 0).toString(16) + " ip=0x" + ev.ip.toString(16) + " pos=" + ev.pos);
+                var known = false;
+                for (var ip2 of writerIPs) if (ip2 === ev.ip) known = true;
+                if (!known) writerIPs.push(ev.ip);
+                if (cnt > 8) break;
             }
-            try {
-                var rip = Number(regs.eip !== undefined ? regs.eip : regs.rip);
-                dumpFile("code_at_rip.hex", rip - 0x40, 0x180);
-            } catch (e) { }
-            if (out.stackPtrs) {
-                var k = 0;
-                for (var p of out.stackPtrs) {
-                    if (p.inPayload && k < 6) {
-                        var a = parseInt(p.val, 16);
-                        dumpFile("payload_at_ptr" + k + ".hex", a - 0x40, 0x200);
-                        k++;
-                    }
-                }
-            }
-            out.files = files;
+        } catch (e) { log("[PS] TTD.Memory failed for " + t.tok + ": " + e); }
+        log("[PS] " + t.tok + " events=" + cnt);
+    }
 
-            // full body bytes at each target VA now (post-backfill)
-            var bodies = {};
-            for (var t2 of TARGETS) {
-                try {
-                    var bb = read1(base + t2.rva, 96);
-                    bodies[t2.tok] = bb.map(b => b.toString(16).padStart(2, "0")).join("");
-                } catch (e) { }
-            }
-            out.bodiesAfter = bodies;
-
-            var txt = JSON.stringify(out);
-            var f2 = host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\payloadscan.json");
-            f2.Write(txt);
-            log("[PS] payloadscan.json written, " + txt.length + " bytes");
-        } catch (e) {
-            log("[PS] deep dump failed: " + e);
+    // ---- 2) reconstruct first WIN bytes per target from events (chronological, LE dwords) ----
+    for (var t3 of TARGETS) {
+        var bytes = {};
+        for (var ev2 of allEvents) {
+            if (ev2.tok !== t3.tok) continue;
+            var off = ev2.addr - (base + t3.rva);
+            if (off < 0 || off >= WIN) continue;
+            var v = ev2.val >>> 0;
+            for (var b = 0; b < ev2.size && (off + b) < WIN; b++) bytes[off + b] = (v >>> (8 * b)) & 0xFF;
         }
-    } else {
-        log("[PS] NO WRITE EVENTS FOUND — trying READ events (JIT fetches IL from stub VA)");
-        // fallback: who READS the stub VA? first read event => JIT reading the stub body.
-        // deep-dump regs/stack there: the decrypted-IL buffer pointer is often in a register/stack.
+        var hex = "";
+        for (var i3 = 0; i3 < WIN; i3++) hex += (bytes[i3] === undefined ? "??" : hexByte(bytes[i3]));
+        log("[PS] IL " + t3.tok + " first" + WIN + "=" + hex);
+    }
+
+    // ---- 3) static identification of writer IPs ----
+    log("[PS] writerIPs: " + writerIPs.map(x => "0x" + x.toString(16)).join(" "));
+    for (var wip of writerIPs.slice(0, 3)) {
+        log("[PS] writerIP 0x" + wip.toString(16) + " module=" + modOf(wip) + " readable=" + memReadable(wip));
+        try { host.namespace.Debugger.Utility.Control.ExecuteCommand("ln 0x" + wip.toString(16)); } catch (e) { }
+        try { host.namespace.Debugger.Utility.Control.ExecuteCommand("u 0x" + (wip - 0x30).toString(16) + " L24"); } catch (e) { }
+    }
+
+    // ---- 4) bp on writer IP + forward replay: live regs/stack at each backfill write ----
+    if (writerIPs.length > 0) {
+        var bip = writerIPs[0];
+        var ipHex = "0x" + bip.toString(16);
+        var set = false;
+        try { host.namespace.Debugger.Utility.Control.ExecuteCommand("bp " + ipHex); set = memReadable(bip); } catch (e) { }
+        var tries = 0;
+        while (!set && tries < 60) {
+            tries++;
+            try {
+                host.namespace.Debugger.Utility.Control.ExecuteCommand("sxe ld");
+                host.namespace.Debugger.Utility.Control.ExecuteCommand("g");
+                set = memReadable(bip);
+                if (set) {
+                    host.namespace.Debugger.Utility.Control.ExecuteCommand("bp " + ipHex);
+                    host.namespace.Debugger.Utility.Control.ExecuteCommand("sxd ld");
+                    break;
+                }
+            } catch (e) { log("[PS] sxe-ld advance " + tries + " failed: " + e); break; }
+        }
+        if (!set) { try { host.namespace.Debugger.Utility.Control.ExecuteCommand("bu " + ipHex); } catch (e) { } log("[PS] bp direct failed; bu fallback set"); }
+        log("[PS] bp set=" + set + " on " + ipHex + " (tries=" + tries + ")");
+
+        for (var hit = 1; hit <= 14; hit++) {
+            try {
+                host.namespace.Debugger.Utility.Control.ExecuteCommand("g");
+            } catch (e) { log("[PS] g#" + hit + " threw: " + e); break; }
+            try { host.namespace.Debugger.Utility.Control.ExecuteCommand("!tt"); } catch (e) { }
+            var regs;
+            try { regs = host.currentThread.Registers.User; } catch (e2) { log("[PS] hit#" + hit + " no regs"); break; }
+            var rd = {};
+            var names = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rip"];
+            for (var rn of names) {
+                try { var v4 = Number(regs[rn]); rd[rn] = isFinite(v4) ? ("0x" + v4.toString(16)) : String(regs[rn]); } catch (e) { }
+            }
+            log("[PS] HIT#" + hit + " regs " + JSON.stringify(rd));
+            try { host.namespace.Debugger.Utility.Control.ExecuteCommand("k 12"); } catch (e) { }
+            try { host.namespace.Debugger.Utility.Control.ExecuteCommand("dps @rsp L30"); } catch (e) { }
+            // memory around candidate data pointers (skip module/stack addresses)
+            var dumped = 0;
+            var rsp = 0;
+            try { rsp = Number(regs.rsp); } catch (e) { }
+            for (var rn2 of ["rsi", "rdi", "rdx", "rcx", "r8", "r9", "rax", "rbx", "r10", "r11", "r12", "r13", "r14", "r15"]) {
+                if (dumped >= 6) break;
+                try {
+                    var a = Number(regs[rn2]);
+                    if (!isFinite(a) || a < 0x10000 || a >= 0x7ff000000000) continue;
+                    var inMod = false;
+                    for (var mm2 of modList) if (a >= mm2.base && a < mm2.end) { inMod = true; break; }
+                    if (inMod) continue;
+                    if (rsp && Math.abs(a - rsp) < 0x10000) continue;
+                    var mb = readBytes(a - 0x10, 0x60);
+                    log("[PS] HIT#" + hit + " mem[" + rn2 + "]@0x" + a.toString(16) + " " + mb.map(hexByte).join(""));
+                    dumped++;
+                } catch (e3) { }
+            }
+        }
+        try { host.namespace.Debugger.Utility.Control.ExecuteCommand("bc *"); } catch (e) { }
+    }
+
+    // ---- 5) bodies at target VAs at final position (partial backfill view) ----
+    for (var t5 of TARGETS) {
         try {
-            var t0 = TARGETS[0];
-            var va0 = base + t0.rva;
-            var rs = session.TTD.Memory(va0, va0 + 16, "r");
-            var rcnt = 0; var firstRead = null;
-            for (var r of rs) {
-                rcnt++;
-                if (!firstRead) firstRead = r;
-                if (rcnt > 5) break;
-            }
-            log("[PS] " + t0.tok + " reads=" + rcnt);
-            if (firstRead) {
-                var pos0 = firstRead.Position ? (String(firstRead.Position.Sequence) + ":" + String(firstRead.Position.Steps)) : String(firstRead.Position);
-                host.namespace.Debugger.Utility.Control.ExecuteCommand("!tt " + pos0);
-                var regs2 = host.currentThread.Registers.User;
-                var rd2 = {};
-                for (var rn3 of ["eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "eip"]) {
-                    try { rd2[rn3] = "0x" + Number(regs2[rn3]).toString(16); } catch (e) { }
-                }
-                var out2 = { mode: "read-fallback", firstReadPos: pos0, regs: rd2 };
-                // stack pointer scan for heap buffers (decrypted IL often freshly allocated)
-                var sp2 = Number(regs2.esp);
-                try {
-                    var sw = read1(sp2, 512);
-                    var pp = [];
-                    for (var i2 = 0; i2 + 3 < sw.length; i2++) {
-                        var v2 = (sw[i2] | (sw[i2+1] << 8) | (sw[i2+2] << 16) | (sw[i2+3] << 24)) >>> 0;
-                        if (v2 > 0x10000 && v2 < 0x7FFFFFFF) pp.push({ off: i2 * 4, val: "0x" + v2.toString(16) });
-                    }
-                    out2.stackPtrs = pp.slice(0, 60);
-                } catch (e) { }
-                var txt2 = JSON.stringify(out2);
-                var f3 = host.namespace.Debugger.Utility.FileSystem.CreateFile("C:\\out\\payloadscan.json");
-                f3.Write(txt2);
-                log("[PS] payloadscan.json (read-fallback) written, " + txt2.length + " bytes");
-            }
-        } catch (e) {
-            log("[PS] read fallback failed: " + e);
-        }
+            var bb = readBytes(base + t5.rva, 32);
+            log("[PS] BODYNOW " + t5.tok + " " + bb.map(hexByte).join(""));
+        } catch (e) { }
     }
     log("[PS] done");
 }
