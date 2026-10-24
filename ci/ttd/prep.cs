@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -127,7 +128,7 @@ class Prep {
             Log("[prep] phase C: full stub walk...");
             int stubs = 0, changed = 0, dumpFail = 0;
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            foreach (var ty in asm.GetTypes()) {
+            foreach (var ty in AllTypes(asm)) {
                 MethodInfo[] ms;
                 try { ms = ty.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly); }
                 catch { continue; }
@@ -149,10 +150,65 @@ class Prep {
             File.WriteAllText(Path.Combine(OutDir, "phaseC.summary"), "stubs=" + stubs + " changed=" + changed);
         }
 
+        // RefScan: 官方引导后全量 IL 字节扫描 — 找委托/静态字段的赋值方法(newobj ParserValidator::.ctor / stsfld UpdateFunction / stsfld WatchSpec)
+        RefScan(asm, mod);
+
         Marker(99999);
         Log("[prep] ALL DONE");
         Log_.Close();
         return 0;
+    }
+
+    static IEnumerable<Type> AllTypes(Assembly asm) {
+        Type[] ts = null;
+        try { ts = asm.GetTypes(); }
+        catch (System.Reflection.ReflectionTypeLoadException ex) { ts = ex.Types; }
+        foreach (var t in ts) if (t != null) yield return t;
+    }
+
+    static void RefScan(Assembly asm, Module mod) {
+        // (opcode, token) 对: ctor 只看 newobj(0x73); 字段只看 stsfld(0x80)
+        var wants = new List<Tuple<byte, uint>>();
+        try {
+            var pv = asm.GetType("ParserValidator") ?? AllTypes(asm).First(t => t.Name == "ParserValidator");
+            var fld = pv.GetField("UpdateFunction", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (fld != null) wants.Add(Tuple.Create((byte)0x80, (uint)fld.MetadataToken));
+            var ctor = pv.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(object), typeof(IntPtr) }, null);
+            if (ctor != null) wants.Add(Tuple.Create((byte)0x73, (uint)ctor.MetadataToken));
+            var arv = AllTypes(asm).First(t => t.Name == "AutomatedRunnerValidator");
+            var fld2 = arv.GetField("WatchSpec", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (fld2 != null) wants.Add(Tuple.Create((byte)0x80, (uint)fld2.MetadataToken));
+        } catch (Exception ex) { Log("[refscan] token resolve fail: " + ex.Message); return; }
+        if (wants.Count == 0) { Log("[refscan] no watch tokens"); return; }
+        Log("[refscan] watch: " + string.Join(",", wants.Select(w => "0x" + w.Item2.ToString("X8") + "/op" + w.Item1.ToString("X2"))));
+        int found = 0;
+        foreach (var ty in AllTypes(asm)) {
+            MemberInfo[] ms;
+            try { ms = ty.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly); } catch { continue; }
+            foreach (var mi in ms) {
+                if (!(mi is MethodBase m)) continue;
+                MethodBody b = null;
+                try { b = m.GetMethodBody(); } catch { }
+                if (b == null) continue;
+                byte[] il;
+                try { il = b.GetILAsByteArray(); } catch { continue; }
+                if (il == null || il.Length < 6) continue;
+                foreach (var w in wants) {
+                    var tb = BitConverter.GetBytes(w.Item2);
+                    bool hit = false;
+                    for (int i = 0; i < il.Length - 4; i++) {
+                        if (il[i] != w.Item1) continue;
+                        if (il[i + 1] == tb[0] && il[i + 2] == tb[1] && il[i + 3] == tb[2] && il[i + 4] == tb[3]) { hit = true; break; }
+                    }
+                    if (!hit) continue;
+                    found++;
+                    Log("[refscan] HIT " + ty.FullName + "::" + m.Name + " tok=0x" + m.MetadataToken.ToString("X8") + " pattern=0x" + w.Item2.ToString("X8"));
+                    FreshDumpIfChanged(mod, (uint)m.MetadataToken, ty.FullName + "::" + m.Name, OutDir);
+                    break;
+                }
+            }
+        }
+        Log("[refscan] done hits=" + found);
     }
 
     // PrepareMethod 后新鲜读体; 变为真体(>4B)则 dump。用 MethodBase — .ctor 是 RuntimeConstructorInfo, 强转 MethodInfo 会失败

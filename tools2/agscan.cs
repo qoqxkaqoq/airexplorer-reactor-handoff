@@ -119,8 +119,12 @@ class AgScan {
                     who = "fld " + f.FullName;
                 else if (ins.Operand is IMethod im && (im.Name.String.Contains(kw) || (im.DeclaringType != null && im.DeclaringType.Name.String.Contains(kw))))
                     who = "m " + im.FullName;
-                if (who != null)
-                    Console.WriteLine("  0x" + m.MDToken.Raw.ToString("X8") + " " + m.DeclaringType.Name.String + "::" + m.Name.String + " @IL_" + ins.Offset.ToString("X4") + " " + ins.OpCode.Name + " " + who);
+                if (who != null) {
+                    uint rawTok = 0;
+                    if (ins.Operand is IField f3) rawTok = f3.MDToken.Raw;
+                    else if (ins.Operand is IMethod m3) rawTok = m3.MDToken.Raw;
+                    Console.WriteLine("  0x" + m.MDToken.Raw.ToString("X8") + " " + m.DeclaringType.Name.String + "::" + m.Name.String + " @IL_" + ins.Offset.ToString("X4") + " " + ins.OpCode.Name + " tok=0x" + rawTok.ToString("X8") + " " + who);
+                }
             }
         }
     }
