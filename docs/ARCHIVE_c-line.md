@@ -43,7 +43,7 @@
 | 加密资源 ×6 | `work/res_*.bin` | ValidatorProject 等，md5 与官方一致（faf6a669...） |
 | 字符串解密 | `work/strmap.tsv` / `work/strings_tsv.txt` | ITP 语义已实证 |
 | 委托绑定表 3266 条 | MapScan 工具产出（重跑 `tools2/dlgmap` 或 CI） | fieldTok→valTok |
-| 方法体 dump 16598 | **不在仓库**——artifact 下载：nbjit-dump（需重新验证内容，2026-10-24 发现部分 artifact 只有 manifest） | |
+| 方法体 dump ×16598 + EH ×2218 | **`work/dump_official_16598.zip`（已入库 2026-10-25）**——run 39864750444 全量官方真体，24B 头格式见包内 MANIFEST.txt；forcedump failed 名单（如 06002BD1）不在其中，需 TTD 补抓 |
 | 工具 | `tools2/bodyswap.cs`（三件套一体替换，唯一安全姿势）、`tools2/agscan8`（IL 转储）、`tools2/injectlog.cs`（入口日志注入） | |
 
 ## 四、硬约束（违反必炸，历史教训全录）

@@ -20,7 +20,7 @@
 | 里程碑 | 状态 |
 |---|---|
 | 文本模式 `help`（16 命令） | ✅ PASS（v59 起，C 线遗产） |
-| C 线脱壳重建 | 🗄️ **已归档**（`docs/ARCHIVE_c-line.md`；最高产物 v140：进程活、进消息循环、0 窗体） |
+| C 线脱壳重建 | 🗄️ **已归档**（`docs/ARCHIVE_c-line.md`；最高产物 v140：进程活、进消息循环、0 窗体；全量真体 dump ×16598+EH ×2218 已入库 `work/dump_official_16598.zip`） |
 | 窗体创建点之谜 | ✅ 已解并归档（InitializerReg=ApplicationContext，ctor 空壳是根因——重启 C 线先读归档文档第二节） |
 | **A 线：激活/便携/暗桩目标定位** | ✅ 详见 board/agents/wb-reverser.md（AssertValidLicense 明文、GetFolderPath 入口） |
 | A 线：三路扫描（xref/字符串/委托回调） | ✅ dscan 全量扫 16598 真体完成：激活=3 布尔字段门控、BC/字符串路径证伪、GFP 9 点、暗桩清单（见 board） |
@@ -36,7 +36,7 @@
 
 | 资产 | 位置 | 说明 |
 |---|---|---|
-| 官方解密方法体 ×16598 | `work/`（jitout 需从 artifact 重下）或 `exes` 构建链 | 24B 头：tok/ilSize/maxStack/ehCount/preExtra/localsTok |
+| 官方解密方法体 ×16598 | `work/dump_official_16598.zip`（run 39864750444 归档） | 24B 头：tok/ilSize/maxStack/ehCount/preExtra/localsTok；forcedump failed 名单不在其中 |
 | 官方 locals ×8392 | `work/loc_official.zip` | 每行 `index\|isPinned\|TypeFullName`（运行时 CLR 格式） |
 | 官方 EH ×2218 + catch 名 ×34 + manifest | `work/eh_official.zip` | 28B CORINFO clause；classTok 可 ResolveToken 100% 命中 |
 | 主武器工具 | `tools2/bodyswap.cs` | **体+locals+EH 三件套一体替换**（唯一安全姿势） |
