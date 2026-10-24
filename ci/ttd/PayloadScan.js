@@ -8,20 +8,36 @@
 //   P5 trace 末尾: dumpheap 门控实例 + 模板类 → 静态字段 → 解密池 byte[] 全量 db
 "use strict";
 
+function initializeScript() {
+    return [new host.apiVersionSupport(1, 7)];
+}
+function invokeScript() {
+    mainImpl();
+}
+function mainImpl() {
+
 function log(s) { host.diagnostics.debugLog(s + "\n"); }
 function hexB(b) { return (b < 16 ? "0" : "") + b.toString(16); }
 function hexW(v) { return ("00000000" + (v >>> 0).toString(16)).slice(-8); }
 
+var session = null;
+try { if (host.currentSession) session = host.currentSession; } catch (e) { }
+if (!session) session = host.namespace.Debugger.Sessions.First();
+var proc = session.Processes.First();
+
 var mod = null;
 var modList = [];
-for (var m of host.currentProcess.Modules) {
-    var b = Number(m.BaseAddress);
-    var e = b + Number(m.Size);
-    modList.push({ name: m.Name, base: b, end: e });
-    if (m.Name.toLowerCase().indexOf("airexplorer") >= 0) mod = m;
+for (var m of proc.Modules) {
+    var nm = String(m.Name);
+    try {
+        var b = Number(m.BaseAddress);
+        modList.push({ name: nm, base: b, end: b + Number(m.Size) });
+        if (nm.toLowerCase().indexOf("airexplorer") >= 0 && !mod) mod = m;
+    } catch (e) { }
 }
 var BASE = mod ? Number(mod.BaseAddress) : 0;
 log("[V4] module AirExplorer base=0x" + BASE.toString(16) + " modules=" + modList.length);
+if (!BASE) { log("[V4] FATAL no AirExplorer module"); return; }
 function modOf(a) { for (var x of modList) if (a >= x.base && a < x.end) return x.name; return "?"; }
 function memReadable(a) {
     try {
@@ -52,8 +68,8 @@ function dumpMem(tag, addr, n) {
     log("[V4] " + tag + "@0x" + addr.toString(16) + " " + hex);
 }
 function evPos(w) {
-    try { if (w.TimeStart !== undefined && w.TimeStart !== null) return w.TimeStart.Sequence.toString(16) + ":" + w.TimeStart.Step.toString(16); } catch (e) { }
-    try { if (w.Position !== undefined && w.Position !== null) return w.Position.toString(); } catch (e) { }
+    try { if (w.TimeStart !== undefined && w.TimeStart !== null) return (String(w.TimeStart.Sequence) + ":" + String(w.TimeStart.Steps)).replace(/0x/g, ""); } catch (e) { }
+    try { if (w.Position !== undefined && w.Position !== null) return String(w.Position).replace(/0x/g, ""); } catch (e) { }
     return "undef";
 }
 function dumpRegs() {
@@ -103,7 +119,7 @@ for (var t of TARGETS) {
     var tw = t.win;
     var cnt = 0;
     try {
-        var ws = host.currentProcess.TTD.Memory(va, va + tw, "w");
+        var ws = session.TTD.Memory(va, va + tw, "w");
         for (var w of ws) {
             cnt++;
             var addr = (w.Address !== undefined && w.Address !== null) ? Number(w.Address) : (va + (cnt - 1) * 4);
@@ -301,3 +317,5 @@ if (amAddr) {
     log("[V4] P5 AlphabeticModel fields:\n" + vals);
 }
 log("[V4] done");
+
+}
