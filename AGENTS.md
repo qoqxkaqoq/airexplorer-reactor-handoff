@@ -29,10 +29,11 @@
 | A 线：tamper 验证实验 | ✅ 间接完成：nb_original+6 补丁存活 150s 无自毁（壳不杀文件改动，但也没用因为宿主本身 0 窗） |
 | A 线：A3 便携化 | ✅ **launcher 方案 CI 全验收通过**（run 40115006727）：`portable/AirExplorer_Portable.cmd` 重定向 USERPROFILE/APPDATA 等到 exe 旁 `data\`，官方 exe 零修改零注入；Accounts.xml 等用户数据落 data\、真实 profile 零残留、主窗完整渲染（MAIN_CONTENT=CONTENT）；依赖集固化 `portable/deps.zip` |
 | A 线：负载解密 | ✅ **重大突破（10-25）**——Reactor 运行时 PRNG keystream 完全破译并验证 3266/3266（`work/decrypt_prng.py`）；6 资源读取链全摸清：2.33MB 主库由 `0600428A WrapperProvider::WrapCommonSorter`（23KB IL、420 块平坦化）读取，**解密循环在它自己体内**（RandomDecryptor 只是 BinaryReader 转发壳）；解密输出 → Deflate 解压 → 反射跳板调用 |
+| A 线：回填机制破译 | ✅ **v4c 实锤（10-25）**——回填 = 托管 IL 调 `Marshal.WriteInt32`（调用链：驱动器方法 → `060041FA VerifyCustomIteratorRunner` 19B 壳 → mscorlib_ni NGEN）；负载流对连续 0x00 游程跳过（r10 读游标 +4/写、rbx 条目偏移、条目头 10B）；**驱动器方法本体 MISSING from dump**（060041FA 无静态调用方）；负载流 ≠ 资源原文件（37 已知明文 dword + 全偏移 prng 链扫描三连证伪）→ 细节见 board/agents/wb-reverser.md 第 VIII 段 |
 | A 线：主库明文导出 | ✅ **interp.py 282M 步跑通（10-25）**：deflate-input 与资源等长（流变换）→ 解压 4260864B = **完整 PE 程序集**，但内容 = **626 嵌入资源的卫星包**（1 类型 0 方法，UI/本地化），不含激活逻辑；keystream 全程已知、可同尺寸回写 |
 | A 线：暗桩清理 | ⏳ 依赖负载重加密路线（暗桩在加密体里，文件级改不到） |
 
-**A 线激活直通的落地路径（10-25 定稿）**：3 个门控布尔字段的写入点全在 3.2MB 负载里，负载不是 ARX 链密码（payldprobe 9 方法×786K 偏移全灭）→ **唯一路 = TTD 抓回填例程**（`.github/workflows/a-ttd.yml` + `ci/ttd/PayloadScan.js` 已就绪：TTD.Memory 写查询定位桩 VA 回填时刻 → 抓解密例程+表指针 → 离线实现负载 decrypt/encrypt（dump 明文做已知明文验证）→ A1 五补丁重加密 → 单 exe 启动即 Pro）。CI 长稳验收用 `.github/workflows/a-soak.yml`（`ci/soak.ps1`，7 分钟进程活+窗在+无错框）。
+**A 线激活直通的落地路径（10-25 v5 更新）**：**v5 战术 = TTD 回放态 SOS `!dumpil`/`!ip2md` 直接读回填后的解密 IL**（不需要 GC heap，绕开 dumpheap/clrstack 回放态限制）：P3 用 writerIP bp 命中后 `!ip2md` 栈上 JIT 帧 → 拿驱动器方法 MethodDesc + 完整 IL（静态读密文流结构+key 推导）；P4 `!dumpil <BASE> <token>` 直读 dump-MISSING 方法（06003909/06002BD1）真体 → 离线实现负载 decrypt/encrypt → A1 五补丁重加密 → 单 exe 启动即 Pro。CI 长稳验收用 `.github/workflows/a-soak.yml`（`ci/soak.ps1`，7 分钟进程活+窗在+无错框，已 PASS）。
 
 **⚠️ 历史修正**：旧记录"v139 主窗口完整渲染 ✅ / Register account 对话框 ✅"**已证伪**——带截图的成功 run（40088489266）`_candidate.txt = candidate: official`（官方基线），v139 真实 ui-probe = windows=0。勿再引用。
 
