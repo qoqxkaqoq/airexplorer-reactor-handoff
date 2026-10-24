@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>disable</Nullable>
+    <AssemblyName>disasm8</AssemblyName><InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup><PackageReference Include="dnlib" Version="3.3.4" /></ItemGroup>
+  <ItemGroup><Compile Remove="**/*.cs" /><Compile Include="disasm.cs" /></ItemGroup>
+</Project>
