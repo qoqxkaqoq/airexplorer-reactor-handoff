@@ -708,3 +708,23 @@ ITP(06004196) 使用的静态：`_ExtractorVisitors`(B64✓已恢复) / `_Recomm
 - `ci/probe2.cs`：ag 模式含 TI 快照 + CHAIN 手动重放（C#5 兼容）
 - `ci/ttd/prep.cs`：targets 列表（活动路径 10 个 token）/dlgscan 实例委托/refscan 字节扫描/MapScan
 - 新活动路径 token 出现新桩时：加进 prep targets → dispatch ttd-prep → bodyswap → 出新版
+
+### 用户真机"没反应"诊断（bootcfg 复现 + SOS 栈证据）
+
+**现象复现（bootcfg-probe run 40093204942/40095458794）**：
+- 官方(种子配置) **t=3s 主窗口出现**；v139/v140(同一配置) **60s 无窗** —— 用户真机现象 100% 复现
+- 无配置路径（ui-probe）v139 与官方一致：~55s 后弹 Register account（=checkversion 网络超时的 fallback），主窗体 visible=True 有截图 —— **主窗体创建链在无配置路径是通的**
+- **分叉点 = 读取 airexplorer.xml 配置后的分支**（真机/种子配置存在时官方 3 秒直出主窗体，v139 空转）
+
+**SOS 栈证据（procdump→cdb SOS，两段式已固化进 bootcfg.yml）**：
+- 官方 2s 栈：`SearchAdapter → Application.Run → InvokeMarshaledCallbacks → Form.OnShown → AdvancedClient.RequestIntegratedRecord → ShowDialog(Register account)` —— 主窗体类 = **CloudClient.Networking.AdvancedClient**(020003DA, WndProc 重载)
+- v139/v140 有配置栈：`SearchAdapter → Application.Run` 后戛然而止 —— **Run(空 ApplicationContext) 空转，主窗体从未 Show**
+
+**结构发现（全部静态实证）**：
+- 主窗体唯一创建点 = `InitializerReg::MergeManager`(06002BD6, 47 指令真体) → `new AdvancedClient(false)`(06002985)
+- MergeManager 唯一调用者 = `AdvancedClient::SplitSynchronizer`(06002995, 3 指令) —— 由 RequestCommonObserver@2187 ldftn 挂接的事件触发
+- `AdvancedClient::RequestCommonObserver`(060029C1) = **InitializeComponent**（3675 指令），唯一调用者 = 主窗体 ctor(06002985)
+- v132 里 **主窗体 ctor(06002985) 是 4 指令桩**、RequestCommonObserver 无体引用链全断
+- 窗口门闩：`SearchAdapter 状态8 → RunScopeThread → if(CreateMixedCache()) ApplyExtendedIterator(PInvoke)`；`m_IsClientDictionary` 唯一赋值 = `PlanEnumerator` ← `ExecuteResponsiveProxy` ← `AnalyzeReg` ← `AdvancedClient.ReceiveInternalToken/GetFinalizer`（实例方法——需主窗体实例）
+- v140 已恢复五件套：ctor(6298B/1601 指令) + RequestCommonObserver(14684B) + RequestIntegratedRecord(568B+EH) + SplitSynchronizer + MergeManager
+- **v140(有配置) 仍无窗** → 配置读取分支还有未恢复依赖，下一步：① bootcfg 抓 v140 有配置路径的 MergeManager 是否执行（tmp 断点/procdump 早期 dump）② GenerateFilteredEvent(06002B03) 配置应用链逐环节 ③ 对比官方/ v140 在配置解析后的 globalTemplate 与窗口门闩字段
