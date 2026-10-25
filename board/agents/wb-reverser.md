@@ -1485,3 +1485,26 @@ for i in range(len(ct) // 4):          # 全资源连续流（不按条目重置
 ### 5. 工具链（work_a1/，a9_ 前缀）
 
 guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key 页 guard）、guard10（rbp 全槽大数组扫描）、guard11b/c（多资源页持续 guard+按 ct 大小分类记录 key）。dec_*.bin（六资源解密尝试，仅 Viewer 有效）。经验：guard 重设上限按需调（Viewer 循环 71 万命中）；VCRUNTIME 范围 0x7ffc7fda0000-0x7ffc7fdbd000。
+
+## 第 XVIII 段（2026-10-25 深夜 III · incept 瞬态猎手：6 资源堆副本+输出对直取，Factory=字符串池）
+
+### 1. incept 方法（a9_incept*.py，正常运行无调试器）
+
+- **瞬态窗口**：正常启动后 0.10-0.34s 内，6 资源密文堆副本（clr GetManifestResourceStream 的拷贝）全部出现在两个 Private 堆区；**只搜 MEM_PRIVATE**（Type==0x20000）——映像区（MEM_IMAGE）会搜到 exe 自身（0.01s 全命中的教训）。
+- **托管数组头形态**：`[MT 8B][count 4B][pad 4B][data]`——本 boot Byte[] MT=`48589e7cfc7f0000`；密文副本 data 前 16B 可辨认（pre32 实证 6 次）。
+- **输出对**：解密输出数组（同 count）分配在密文副本附近——**mainlib/Factory 各抓到完整输出对（0x23a907/0x615ca）**；Emitter 输出=0e 填充（两份）；Proc 副本 count=0x2bbb（非完整 0xBB2B，部分拷贝）；Project 输出未抓到（瞬态错过）。
+- **输出直取 ⇒ key 不再必需**（mainlib/Factory 已绕过 key）。
+
+### 2. 资源真身（修正认知）
+
+- **FactoryValidator（0x615CA）= Necrobit 字符串池**（UTF-16 明文）：格式化模板（{{alg={0},typ={1}}、iss/scope/aud/iat/sub/exp=JWT 样板）、WinForms 控件名、PowerShell/TaskScheduler 命令模板（"A maximum of 32 actions..."）——7956 无槽位方法的字符串资源。`work_a1/a9_incept3/arr_Factory_1.bin`。
+- **mainlib（0x23A907）输出=raw-deflate 流**（arr_mainlib_1.bin）——inflate=mainlib_plain（已验证等长）。**与四轮结论合流：mainlib=卫星资源包容器**。
+- **Viewer=phase-A 桩表**（16598 条目×~21.7B ✓ 0x56FE8 吻合）。
+- **完整体（phase-B 写桩数据源）仍未知**——TTD v7 的 phase-B 条目偏移在 Viewer 范围（0x5358c<0x56FE8），但 Viewer 条目仅 fat+8B；桩槽完整体（a4_rtbodies 14541 体）的流入路径待解（渐进多次写/其他流）。
+
+### 3. 遗留清单（下次会话）
+
+1. **完整体数据源**（phase-B）：guard 系列对「桩槽页」下 guard（回填写入时刻抓数据流来源）；或对 arr_mainlib_1 inflate 后的 626 资源深挖（序列化方法体？）。
+2. **Proc/Project/Emitter 的 key 或输出**：incept 轮询再跑+Project 输出窗口对齐；Proc 的 0x2bbb 部分副本含义。
+3. **4 个惰性 key**（若 1/2 不需要则降级）。
+4. **A1 堵点不变**：native 校验（自包含+随机化）；Factory 字符串池里可能藏校验配置（"{{alg={0}..."的 alg 样板=**算法参数模板**——值得全文检索 license/check/hash 相关字符串）。
