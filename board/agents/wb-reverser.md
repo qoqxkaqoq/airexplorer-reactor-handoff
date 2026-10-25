@@ -1395,3 +1395,29 @@ C-lite stage2（解密资源进文件+剥壳）等反篡改算法落定后启动
 1. 先读本段与 XIII/XII，再跑 `python3 work/a1re.py` 无参复验资源定位；候选 exe 实测规程：独立 APPDATA + localapp/ 依赖 + 等窗 100s + 杀自己 PID + overlay 绝不能改。
 2. 唯一硬堵点=驱动器加密源 blob/解密器。突破口：native 运行时区从未审计；驱动器转储大片静态代码=已知明文可做 blob 对齐扫描；尾部 BL1/BL2/SV 疑似解密参数。
 3. 出窗后：a1/a1b 对齐裁决（标题 Pro）→ 7 分钟长稳 → CI ui-probe（tools/ci/probe.ps1 版）+ a-soak。
+
+## 第 XV 段（2026-10-25 晚 · 主会话接管：checker#1 证伪为条件死代码 + native 校验终局图景）
+
+> 五/六轮代理因配额中断（遗产 a5_progress.md/a8_progress.md 完整）；主会话接管全部战线（业主指示暂停子代理）。
+
+### 1. 新事实（全部实证）
+
+- **K/A 静态铁证**：修正 RVA bug（尾区在第二节：file 0x927E00↔RVA 0x92A000，a5_keypoll 原版 +0x1E00 直加错 0x400）后高频轮询（6287 次/30s）：尾区 K(0x9298C8)/A(0x929A28)/B 恒==文件值、启动 6ms 起从未变 → "运行时恢复/扰动 K/A"假设死。文件 K/A 直接 AES 解 6 资源=乱码 → WritePool 非资源解密器（真解密器在 native 驱动器，原始证据链成立）。
+- **guard4 一发命中**（PAGE_GUARD 对尾表区，未被反调试杀——**修正"创建即调试必死"旧结论**，a5/a7 当年失败疑为 PEB 清零操作自伤）：命中者=clr.dll/VCRUNTIME 读**导入表**（@RVA 0x929B50, r9=0x4B=目录 size）+ **memcpy 拷走尾前导 [0x928000,0x9282CC) 716B**（高熵，r8/rbx=0x615CA=FactoryValidator 长度现场, 调用栈=mscorlib JIT 帧+CoTaskMem 目的区）。**BL1/SV/BL2/CRC/params 表区（0x9282CC-0x929888）60s 零读取 → a6"驱动器消费尾表"模型证伪：校验器自包含**。
+- **Overlay=官方 Authenticode**（Certum PKCS#7 SignedData 0x2970B @0x936000，含 SHA-256 DigestInfo+X.509），非 Reactor 签名槽。T10 的 EXIT 0xFFFFFFFF=Authenticode 校验路径。
+- **驱动器稳定区锁定**：两运行实例对比 0x1000-0x2E000 每块差<0x100（指针/立即数槽）；0x30000-0x67000 随机化带。195 个跨运行恒定系统指针（多数=mscorlib NGen MethodTable，GC 分配用）。无 int29/ud2/RtlFailFast 痕迹。
+- **checker#1（06004192）= 条件死代码（A2 重签路线证伪）**：调用点 IL `ldloc.s v40; call 0600419C; call 06004192`——v2=0600419C 返回值；IL_0087 `ldloc.2; brfalse IL_0B51`，**IL_0B51=`ldc.i4 const; ret` 立即返回**。0600419C 首调 AV 被吞/后续立即 ret（a5 已证）→ v2=false → 06004192 的 SHA1[PE32 头152B+opt96清CheckSum+目录128清Certificate项+节数据表(PE32 optsz=224,节数据表@376)+节raw数据(跳过区间[v27,v34))] + RSA.VerifyHash **整段不执行**。四轮"5B 补丁使崩溃点移交 checker#2"系误判（全部实验死亡形态本就一致）。
+- **PE 布局修正**：PE32（magic 0x10B 非 PE32+）！opt=224（96+目录128）、节数据表@376、magic 判定 523=PE32+ 分支不成立（走 v7=96 分支）、清零项=Certificate 目录@file 280。DefineRandomCompressor(06004191)=RVA→文件偏移换算器（节表 VA/VS 匹配）。
+- v27/v10 谜（DOS[32,40)=0 与官方能跑矛盾）随 checker#1 死代码定性而不需再解。
+
+### 2. 终局图景（当前认知）
+
+**镜像校验 100% 在 native 驱动器内、自包含期望值、每运行随机化**（稳定区 0x1000-0x2E000+随机带 0x30000-0x67000）。文件任何 1 字节改动（含资源区/padding/DOS 头/overlay）均死。托管侧两层 checker（#1 条件死代码；#2 Necrobit 隔离域网络）在 a7 切断实验中从未独立显形——**全部死亡=同一 native 校验**。
+剩余未排除的出窗路径：
+1. **驱动器生成链逆向**：355KB 高熵 blob（文件 0x6213C4 区头）→ 运行时 ≤1.5s 解密/生成驱动器。解密器在哪执行（托管 cctor 链? CLR 内部钩子?）仍未钉死——0600419C"死代码"判定依赖 a5 解释器，值得用 guard4 同款 PAGE_GUARD 对 blob 首页下钩直接抓解密器 rip（**下一个最高价值实验**）。
+2. blob 解密算法逆向 → 离线解密驱动器稳定区 → 反汇编校验逻辑 → 找文件侧可影响输入。
+3. 接受"单 exe 静态改版"约束下无解，转业主协商（如 launcher 便携+激活已过 CI 的 A3 方案 + CI 环境白名单）。
+
+### 3. 资产（work_a1/，a9_ 前缀新增）
+
+a9_guard3.py（两段式堆追踪，有 rcx 寄存器语义坑）、a9_guard4.py（尾表区 guard+动态区 dump+深栈捕获，**已验证可跑满**）、a9_guard4/{log,hits.json,code_*,dyn_*}。修正版 a5_keypoll.py。
