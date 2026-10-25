@@ -1342,3 +1342,27 @@ res_GlobalValidator.FactoryValidator.bin       size=0x0615ca exe@0x8c4f02 (res+0
 1. capstone 线性化 pexec_0x7ffc1f330000.bin（分发器入口 +0x15cb，状态变量 edi/esi，跳表 @rip+0x80a4）
 2. 找 dword 读→算→写路径，恢复 Viewer 条目密码（预期：per-entry key 从 8B 条目头折叠）
 3. a1re.py v2：按真算法重加密两字节 → 本机 ui-probe → a-soak → CI
+
+## 第 XIII 段（2026-10-25 · 双线并行：C-lite 一期完成 + A1 算法结构恢复 + 反篡改校验实证）
+
+### 1. C-lite 一期（子代理，work_clite/）
+
+- **回填机制全通**：22930 槽整槽回填（fat 10454/tiny 12476，EH 槽 2317），dump 库 **16598/16598 逐字节全量一致**（dumpcheck.py）；.text 槽外零改动；IAT/EP shim 保文件原值。两个解析坑已修：fat 头长度在 16B flags 高 4 位；CorILMethod_Sect_EHTable=0x01（0x40 是 FatFormat）。
+- **一期产物崩溃（实证新事实）**：`exes/AirExplorer_clite_stage1.exe`（md5 fb8f074c）启动 1-3s fail-fast 0xE0434352。**11 组单变量 1 字节实验**（桩 nop/padding/.rsrc/.reloc/元数据/资源区/哈希表）全部同样崩溃 ⇒ **原生 runtime 在槽重写之前对整个映射镜像做字节级反篡改校验，任何 1 字节差异即杀**。"运行时幂等重写"预期不成立。
+- **中和测绘**：EP= jmp [IAT]（mscoree 单导入，无 TLS）；托管引导链 <Module>::.cctor(06000002)→06000001→06004192→06004194→0600419C（272 个真 fat 体文件内明文）；驱动器=64 位代码（WoW64 + Heaven's Gate，32 位 gate @0x929A5C）；反篡改静态结构=124×u32 哈希表 @0x929004（文件 0x927204）+素数表 @0x9293CC+x64 桥 @0x9298A4+gate @0x929A5C，读取方在运行时解密代码里。
+- 归因备注：34 个方法 dump 侧 ehCount=0 但槽内 1 个合法 catch 子句 = dump 工具伪影；.eh 边车 28B 的 try/hand 与槽体 1892 全同/1666 仅 token 异（驱动喂 JIT 时 TypeRef→TypeDef 解析）。**0600419C "数学必死循环"旧结论与真进程出窗矛盾——离线模拟器有误**。
+
+### 2. A1 线（子代理，work_a1/）
+
+- **驱动器状态机线性化完成**（3 大平坦化 + 24 嵌套；入口 0x1590，dispatcher 0x15cb，跳表 @rip+0x80a4 基 0x15c1）。**rsi=0x6e51d6f8 之谜解开**：非 key，是折叠链稳态值（循环每轮 esi 恒回 0x6E51D6F8，与链重启块 0x6955 逐位一致）。写循环：state 0x6d@0x6fda → call 0x610 迭代器取 dword → jmp 0xb1a0 WriteInt32。
+- **CTBASE=mainlib 镜像（v8 猜测成立）**：res_ValidatorGenerator.DefinitionError（文件 0x68a5f7，0x23A907）= raw-deflate 再加密；运行时 inflate 到 RW 区，与 mainlib_plain.bin 逐字节一致。**方法体在 mainlib 内寻址 = RVA−0x1E00**。
+- **解密算法结构（AOT 级）**：`state=0; for i: state+=BE32(key[(i mod kdl)*4..+3]); state=prng_round(state); out=BE32(ct)^state`（常量与 decrypt_prng.py 一致；state 更新不读明文 ⇒ 流式 XOR 单字节补丁安全）。AOT 函数 3 份拷贝 @pexec_0x7ffc1f580000+0x30F72 等，对应 06004193/418B/428C 家族；核心解密方法不在 16598 dump（native 提供）。
+- 堵点（精确）：①AOT per-entry key 来源（round⁻¹ 已解出 4 锚点绝对状态：0x2127=0xEA2BE063/0x2133=0x9F887B96/0x2145=0xEA51FF12/0x2157=0x2D984DD1，现成测试向量）；②mainlib 资源级 ks 生成器（**但 ks 数据本身在 work_a1/mainlib_ks.bin——补丁用一次性 pad，不需要生成器，堵点实质已消**）；③反篡改哈希算法（读取方在驱动器转储内待挖）。
+- 补丁路径定稿：mainlib_plain 两字节（0x194518/0x197AE4，ct^1）→ raw-deflate → pad 到 0x23A907 → XOR mainlib_ks.bin → 原位写回 0x68a5f7。
+- 驱动器明文不在 mainlib_plain 内（10 片段搜索全 NOT FOUND）⇒ 反篡改 checker 只能从驱动器转储挖。
+
+### 3. 当前唯一硬堵点与下一步
+
+**全镜像反篡改哈希算法** = A1/C-lite 两线共同且唯一的硬前置（任何 1 字节文件改动都会被拦）。
+A1 续作代理进行中：先组装候选 exe 实测（若校验不覆盖资源区则直接交付），否则按引用搜索法（表 VA=0x1D0DC9E9004 的绝对/RIP 相对引用扫描驱动器转储）找 checker。
+C-lite stage2（解密资源进文件+剥壳）等反篡改算法落定后启动。
