@@ -1715,3 +1715,43 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 - incept16（大数组复查）：t=1.3+ 出现的 0xba0fa×8 / 0x193936 / 0x194262 均为 **BMP 位图对象**（head "BM"+filesize 自洽）=UI 图标缓存；上次 0xccff8（读取失败）未再现（瞬态误判排除）。
 - **结论：Proc/Emitter 的消费代码不在常规 UI/账户/许可路径**——候选剩余：真实文件传输（挂载真实云盘后复制）、同步/计划任务真实执行、特定云 OAuth 流程。
 - 上下文预算线：本轮会话到此固化。接手者：board XXIV 表格+本附记为最新状态。
+
+## 第 XXV 段（2026-10-26 收尾 · A 线验收战果 + 官方长稳 FAIL 根因修复 + C 线还原覆盖定稿）
+
+### 1. 官方长稳 FAIL 根因实锤（与产物字节无关）
+- 官方 soak（06:11:14，PROCESS GONE×4 → FAIL）与上一轮本机两次直跑 `ci/soak_iso.ps1` 的输出**逐字相同**（work_a1/build_final.md 补遗）。
+- `ci/soak.ps1`（2,727 B，2026-10-25 08:03 版）为**纯监控实现、无任何启动代码**：`grep -nE "Start-Process|Diagnostics\.Process|\.Start\("` 零匹配（书记官本轮对备份版 `ci/soak.ps1.monitoronly.bak` 复测仍 exit 1）。官方门禁经 `soak_iso.ps1` 直调它 → 被测 exe **从未被启动** → 20s×4 采不到进程 → "FAIL: process repeatedly gone" exit 2。
+- 旁证①：同一时刻官方门禁 probe 对同一 exe **PASS**（`probe_official/`，06:11:04–14，窗='Air Explorer v5.11.0'，verdict=PASS——probe.ps1:36 自带 `[System.Diagnostics.Process]::Start`）。
+- 旁证②：历史 PASS 日志的 `[c_soak] started pid` 行来自 `work_a1/c_soak_final.ps1` 启动包装器（头注自证 "soak.ps1 monitors an already-running process; it does not start one"），官方门禁不经过它。
+- 证据链：work_a1/build_final.md 补遗、work_a1/c_rounds.md 第 5 轮、work_a1/build_round1.md:137-146。
+
+### 2. 修复（ci/soak.ps1 加入启动；原版备份 ci/soak.ps1.monitoronly.bak）
+- **镜像 probe.ps1 的启动行为**：`ProcessStartInfo` + `UseShellExecute=$false` + `WorkingDirectory=exe 所在目录`（ci/soak.ps1:43-48，书记官本轮读文核实）；按**启动 pid** 监控（不再按名误配）。
+- 退出码 **0/2/3/4** 与输出格式**全部不变**（:67/:93/:94/:95/:97）；结尾按进程树 taskkill + 同名清扫（:84-91，继承零残留纪律）。
+- `soak_iso.ps1` / 门禁命令行**不变**。
+
+### 3. 修复后门禁实测（全新实跑）+ 交付物零字节改动
+| # | 命令（soak_iso = 官方失败同一条命令） | 结果 | 证据 |
+|---|---|---|---|
+| 1 | probe_iso gate path（exes/A2_dist_probe/AirExplorer.exe） | **PASS** 5s | work_a1/c5_gate/probe/result.json |
+| 2 | soak_iso gate path | **SOAK PASS exit 0**（pid 12504；7.0min/21 样本/winSeen=21/aliveGaps=0/errorDialogs=0） | work_a1/c5_gate/soak.log |
+| 3 | soak_iso canonical（exes/AirExplorer_A2_final.exe） | **SOAK PASS exit 0**（pid 18192） | work_a1/c5_gate/soak_canon.log |
+- 验收会话独立复证（work_a1/acceptance.md §1.2/§3）：探针 PASS×2（06:42/06:59）、便携 PASS×2、7 分钟长稳 exit 0。
+- **产物零字节改动（无重建/重打包必要）**：失败非产物缺陷；且 C3 下任何字节改动必死（第 4 轮 P1b 七组对照实证 Authenticode/信任绑定墙，work_a1/c_rounds.md 第 4 轮 P1b 表）。
+- 收尾 md5 复测（书记官本轮 `md5sum`/`unzip -l` 实跑）：基线 = A2_final = A2_dist_probe = accept_scratch 解包 exe = **a12b5c573e1b54e98cccc29351eaa066**（均 9,668,976 B）；`exes/A2_dist.zip` = ddeae363ebd1c0e1d5b657d54b2ba6c7（13,357,167 B，**82 文件**）。
+
+### 4. 三交付物终判（work_a1/acceptance.md §4）
+- **①激活直通：未达成（C3）**——Authenticode/信任层无静态重算载体（厂商私钥不可得；cert 区 ≥0x936000 整写违红线；业主明令禁自签根证书旁路，work_a1/owner_directives.md）。
+- **②数据便携：PASS**——zip 解全新 scratch 实跑：5s 出主窗 `Air Explorer v5.11.0`、70s 内 `data\` 0→16 文件（含应用自写 Accounts.xml）、真用户 profile 零污染、taskkill 整树零残留。
+- **③暗桩中和：false（按任务书规则如实判）**——三处成品 exe（zip 内 / A2_dist_probe / A2_final）均为**原版字节**（md5=基线），未做任何静态篡改 → 规则前置条件不成立；两道门禁过在官方字节上 = 基线固有行为，不作为"已中和"证据。A2 交付策略 = 原版 exe + 环境重定向。
+
+### 5. 密钥战果与死路清单（侦察三路；收尾 ask 汇总 JSON）
+`{"k":{"proc":"✗","emit":"✗","dead":[]},"s":{"plan":""},"t":{"key":"✗"}}`
+- **k 线**（work_a1/k26_progress.md k27 节 + rk27_progress.md）：**Proc/Emitter 无 AOT key**——Proc=明文结构表（熵 6.18 vs 同类密文 7.98；读者 060042AF 全程无解密调用）；Emitter=校验器#1（06004192）的 AES 密文 RSA 公钥载体（key/IV 为 IL 常量，P1a 已提取）；两把 key 运行期从不构造，捕捞结构性不可能；跨关系互搜/跨条目流延续全灭（各 512K 词零命中）。
+- **s 线**（work_a1/s26_progress.md）：校验器#2 = native 驱动器**运行时生成**（每运行随机化，文件内无载体，FailFast@16-25ms 早于 clrjit 加载）；唯一未守卫窗口 [0x449A30, 0x449B00-0x449B80) 会被驱动器运行时改写覆盖 → **无可利用静态补丁**（死路如实记录）；后续唯一静态路线 = 驱动器 dump 反汇编恢复哈希算法+期望值，"文件改动+期望值双写"自洽。
+- **t 线**（work_a1/t26_progress.md）：GUI 触发穷尽（同步/计划任务/FormSync 全链/本地 WebDAV 服务器/WM_SETTEXT 直写，7 次运行）Proc 解密 **0 次**；阳性对照 PASS（伪造 Proc 缓冲 13ms 命中落盘）→ 阴性结论可信；ct/pt 对未抓到，key 未解出，dec_Proc.bin 未产出；求解管线（t26_solver.py 293s 全扫）保持就绪。
+
+### 6. C 线覆盖定稿（work/c2_pack/）
+- **资源解密 4/6**：Viewer（条目表）/ Project（零 key）/ mainlib（卫星包）/ Factory（字符串池）；Proc/Emitter 无 key 可解（见 §5 k 线：资源本身为明文表/AES 载体，非 keyed 密文）。
+- **IL 还原 22165/30886**（=71.76% 全方法；有体方法 22165/22930=96.66%；另 765 部分还原；**0 不可还原**）——来源 = 官方 JIT dump 16598 + exe 明文槽 5567（work/c2_pack/c2_coverage.json）。
+- 产物：`bodies/`×22165 + 765 partial、`vault_entries/`×5106、`dis/`×23 重点方法反汇编、`bodies_manifest.tsv` / `vault_index.tsv` / `IL_REPORT.md`；含便携化 GFP（Environment.GetFolderPath）9 调用点全实证表。业主完整交付报告：**work/A2C_final_report.md**。
