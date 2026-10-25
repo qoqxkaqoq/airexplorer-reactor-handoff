@@ -1421,3 +1421,28 @@ C-lite stage2（解密资源进文件+剥壳）等反篡改算法落定后启动
 ### 3. 资产（work_a1/，a9_ 前缀新增）
 
 a9_guard3.py（两段式堆追踪，有 rcx 寄存器语义坑）、a9_guard4.py（尾表区 guard+动态区 dump+深栈捕获，**已验证可跑满**）、a9_guard4/{log,hits.json,code_*,dyn_*}。修正版 a5_keypoll.py。
+
+## 第 XVI 段（2026-10-25 深夜 · guard6 命中：资源解密器定位+解密循环解码）
+
+### 1. guard6 方法学（可复用的杀器）
+
+两段式 PAGE_GUARD：phase1 guard 资源头页（RVA 0x623000）抓 clr GetManifestResourceStream 的 memcpy（VCRUNTIME140_CLR0400+0x12db，**范围 0x7ffc7fda0000-0x7ffc7fdbd000**——注意别少写一位 hex）→ **rdi=memcpy 目的堆页** → phase2 对堆页 RW guard、过滤 memcpy 自身命中 → 剩余命中=密文消费者。三个前版失败教训：rcx 在 memcpy 内是剩余计数（dst 用 rdi）、phase2 切换阈值、VCR_HI 笔误。
+
+### 2. 命中结果（a9_guard6/）
+
+- **消费者=驱动器本体**（命中 rip 全在 0x7ffc1f310000 基址=驱动器；jmp 0x7ffc1f3115cb=+0x15cb 已知分发器）：+0x2800（len→new byte[]）、+0x5b4d（len%4）、**+0x6891（解密主循环）**、+0x69a5（结构间拷贝）、+0x6a34（字符串构建）。
+- **解密主循环解码（+0x6891-0x6941）**：`c = data[i+3]<<24 | data[i+2]<<16 | data[i+1]<<8 | data[i]`（**BE32 逐字节组装**→[rbp-0x3c]）——AOT 模型的 BE32 实证；每次访问带越界检查（jae 0x929d）。
+- **ctx 结构=托管 byte[] 对象**：[rbp-0x278]=密文数组（+8=count、+0x10=元素）、[rbp-0x1f8]=输出数组、[rbp-0x208]/[rbp-0x270]/[rbp-0x230]=工作数组——**驱动器直接读写托管堆数组**（无 Marshal，裸指针操作 GC 对象）。
+- +0x3c88 块：len/4（dword 计数）；+0x6964：输出 byte[+0x1e]=dl；字符串构建块写 't'(0x74)@+0x15、'.'(0x2e)@+0x16——**同函数兼资源解密+字符串生成**（文件名族）。
+- 调用链特征：`mov edx,[ctx+8]; movabs rcx, 0x7ffc7c994fca (mscorlib+0x4fca); call <平坦化间跳>` = new byte[len]（mscorlib 分配）；`movabs rcx,<堆槽>; mov rcx,[rcx]; call +0x738` = 全局对象槽间接调用。
+- 本次运行驱动器当场快照已存 a9_guard6/dyn_consumer_0x7ffc1f310000.bin（0xb000 首区，与 memdump 老实例布局一致）。
+
+### 3. 与既有模型的合流
+
+四轮 AOT 模型（state=0; state+=BE32(key[(i mod kdl)*4..]); state=prng_round(state); out_LE=BE32(ct)^state）的 **BE32/逐 dword/流式语义全部在驱动器稳定区实证**。剩余缺口=①key 数组的 ctx 块（在稳定区，待反汇编定位——与 0x6891 同构但源 ctx 不同）②key 的构建来源（+0x2831 的堆槽链）。**guard4 旧结论"校验器自包含"与"驱动器读资源解密"不矛盾：解密输入=资源密文（已固定），校验期望值=解密产物的一部分（随机构建期确定）**。
+
+### 4. 下一步（接手从这继续）
+
+1. 反汇编 dyn_consumer_0x7ffc1f310000.bin 全稳定区（0x0-0xb000 已 dump；0xb000-0x69000 用 memdump 老实例对照），定位 key ctx 块（读 [rbp-0x???] 数组做 state+= 的块）→ key 来源（构建期常量 or 派生）。
+2. key 到手 → 离线解密 Viewer/FactoryValidator 资源 → C-lite stage2 语料 + 驱动器明文全解 → 校验逻辑（stable 区 fail-fast 分支）→ 文件侧绕过设计。
+3. guard6 方法学可复用于任何"谁动了这块内存"问题（堆页/任意 VA/读写分向）。
