@@ -1446,3 +1446,42 @@ a9_guard3.py（两段式堆追踪，有 rcx 寄存器语义坑）、a9_guard4.py
 1. 反汇编 dyn_consumer_0x7ffc1f310000.bin 全稳定区（0x0-0xb000 已 dump；0xb000-0x69000 用 memdump 老实例对照），定位 key ctx 块（读 [rbp-0x???] 数组做 state+= 的块）→ key 来源（构建期常量 or 派生）。
 2. key 到手 → 离线解密 Viewer/FactoryValidator 资源 → C-lite stage2 语料 + 驱动器明文全解 → 校验逻辑（stable 区 fail-fast 分支）→ 文件侧绕过设计。
 3. guard6 方法学可复用于任何"谁动了这块内存"问题（堆页/任意 VA/读写分向）。
+
+## 第 XVII 段（2026-10-25 深夜 II · 🔓 AOT 解密算法完全破解 + Viewer 全量解密成功）
+
+### 1. 算法（guard7/10 现场快照 + 四 dword 逐字节实证，最终版）
+
+```python
+# 密文 = 托管 byte[]（驱动器裸指针操作）；key = 32B 数组（8 dword, LE 读）
+state = 0
+for i in range(len(ct) // 4):          # 全资源连续流（不按条目重置）
+    state = (state + key_dwords[i % 8]) & 0xFFFFFFFF
+    state = prng_round(state)           # decrypt_prng.py 的 prng_round，常量已双实证
+    d = ct[i*4:i*4+4]
+    c = d[3]<<24 | d[2]<<16 | d[1]<<8 | d[0]     # bswap 组装（驱动器+0x6891 逐字节）
+    out_dword_le = c ^ state             # 输出按 LE 字节写
+```
+- **流式 XOR**：state 序列与明文/密文内容无关 → **单字节密文改动 = 单字节明文改动**（重加密=直接改密文字节，ks 语义恒定）。
+- **验证**：guard10 现场输出数组 [rbp-0x5d0]（count=0x56fe8）在 hit3/hit6 的字节与离线模型逐字节一致（0x43eeed2b/0x00405b21/0x45eeae4b/0x005d0e6e 四 dword 全中）。
+- 驱动器侧块布局（稳定区，memdump 老实例可直接反汇编）：+0x2060=**key BE32 组装**（读 [rbp-0x220]→[rbp-0xa4]）、+0x6891=**ct BE32 组装**（读 [rbp-0x278]→[rbp-0x3c]）、+0x1dd3=**state+=key**（[rbp-0x84]）、+0x9197=**prng_round 内联**（rotK2=0xD53A6219/rotK4=0xF0381409/K1B=0x639D2347/K3K3=0xF769A8C4 四常量实证）、+0x5b4d=len%4、+0x3c88=len/4、+0x2800=len→new byte[]（mscorlib+0x4fca 分配）、+0x6964=输出写、+0x69a5=结构间拷贝、+0x6a34=字符串构建。
+
+### 2. Viewer key（32B，运行时抓取）
+
+`f5999790 8a8bf27e 5dfba621 81d9f423 762aa085 05365daf e4274cfb dd503943`
+- **不在文件/mainlib_plain/驱动器 dump 任何静态位置** → 运行时派生（来源待逆向：arr220 写入者）。
+- Viewer（0x56FE8）全量解密成功 → `work_a1/dec_Viewer.bin`；9153 个桩区 RVA 字段（0x2050-0x44b81c 对齐 4）实证。
+- **条目结构**（解密流内）：[RVA][tag1][fat头(flags|maxstack)][tag2][localsTok][body…][tag3][count?]…，tag=0x45ee???? 模式字段（含义待解，疑每条目校验/种子）。示例@0x54：`bc200000(RVA) dbacee45 13300400(fat,ms=4) 67acee45 02000011(locals 0x11000002) fed11ac8 0bfe0e02(body) 5a8dee45 05000000`。
+
+### 3. per-resource key（部分）
+
+- **其余 5 资源（Emitter 0x100/Proc 0xBB2B/Project 0x6610/mainlib 0x23A907/Factory 0x615CA）启动期不解密**（guard11b/c 70s×2 轮：只有 Viewer 的 0x6891 循环命中；其余 BE32 副本块 0x12ac9/0x2f23b/0x2f2f4/0x4c288/0x4d0bf/0x5cfdf/0x5d1e0 零命中）→ **惰性解密**（功能触发时）。同 key 解其余资源=乱码（已证伪）。
+- 抓取路径：①GUI 功能触发时 guard（重）②逆向 key 派生（arr220 写入者——guard7 同法对 key 页下 guard 但需在解密调用前的写入窗口）③从 Viewer 条目 tag 字段推测种子关系。
+
+### 4. 对全局的意义
+
+- **C-lite stage2 钥匙到手**：算法+Viewer key 已破；缺 4 个惰性 key（mainlib 已有 plain 不需要）。全 key 到手 → 全资源离线解密 → 7956 无槽位体语料 → C-lite 全 IL 化。
+- **A1 出窗唯一堵点不变**：native 校验（自包含+每运行随机化）。**注意**：资源密文改动=文件字节改动 → 仍会被 native 校验杀——AOT 破解不直接解锁 A1，但解开「驱动器从哪来」（mainlib/Factory=JIT hook 喂的解密块源头）后，**校验逻辑所在的驱动器代码 = Factory 解密产物的一部分**——拿到 Factory key = 离线解出驱动器完整逻辑 = 校验器白盒！
+
+### 5. 工具链（work_a1/，a9_ 前缀）
+
+guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key 页 guard）、guard10（rbp 全槽大数组扫描）、guard11b/c（多资源页持续 guard+按 ct 大小分类记录 key）。dec_*.bin（六资源解密尝试，仅 Viewer 有效）。经验：guard 重设上限按需调（Viewer 循环 71 万命中）；VCRUNTIME 范围 0x7ffc7fda0000-0x7ffc7fdbd000。
