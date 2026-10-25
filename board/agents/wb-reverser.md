@@ -1605,3 +1605,30 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 - 哈希中间值 0x620062/0xd400d2/0x20800b4 在 int3 时唯一 exec 区 0x1cd0fe10000（0xe000）命中 7 处，但该区**非驱动器**（+0x15cb/+0x6891 布局不符、头 0x200 仅 109/512 相同）——是 CLR stub/LoaderHeap 数据区，哈希命中为数据巧合（UTF-16 双字节模式）。
 - e06d7363 的 EXCEPTION_RECORD 参数 [1]（托管异常对象指针）在捕获时已清零（二次分发）——异常对象 Message 未取到；**下次**：首 Chance 即抓（DEBUG_EVENT 的 dwFirstChance=1 时立刻 dump rdx+0x40 参数区）。
 - **校验器身份仍未定**（托管 JIT vs 驱动器两说并存：e06d7363 栈无驱动器帧支持托管说；但 NSTub 区 0x7ffc1f2a0360 帧含 `jmp 0x7ffc1f30d2e8`（跳驱动器区！+0xd2e8）——驱动器参与分派的证据）。下次实验：首 Chance e06d7363 抓异常对象 + 反汇编 0x7ffc1f30d2e8 驱动器侧。
+
+## 第 XXII 段（2026-10-26 凌晨 · 校验器定性终局：托管 FailFast 实锤 + A2 重签路线复活推演）
+
+### 1. 定性实验双双完成（guard17i：EXCEPTION_RECORD 参数全读）
+
+- **0x04242420 参数=[0x31415927(π), clr.dll基址, 栈指针]**——RaiseFailFastException 由 **clr 内部**调用=**托管 Environment.FailFast(π)** 被校验器调用——**校验器=托管代码（Necrobit 流）终局实锤**（与 NSTub→ThePreStub 发现互证：所有"驱动器帧"都是 CLR stub 机制）。
+- **e06d7363 param[1]（异常对象）恒 0**（re-throw 清除）——Message 路死。
+- **e0434352 param[0]=0x80131500(System.Exception)/0x80131534**——校验器抛 System.Exception 衍生类。
+
+### 2. a1_plain（纯资源补丁）死法与 .text 篡改逐异常一致
+
+同一 π fail-fast 序列——**单一校验器覆盖全文件（含资源区），无两套校验**。
+
+### 3. A2 重签路线复活推演（中和主路径）
+
+- Reactor 构建时必然自洽：**公钥区+签名区必须在哈希排除区**（否则自身无法构建）。
+- 推论：找到真公钥载体（在文件某处、被哈希排除）→ 换公钥（新密钥对）→ 改激活字节（资源区，哈希变）→ 新私钥重签 → 签名写回排除区 → **校验通过**。
+- 已排除的公钥位置：mainlib_plain/Factory 池/dec_Viewer/exe 明文（RSAKeyValue 全 NF）——**公钥在未解密资源（Proc/Project/Emitter 的密文内，key 未抓）或运行时派生**。
+- 前置依赖：**三资源 key 抓取**（incept 瞬态窗口补抓）或 **Necrobit 字符串解密器离线化**（06004196 已知+Factory 池在手→解出全部字符串→公钥片段/校验器消息 xref）。
+
+### 4. 下次会话路线（按优先级）
+
+1. **Necrobit 字符串离线解密**（最高杠杆）：Factory 池格式=解密产物（明文字符串表），其 id 引用机制（06004196 的 const^canary 公式，board IX 有）→ 反查所有方法的字符串 xref → 校验器身份+公钥位置。
+2. incept 抓 Proc/Project/Emitter key → 全资源解密 → 直接找校验器体。
+3. A2 全流程实现（换钥+重签+双改）→ 篡改 exe 实测。
+
+工具资产已推 GitHub（a9_pack/a11_pack/board XII-XXI 附记，最新 commit 3a34efee/2db953cc）。
