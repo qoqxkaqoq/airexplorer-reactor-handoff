@@ -1302,3 +1302,43 @@ res_GlobalValidator.FactoryValidator.bin       size=0x0615ca exe@0x8c4f02 (res+0
 ### 5. 提示词
 
 见 `HANDOFF_NEXT.md`（本段同日生成，给下一个 AI 的完整接手提示词）。
+
+## 第 XII 段（2026-10-25 · 本地活进程内存路线：驱动器定位 + 桩槽全景 + 回填机制改写）
+
+> 接手者换了打法：v8 校准失败 + v7 反汇编回放全零 + v5 ip2ml 出 JIT 范围外（驱动器=VirtualAlloc 原生代码）后，
+> 放弃 TTD，直接在本机 Windows 启动 baseline（deps.zip 依赖 + ReadProcessMemory），零 CI 拿到全部运行时真值。
+> 业主已确认清理本地 AirExplorer 用户数据后重跑（%APPDATA%\AirExplorer 已删，干净态窗口 "Air Explorer v5.11.0"）。
+
+### 1. 运行时全景（零 CI，ReadProcessMemory）
+
+- baseline 本机可运行：deps.zip 解包到目录 + exe 即起窗。PID 内存 0x1ae13000 全景已转储（memdump/：module_text 0x927000 + 27 个私有可执行区 + 15 个大堆）。
+- **桩槽运行时=完体明文**：06002133/06002145/0600428A 的运行时槽体与 dump 库逐字节相同（第四~五重验证）。22930 个有 RVA 方法槽区 0x2050-0x44b81c，IAT 仅 8B（mscoree 单导入）。
+- **文件 .text == 运行时 .text，除桩槽外零差异（23019 个 16B 差异块全部落在方法槽内）**→ 原生 Reactor runtime/bootstrap/EP shim 在文件里就是明文（.text 0x44b81c-0x92a000 ≈ 5MB，可静态反汇编！）。运行时镜像 PAGE_READONLY，回填时临时 VirtualProtect。
+- 全库 body 零 dword 仅 1.8%（游程中位 1，最长 2）→ 游程编码/压缩假设全灭；完体密文必然走真压缩，Viewer(356KB) 只可能是 phase-A 短条目表。
+
+### 2. Viewer 资源=phase-A 桩表（rbx 差值精确解出条目编码）
+
+- v8 rbx 差值四段预算（0x4C/0xCC/0x1EC/0x130）在 **h=8 头 + fat 条目 ct=12B fat 头+体前 8B、tiny 条目=1+7B、写多少 ct 存多少** 模型下：R2=176+2×28 精确吻合、R3=17×28+16=492 精确吻合、R1=32+28+16=76 精确吻合（06002127 phase-A 写了 6 dword=24B ct 与 TTD 观测一致）。R4 差 52B ⇒ 条目序 ≠ rid 序（或缺 4 个 nodump 方法的条目）——但全局 Σ(phase-A 条目)≈0x51B00 vs Viewer 0x56FE8 量级吻合。
+- **结论：Viewer=启动期"fat头+体前8B"桩表（phase-A）；补丁目标字节 body[0x290]/[0x120] 不在 Viewer**——v8 的 ENT 校准失败是必然（找的地方就错了）。
+- H_a（ct=res 原文）残存形态=按条目独立加钥：5 锚点 ks 无常量/无 prng_round 链/无跨条目缝合（缝合检验全灭）→ 算法必须来自驱动器反汇编。
+
+### 3. 驱动器定位（本战最大突破）
+
+- TTD 回放态驱动器区读全零、`u` 反汇编全零、!ip2md "not in JIT code range"——TTD 对 VirtualAlloc 区无能为力。**活进程 ReadProcessMemory 无此限制。**
+- **驱动器=私有可执行区 0x7ffc1f330000（0x69000B）**，验证：+0xb1a0 `sub rsp,0x28; mov r8d,edx; xor edx,edx; call <mscorlib_ni WriteInt32>; nop; add rsp,0x28; ret` —— retaddr=+0xb1ae 与 TTD k 栈逐位吻合。
+- +0x15cb=9 指令平坦化分发器（mov edi,0x212; cmp edi,0x270; lea rdx,[rip+0x80a4]; mov edx,[rdx+rcx*4]; jmp rdx）= TTD 热循环 9 IP × 13051 次。
+- rsi=0x6e51d6f8 等常量不嵌入，以**常量折叠链**形式存在（lea edi,[rsi-0x686fb2f7]; add esi,0xb2bcdf6d 等）——线性化状态机即可恢复全部常量与算法。
+- 资源以托管 byte[] 进堆（ValidatorProc 原文副本 @heap_0x1d0de9c0000+0x330a0，[MT][size][data] 布局）；Viewer byte[] 未在已转储堆中现形（GC 分区多，需再扫）。
+
+### 4. 对 A1/C 线的含义
+
+- **A1 前置（解密算法）已解锁**：驱动器 0x69000 在 memdump/pexec_0x7ffc1f330000.bin，capstone 线性化状态机 → 恢复 Viewer 条目密码 → 两字节重加密（a1re.py 改造）。
+- **C-lite（=C 线目标，非 v140 全量重建）已可行**：22930 槽位运行时真体可整体回填进文件 + 原生 runtime 文件内明文可静态中和 → 全 IL 化 exe。依赖链：managed 字符串解密器（0600418B/96/282 真体已在 dump 库/运行时槽）读的资源副本由原生驱动器解密进堆 ⇒ C-lite 需先拿资源密码（同一前置）。
+- 建议顺序：①驱动器线性化拿算法（两条线共同前置）→ ②A1 两字节重加密出 exe → 本机 ui-probe+soak → CI 验收 → ③（业主决策）C-lite 升级。
+- 本地跑 ui-probe/soak 可行（probe.ps1 本机即用），CI 仍为最终验收。
+
+### 5. 下一步
+
+1. capstone 线性化 pexec_0x7ffc1f330000.bin（分发器入口 +0x15cb，状态变量 edi/esi，跳表 @rip+0x80a4）
+2. 找 dword 读→算→写路径，恢复 Viewer 条目密码（预期：per-entry key 从 8B 条目头折叠）
+3. a1re.py v2：按真算法重加密两字节 → 本机 ui-probe → a-soak → CI
