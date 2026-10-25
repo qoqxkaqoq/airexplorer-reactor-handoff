@@ -1366,3 +1366,32 @@ res_GlobalValidator.FactoryValidator.bin       size=0x0615ca exe@0x8c4f02 (res+0
 **全镜像反篡改哈希算法** = A1/C-lite 两线共同且唯一的硬前置（任何 1 字节文件改动都会被拦）。
 A1 续作代理进行中：先组装候选 exe 实测（若校验不覆盖资源区则直接交付），否则按引用搜索法（表 VA=0x1D0DC9E9004 的绝对/RIP 相对引用扫描驱动器转储）找 checker。
 C-lite stage2（解密资源进文件+剥壳）等反篡改算法落定后启动。
+
+## 第 XIV 段（2026-10-25 · 四~七轮：双层反篡改全景 + 唯一堵点=native blob）⚠️ 接手必读
+
+### 1. 反篡改全景（四轮修正三轮，七轮修正四轮，当前定论）
+
+- **checker#1（托管层，已破）**：06004192（文件明文 IL）= SHA1[文件0..152 + 可选头(CheckSum清零) + 尾128B(Certificate清零) + 节表 + 节数据交集] → RSA VerifyHash（XML 公钥自 mainlib 资源 AES 解密）→ v12≠0 抛 "is tampered."。**5B IL 补丁已验证**：文件 0x3F96BC `16 FE 01`→`26 16 00`、0x3FB465 `17`→`16`、0x3F9B71 `17`→`16`（IL 基址 0x3F91DC）。工具 a4_diag.py。
+- **checker#2（native 层，未破，唯一堵点）**：a7 线 33 次实测切断全部托管跳板（14 处 VSAI→ldtoken、UpdatePredictor 主体 ret、0600419C 11 调用点、06004198 hook 调用点、keogyBbmx 家族）后 native FailFast 形态逐字节不变（exit 0xE0434352、异常地址恒 0x7FFC996E408A、事件 1026 空栈、1-3s）⇒ **100% native 独立自检，不经过任何托管跳板**。第四轮"崩溃点移交 checker#2"、第三轮"托管 IL 路线"均已被此修正。
+- a6 修正：.text 尾部结构=**FieldRVA 表驱动的运行时类静态数组初始化数据**（0x54E900 表 21 行×6B）：BL1/SV/BL2/BE·LE CRC32 表/素数表 2..1999/MD5 T 表/DigestInfo 模板（OID 故意 02 00）/AES IV·KEY（0x929A28 数据被改写、0x929A38 真值=字符串解密钥）/x64 桥/x86-32 gate/StrongName 签名@0x929A88+0x80。**消费链：06004198→UpdatePredictor(060041A3)→…→驱动器内 native（派发器@0x3299、跳表@0xA0AC，0x335d/0x5e6b8 栈参 0xCEA1D7D）消费 BL1/BL2/CRC/params**——但 a7 证明切断托管侧这些调用不阻止校验 ⇒ native 自检另有触发路径。
+- MD5 T 表归属修正：0x9298E8 256B=FieldRVA 裸数据（0400207E），由 06004181 .cctor InitializeArray 装入静态字段——GC 堆两份 BE int[] = AES 密钥派生（0600425A 路径）的缓存，与文件校验无关。
+- K/A 原值有 SHA256 预言机（<PrivateImplementationDetails> 字段名=SHA256(编译期原数据)；K=4BED3ADC…A7B、A=97E613E5…A4A）。字符串解密可离线：AES-256-CBC(key=0x929A38 真值, IV=MD5(UTF16LE(盐)))。
+- 工具修正：**a3_resolve.py/a3_tokmap.json 有表偏移 bug（+8*popcount 应为 +4*popcount）不可信；用 a7_meta.py**。早期"ilonly/a1 死于 checker#2"推断作废——所有死亡=同一 native 校验。
+
+### 2. 已就绪的出包管线（等 checker#2 破即出窗）
+
+- mainlib 管线：mainlib_plain 改字节 → raw-deflate → pad 0x23A907 → XOR mainlib_ks.bin（一次性 pad）→ 写回 0x68a5f7。a2_build.py。
+- A1 两字节体补丁候选：exes/AirExplorer_baseline_verified_a1.exe（IL 对齐 0x194518/0x197AE4）/ _a1b.exe（槽对齐 0x194524/0x197AF0）——对齐裁决待出窗后实测。
+- 候选 exe 均死于 native 校验（预期内）。sanity 基线本机出窗 2s 正常。
+
+### 3. 进行中（会话中断则从此处接手）
+
+- **五轮（流解密线）**：EmitterReporter 容器资源解密（0600419C 的 G(key)^in 流解密器离线化）→ 7956 无槽位 Necrobit 体提取（C-lite stage2 语料，独立价值）。a5_meta.py 已通，IL 解释器编写中。
+- **六轮（native blob 线，当前 A1 主攻）**：.text 未审计区 [meta_end, 0x6231c0]（~845KB 文件明文 native 运行时）测绘 → 驱动器 0x69000 的**加密源 blob** 定位（明文不在文件任何已查位置，必有加密源）→ 解密器逆向 → 离线解密驱动器 → 修补镜像校验 → 重加密回写 → 组合出包。
+- 排队：stage2 活进程资源明文提取（C-lite 输入）。
+
+### 4. 接手要点
+
+1. 先读本段与 XIII/XII，再跑 `python3 work/a1re.py` 无参复验资源定位；候选 exe 实测规程：独立 APPDATA + localapp/ 依赖 + 等窗 100s + 杀自己 PID + overlay 绝不能改。
+2. 唯一硬堵点=驱动器加密源 blob/解密器。突破口：native 运行时区从未审计；驱动器转储大片静态代码=已知明文可做 blob 对齐扫描；尾部 BL1/BL2/SV 疑似解密参数。
+3. 出窗后：a1/a1b 对齐裁决（标题 Pro）→ 7 分钟长稳 → CI ui-probe（tools/ci/probe.ps1 版）+ a-soak。
