@@ -1674,3 +1674,37 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 - Proc 副本 t=0.174 现形（region+0x964f0）→ 立即/延迟 120ms 两次全堆 raw dump（96 region）——**0xbb2b 输出实例始终不存在** + 22 个小数组候选全灭 → **Proc 解密惰性**（副本≠解密，等运行期功能触发）。
 - key 互搜全灭（vkey/mkey/fkey 不在任何明文/exe）；资源头派生无模式。
 - 下次：incept14 长跑多窗口或 GUI 功能触发后 dump，抓 Proc OUT 实例 → preimage 解 key（工具链已就绪，mainlib/Factory 同法 310s 可复用）。
+
+## 第 XXIV 段（2026-10-26 · GUI 触发战役 + Emitter 盲点修正 + 资源读取真相）
+
+### 1. GUI 自动化触发战役（computer-use + incept14 长窗）
+
+- 成功流程：正常启动（pid 7272）→ 注册帐户窗（继承自 APPDATA 状态）→ **双击 WebDav → login 窗（填服务器/用户/密码）→ 确定 → "该账户验证失败：未能解析远程名称"**——**WebDav 账户验证代码完整执行**（DNS 失败但代码路径跑了）。
+- 另触发：帮助/专业版菜单导航（SendKeys）。
+- **400 秒 watcher 全程：Proc OUT 实例 0 次出现**（WebDav 验证+菜单交互都没触发 Proc 解密）。
+- 工具沉淀：a9_incept14.py（400s 版）。
+
+### 2. Emitter 盲点修正（重要）
+
+- incept3 抓的"Emitter 副本"（head=637c777b）**在 exe 全文 NOT FOUND**——它不是 exe Emitter 资源的密文副本（**是 mainlib_plain 内嵌子资源或其他来源**）。
+- 此前用它推的 ks/求逆全废（preimage 空的真正原因——**密文源对错了**，不是输出损坏）。
+- **exe Emitter（@0x6783b0, c2d1db0a）从未被 GetManifestResourceStream 读过**（无堆副本记录）。
+
+### 3. 资源读取真相（堆副本头指纹验证 5/6 吻合 exe 偏移）
+
+| 资源 | exe 偏移 | 堆副本 | 解密输出 | key |
+|---|---|---|---|---|
+| Viewer | 0x6213c4 ✓ | ✓ | ✓ | 32B ✓ |
+| Project | 0x683fe3 ✓ | ✓ | ✓ | 零 ✓ |
+| mainlib | 0x68a5f7 ✓ | ✓ | ✓ | ✓（独家） |
+| Factory | 0x8c4f02 ✓ | ✓ | ✓ | ✓（独家） |
+| Proc | 0x6784b4 ✓ | ✓（只读） | **从未** | ⛔ |
+| Emitter | 0x6783b0 ✓ | **从未** | **从未** | ⛔ |
+
+**新认知：堆副本（GetManifestResourceStream）≠解密。Proc 走到了"读"，Emitter 连读都没读**。两资源的消费代码在极深的功能路径（真实文件传输/特定云操作？）。
+
+### 4. 下次路线
+
+1. Proc/Emitter 触发场景挖掘：真实文件操作（浏览面板挂载真实云/本地盘复制）、命令行模式（AirExplorerCmd help 触发过 license 检查——那个路径读什么资源？用 incept 监控 Cmd 进程）。
+2. 或数学侧：Proc 解密即使发生，输出若被流式消费（不经 0xbb2b 数组），改抓 [rbp-0x1f8] 形态——需运行时断点（调试模式不出窗的约束仍在）。
+3. **已有 4 把 key+解密管线的价值**：即使 Proc 未破，Viewer（条目表）+Project（委托表）+mainlib（卫星包）+Factory（字符串池）的完整明文已可支撑 C-lite stage2 大部分语料需求。
