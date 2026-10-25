@@ -1668,3 +1668,9 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 1. **Proc key 抓取**：incept12 专项（2ms 高频盯 0xbb2b 副本出现→紧邻小数组分配窗口）或等 Proc 解密瞬间的输出对（副本两次出现 t=0.183/0.343，输出对窗口 <20ms 未捕获）。
 2. Proc 解密后：搜校验器（FailFast 调用/期望常量/RSA 公钥二进制形式）→ A2 重签或期望改写落地。
 3. 5 把 key 全景后：**完整体库/驱动器代码源谜题**可能同在 Proc（47KB 装不下全部但装得下引导段）。
+
+### XXIII 附记（incept12/13：Proc 惰性解密实锤）
+
+- Proc 副本 t=0.174 现形（region+0x964f0）→ 立即/延迟 120ms 两次全堆 raw dump（96 region）——**0xbb2b 输出实例始终不存在** + 22 个小数组候选全灭 → **Proc 解密惰性**（副本≠解密，等运行期功能触发）。
+- key 互搜全灭（vkey/mkey/fkey 不在任何明文/exe）；资源头派生无模式。
+- 下次：incept14 长跑多窗口或 GUI 功能触发后 dump，抓 Proc OUT 实例 → preimage 解 key（工具链已就绪，mainlib/Factory 同法 310s 可复用）。
