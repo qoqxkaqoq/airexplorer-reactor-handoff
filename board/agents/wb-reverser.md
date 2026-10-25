@@ -1254,3 +1254,51 @@ v6 artifact（run 40141500463）全文重析（cdb.log 在 /tmp/v6art/cdb.log，
 1. v7 artifact（run 40143160905）→ P3 解密循环反汇编（密码算法）+ P5 驱动器内存真体
 2. v8 artifact → 五目标 rbx + ct → 两字节补丁重加密 → 重组 exe → ui-probe + soak 7min
 3. 若 v8 校准失败（驱动器 ct 缓冲 ≠ res 原文）→ 依据 v7 反汇编离线复刻变换再定位
+
+## XI. 10-25 收尾段：a1re.py 资源指纹定位验证通过 + kschain3 全灭（接手 AI 从这里开始）
+
+### 1. a1re.py cor20 定位 + 资源指纹定位已验证（本轮最重要成果）
+
+- cor20 两级解析修正：DD[14] → CLI 头 RVA 0x2008 → CLI 头内 **+24** 取 ResRVA=0x6231C0 / Size=0x30510C → 文件偏移 res_base=0x6213C0（CLI 头内 +22 是错的，那是 EP）
+- 资源目录标准格式解析不可用（Reactor 改过：off=0x56FE8 恰=Viewer 大小但 size/nlen 荒谬；reslist.py 同样被骗）→ **改为 res_*.bin 内容指纹搜索，6 资源全部定位成功**：
+
+```
+res_ErrorReceiver.ValidatorViewer.bin          size=0x056fe8 exe@0x6213c4 (res+0x4)       ← Viewer = 资源区第一个数据
+res_ValidatorArgument.EmitterReporter.bin      size=0x000100 exe@0x6783b0 (res+0x56ff0)
+res_ValidatorAllocator.ValidatorProc.bin       size=0x00bb2b exe@0x6784b4 (res+0x570f4)
+res_CollectorTransaction.ValidatorProject.bin  size=0x006610 exe@0x683fe3 (res+0x62c23)
+res_ValidatorGenerator.DefinitionError.bin     size=0x23a907 exe@0x68a5f7 (res+0x69237)
+res_GlobalValidator.FactoryValidator.bin       size=0x0615ca exe@0x8c4f02 (res+0x2a3b42)
+```
+
+- Σ=0x3050ED ≈ 0x30510C（差 0x1F=目录开销）→ **6 资源在 exe 内连续布局，Viewer 打头**
+- **含义：任何"Viewer 资源内偏移"可 res+off 直接换算 exe 文件偏移，重加密写回路径已打通**
+- a1re.py 已修：无 stdin 数据时优雅退出并打印用法（之前 JSON 崩溃）。ENT 用文件传：`python3 work/a1re.py <exe> ent.json`；无 ENT 仅做定位打印
+
+### 2. kschain3（正确版 numpy 全 2^32 扫描）结论：0600418B 型链全灭
+
+- prng_vec 与 decrypt_prng.prng_round 对拍 0/50000 mismatch（selfcheck 通过）
+- preimage(ks0)=[]；preimage(ks1) 唯一命中 0x33e53d5d，但全 kw 链验证不通过
+- **结论：Viewer 资源密码 ≠ (v4+kw, prng_round) 型链。等 v7/v8 驱动器反汇编，勿再试此路**（与第 X 段 3 节排除清单合并）
+
+### 3. A1 两字节补丁规格（定稿，接手可直接用）
+
+- P1：06002133 body[0x290] **0x16→0x17**（上下文 `02 16 7d 3d 0c 00 04` = `ldarg.0; ldc.i4.0; stfld 04000C3D`，全文唯一降级点）
+- P2：06002145 body[0x120] **0x16→0x17**（同款，全文唯一）
+- P3/P4/P5 getter（0600212A/06002157/06002127）**无需替换**——P1/P2 后 `_IsDecoratorProvider` 恒 true，getter 自然恒 true
+- 补丁位置换算（H_a 假设）：patch 位置 = Viewer资源内条目偏移(rbx) + 0xA + 12(fat hdr) + body_off；ks = ct字节 ^ 原值，新密文 = ks ^ 新值
+- 桩 RVA（mdrva.py 已验证）：06002133=0x196088 / 06002145=0x1997C4
+
+### 4. 接手 AI 的下一步（按序执行）
+
+1. 查 a-ttd workflow 最新 run（v8 PayloadScan，commit 0817268 已 dispatch）→ 下载 artifact
+2. 从 cdb.log 提取 `[V8] P2 cand ... FPRINT MATCH` 的 CTBASE + `[V8] ENT 06002133/06002145 rbx=0x.. ct=<hex>`，存成 ent.json
+3. `python3 work/a1re.py exes/AirExplorer_baseline_verified.exe ent.json`
+   - 校准：输出 res-rel 应 == rbx（CTBASE = Viewer 资源在驱动器内存基址）
+   - 若 `cur != old`（H_a 偏移错）→ 脚本打印邻域 hex 人工核对；再不行看 v7 P3 native 解密循环反汇编（run 40143160905）离线复刻变换
+4. 生成 `AirExplorer_baseline_verified_a1.exe` → **ui-probe workflow（probe.ps1 版）** → **a-soak 7 分钟**
+5. 通过后按 AGENTS.md 路线图推进 A3 便携 + 暗桩清单
+
+### 5. 提示词
+
+见 `HANDOFF_NEXT.md`（本段同日生成，给下一个 AI 的完整接手提示词）。
