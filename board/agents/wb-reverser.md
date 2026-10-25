@@ -1708,3 +1708,10 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 1. Proc/Emitter 触发场景挖掘：真实文件操作（浏览面板挂载真实云/本地盘复制）、命令行模式（AirExplorerCmd help 触发过 license 检查——那个路径读什么资源？用 incept 监控 Cmd 进程）。
 2. 或数学侧：Proc 解密即使发生，输出若被流式消费（不经 0xbb2b 数组），改抓 [rbp-0x1f8] 形态——需运行时断点（调试模式不出窗的约束仍在）。
 3. **已有 4 把 key+解密管线的价值**：即使 Proc 未破，Viewer（条目表）+Project（委托表）+mainlib（卫星包）+Factory（字符串池）的完整明文已可支撑 C-lite stage2 大部分语料需求。
+
+### XXIV 附记 II（GUI 触发穷尽记录）
+
+- 已触发并全程监控（400s watcher each）的功能路径：①WebDav 账户验证完整执行（登录→凭据→验证失败弹窗）②浏览按钮 ③帮助/专业版菜单导航 ④激活码菜单点击（无 UI 响应）⑤AirExplorerCmd help（license 检查路径）——**Proc 解密 0 次触发**。
+- incept16（大数组复查）：t=1.3+ 出现的 0xba0fa×8 / 0x193936 / 0x194262 均为 **BMP 位图对象**（head "BM"+filesize 自洽）=UI 图标缓存；上次 0xccff8（读取失败）未再现（瞬态误判排除）。
+- **结论：Proc/Emitter 的消费代码不在常规 UI/账户/许可路径**——候选剩余：真实文件传输（挂载真实云盘后复制）、同步/计划任务真实执行、特定云 OAuth 流程。
+- 上下文预算线：本轮会话到此固化。接手者：board XXIV 表格+本附记为最新状态。
