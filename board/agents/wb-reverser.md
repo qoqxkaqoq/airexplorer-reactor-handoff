@@ -1632,3 +1632,39 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 3. A2 全流程实现（换钥+重签+双改）→ 篡改 exe 实测。
 
 工具资产已推 GitHub（a9_pack/a11_pack/board XII-XXI 附记，最新 commit 3a34efee/2db953cc）。
+
+## 第 XXIII 段（2026-10-26 凌晨 II · 🔓🔓 三资源 key 破解：Project=零 key + mainlib/Factory key 独家解出）
+
+### 1. Project=零 key（100% 验证）
+
+- incept7 的 Project 密文副本+输出对（t01451 双数组）→ ct^pt=ks → **ks[0:8]=9013742e b52c982d…（seed-0 链特征）** → 零 key AOT 解密 **26128/26128 字节 100% 匹配**。
+- exe 直解（@0x683fe3）一致。Project 明文=结构化小表（head=02210004 100b000a 03210004…，XX21 0004 重复模式）。
+
+### 2. mainlib/Factory key（prng 求逆独家解出，24-dword 链验证）
+
+- 方法：state 链=ks（exe密文^捕获输出）逐 dword 已知 → **一次 2^32 全扫（310s, v41_batch 向量化）解 16 个 preimage** → k[0]∈pre(s0)、k[i]=pre(s_i)-s_{i-1} → 组合验证 s[8..23] 链 → **唯一解**。
+- **mainlib key** = `cbf9094942db0b2e7a8a37224c70a1531686854305bb96ac54ab6d0dc30ef481`（解密 vs 捕获输出 512/512 ✓）
+- **Factory key** = `37038b1c606ca165c7f772c0e2a6ff545e4a9d0ea55139779f7ecb7404fa9a3a`（398781/398792 ✓）
+- 工具：a12_preimages.pkl + 内联求解器（work_a1/zdec/ 有解密产物 mainlib_keyed/Factory_keyed.bin）
+
+### 3. per-resource key 全景
+
+| 资源 | key | 状态 |
+|---|---|---|
+| Viewer | 32B（f599…运行时抓） | ✅ |
+| Project | **全零** | ✅ |
+| mainlib | 独家解出 | ✅ |
+| Factory | 独家解出 | ✅ |
+| **Proc(0xBB2B)** | 未知 | ⛔ 候选 657 个小数组全灭+零/已知 key 均不中 |
+| Emitter(0x100) | 未知 | ⛔（256B 太小，疑魔数/头） |
+
+### 4. Factory 池复查（key 后全文本）
+
+- license 签名消息=**应用层 License 校验**（非 exe 篡改器）；无 "is tampered" 族消息、无 RSAKeyValue——**篡改校验器异常消息不经字符串池**。
+- **Proc=最后一块拼图**（47KB 足装校验器体+期望值+公钥）；Emitter 疑辅助。
+
+### 5. 下次路线
+
+1. **Proc key 抓取**：incept12 专项（2ms 高频盯 0xbb2b 副本出现→紧邻小数组分配窗口）或等 Proc 解密瞬间的输出对（副本两次出现 t=0.183/0.343，输出对窗口 <20ms 未捕获）。
+2. Proc 解密后：搜校验器（FailFast 调用/期望常量/RSA 公钥二进制形式）→ A2 重签或期望改写落地。
+3. 5 把 key 全景后：**完整体库/驱动器代码源谜题**可能同在 Proc（47KB 装不下全部但装得下引导段）。
