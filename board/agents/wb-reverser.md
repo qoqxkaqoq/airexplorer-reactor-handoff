@@ -1508,3 +1508,36 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 2. **Proc/Project/Emitter 的 key 或输出**：incept 轮询再跑+Project 输出窗口对齐；Proc 的 0x2bbb 部分副本含义。
 3. **4 个惰性 key**（若 1/2 不需要则降级）。
 4. **A1 堵点不变**：native 校验（自包含+随机化）；Factory 字符串池里可能藏校验配置（"{{alg={0}..."的 alg 样板=**算法参数模板**——值得全文检索 license/check/hash 相关字符串）。
+
+## 第 XIX 段（2026-10-25 深夜 IV · 完整体数据源穷尽追查 + mainlib 626 资源全提取）
+
+### 1. mainlib 626 资源正确提取（校准法）
+
+- ManifestResource 表行起点自校准（约束：行0 Offset=0 + 行1 Offset=align4(4+len0) + 626 行单调）→ 起点=表区+0x2E（此前直接 walk 偏差）。产物：`work_a1/mlres/`（626 文件，BEEFCAFE .resources 全部）。
+- **资源真身全部是 UI/卫星资源**（AirExplorer.g.resources、CloudClient.*.resources，PNG/本地化/模板），**无方法体**（100 体抽样 1 噪声命中）。mainlib_plain 全文 fat 头扫描 251 噪声级（期待 16598）。
+- **结论：mainlib=纯 UI/配置卫星包，与完整体无关**（四轮"626 嵌入资源卫星包"判断最终确证）。
+
+### 2. 回填工作缓冲结构破译（incept7 决定性快照）
+
+- t=0.0894s 双 0x56FE8 数组同现：密文副本（20efb9d7…）+ **工作缓冲**（head=`f5410006 215b4000`——dword0=0x060041F5 token）。
+- **工作缓冲 vs dec_Viewer（离线 AOT 解密）逐 dword 对比**：**奇数位 dword 100% 相同、偶数位 100% 不同**——工作缓冲=**解密骨架+回填器覆写**：骨架=[RVA][tag=0x45ee????占位][fat0][tag][locals][body…][tag][count]；回填器把已 JIT 方法的 tag 占位覆写为真实数据（完整 fat 头/cs/IL body 字节，如 06004194 call 序列、`20 7d f4 8d` body）。
+- t=0.0894 时 body 覆盖率 45/300（15%，启动路径方法）——**渐进惰性回填**实证。
+- 工作缓冲 0.1s 后即弃（incept8 65s 全程未再现 0x56FE8 数组）——回填在瞬态窗口内完成或后续走新分配。
+
+### 3. 完整体数据源穷尽记录（全部负结果）
+
+- 已搜空间：mainlib_plain 全文、626 .resources、Factory 字符串池、dec_Viewer、incept5/7 全部大数组（含 47 区 93MB 大 Private 区 dump：JIT 代码区 40MB/13MB RWX、PE 装载影子、资源输出对）——**已知方法体明文 1-6/80~300 噪声级命中**。
+- **结论：完整体 IL 从不以明文大块存在于内存（桩槽=唯一最终归宿）**；回填=逐方法即时解密（每方法几百字节，无大块中间态）。**body 密文源仍未定位**（3.7MB 总量装不进 3.1MB 资源区单资源——必在压缩态；mainlib 已排除；剩 Proc/Project/Emitter/Factory 之一为压缩流的可能性：Factory=字符串池已排除、Proc 0xBB2B/Project 0x6610/Emitter 0x100 太小——**无解 ⇒ 压缩流假设也存疑，回填器输入待反汇编**（guard 对工作缓冲写入时刻抓 rip——需解决"调试不出窗"前提，见 §4）。
+- C-lite 影响：**无碍**——桩槽完整体全量已在手（module_text/a4_rtbodies），一期回填工具已验证；数据源谜题只影响"离线重加密改写"能力（当前被 native 校验封死，无需求）。
+
+### 4. 新工具/资产
+
+- `a9_incept6.py`（桩槽翻转监视：t=0.08s 三槽同时翻转实证）、`a9_incept7.py`（t=0 高频大数组快照：0.0894s 双数组/工作缓冲）、`a9_incept10`（全保护大区 dump：40MB JIT 区等 47 区）。
+- `work_a1/mlres/`（626 资源全提取）、`a9_incept7/t01090_arr_*`（工作缓冲+密文副本成对快照）。
+- 调试模式（创建即调试）不出窗（guard16 窗口监视 60s 全空实证）——**guard 系列的适用边界=启动早期（Viewer 解密前）**；正常运行后的内存事件只能用 incept 轮询法（无断点）。
+
+### 5. 下一步建议（按价值排序）
+
+1. **A1 线**（native 校验）仍为出窗唯一堵点：候选=反汇编驱动器稳定区的 fail-fast 判定（需先解密驱动器=需 Factory 型资源中的"代码资源"——**驱动器代码源也未定位**，与完整体源同一谜题族）。
+2. 回填器输入逆向：对工作缓冲写入时刻抓 rip（需绕"调试不出窗"——试 PEB BeingDebugged+NtGlobalFlag 双清+heap flags 清零的完整反反调试，或用硬件断点驱动）。
+3. Factory 字符串池全文检索（license/check/alg 相关——A1 线索）。
