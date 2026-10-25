@@ -1571,3 +1571,30 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 ### 5. 对 A1 的意义
 
 崩溃栈是校验器的**完整调用链证据**——此前 a7 只知道"切托管跳板无用"，现在有了具体代码地址可反汇编；校验缓冲（0x8787e6c000）的 dump 将揭示校验输入范围与哈希上下文。**中和校验第一次有了可操作的抓手。**
+
+## 第 XXI 段（2026-10-25 深夜 VI · 🔥🔥 架构级翻案：校验器=托管 JIT 代码（非 native）+ 反调试真相）
+
+### 1. guard17b/c 战果（篡改 exe 崩溃现场全解）
+
+- **四个异常序列**（调试器下）：①0x80000003 int3 → ②0x04242420 fail-fast(π=0x31415927) → ③**e06d7363（CLR 托管异常！）** → ④e0434352（.NET 包装）。
+- **int3 真相（ntdll+0x122694 完全反汇编）**：`ZwQueryInformationProcess(ProcessDebugFlags)` 检查——**反调试陷阱**（检测到调试器→int3），**不是校验失败**。正常运行时此 int3 不触发。
+- **栈上 NSTub 破译**（0x7ffc1f29c020/0x7ffc1f2a0360 两帧）：**CLR 虚分派 stub 群+fixup precode**（每 0x20B 一条：`movabs MT; cmp [rcx],rax; jne next; movabs target; jmp rax`）——**不是驱动器代码**。
+- **决定性结论**：托管异常（e06d7363）栈里**没有任何驱动器帧**——**校验器是纯托管代码**（Necrobit 加密流体，运行时解密→JIT→在 0x238 JIT 区执行）→ 抛托管异常 → fail-fast 链。
+- **翻案**：board XX "校验器=native" 判断错误；a7 的"切断托管跳板无效"其实切的是 .text 明文 IL 跳板（decoy），**真校验器在加密流里 JIT 后才存在**——两层保护（加密流+decoy IL）造成"看起来 native"的假象。
+
+### 2. Factory 字符串池 license 文本（work_a1/a9_incept7/t02379_arr_22b95da3188_615ca.bin，199,395 字符）
+
+- "License signature validation error!"、"The license signature and data does not m[atch]"、"Licensing for this product has expired!"、"license file is corrupted or has been altered"——**license 签名校验路径消息全在手**。
+- 校验器异常文本未直接出现（可能空消息/编码）。
+
+### 3. 资产（54 个 JIT 帧代码 dump + 4 异常全栈）
+
+- work_a1/a9_guard17/exc{80000003,04242420,e06d7363,e0434352}_{stack,jit_*,code_*,reg_*,dyn_*}——崩溃现场全套。
+- 初步反汇编：JIT dump 混有 GC 对象指针（非全代码帧），需筛"含 E8 call+非零密度"的真代码帧再反汇编。
+
+### 4. 下一步（接手从这继续）
+
+1. **精筛 JIT 帧代码**（E8 call 密度+非零度）→ 反汇编真代码帧 → movabs 字符串引用 → **读字符串对象=校验器方法身份**。
+2. JIT 代码帧 → MethodDesc 反查（JIT 序言或 stub 关联）→ 定位校验器在 7956 无槽位体中的 token → **在 Factory/字符串池 xref 其行为**。
+3. **中和设计转向**：校验器=托管 → **JIT hook 层（06004198）可拦截**（a6 消费链：_RegFunction 查表喂 JIT）——**改 hook 喂的解密块=改校验器 IL**！或者：激活补丁两字节在 mainlib（资源密文）——**校验器读 exe 文件校验 hash**（0x8787e6c000 缓冲）→ **改文件后重算校验器期望值**（期望值在加密流里——**如果能定位校验器方法体+它的期望常量**，改密文重加密即通！per-resource AOT 重加密管线已通！）
+4. **最短路径推演**：校验器是 7956 体之一 → 它的密文在某资源 → 它 JIT 后比对文件 hash vs 期望常量 → **改文件字节 + 改期望常量（在它的加密体内，AOT 重加密）→ 双改文件不悖**（文件改动+密文改动都落在文件里——校验器自己的密文也在被校验范围？→ 需实验：改校验器密文是否触发其他校验）。
