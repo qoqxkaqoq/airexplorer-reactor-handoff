@@ -62,6 +62,19 @@ type shells added=673（NRS 删除的类型补壳）
 
 **死法分类结论（M1 判据）**：不是资源缺、不是启动链结构性死——是注入工程细节，已收敛到**唯一类型（dummy_ptr）的 CLR 类型加载验证**这一层。闭包版（159 方法注入）证明：模块级修复（壳/签名/EH）方向正确，cctor 已通过。
 
+## M1 最新定位（CI 成员级诊断, run 40339106106）
+
+- `Module.ResolveMethod` 逐 token 扫描（30912 个）：**bad=205, 全部是 dummy_ptr 的成员**，
+  错误统一为 "Could not load type 'dummy_ptr'"（成员解析因所属类型失败而失败）。
+- **其余 5580 个类型全部健康**（含 673 个壳）——问题精确锁死在 **dummy_ptr 类型定义本身**。
+- **下一棒的锤子方向**（按嫌疑排序，均为 NRS 残留元数据 + 类型表错位的交互）：
+  1. **ClassLayout 行**：AutoLayout 类型挂了 ClassLayout 行 → CLR TypeLoad 直接拒
+  2. **MethodImpl 行**（显式 override）：class 列指向的基线 TypeDef token 因 673 类型删除而错位
+  3. **FieldRVA 行**：129 个 static Byte 字段中带 RVA 的，Field 列错位
+  4. **PropertyMap/EventMap**：dnlib 语义视角 scansem=0，但需表级复查
+- 工具已就绪：`scanmi`（MethodImpl 表级扫描，dnlib 4.4 表 API 待适配）、`dumptype`、`scansem`、
+  CI 诊断步骤（反射 GetTypes + ResolveMethod 逐成员）常驻每轮门禁。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员
