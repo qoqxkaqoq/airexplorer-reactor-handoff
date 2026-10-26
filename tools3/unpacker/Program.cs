@@ -32,7 +32,6 @@ public static class Program
                 case "dumptype": return CmdDumpType.Run(args);
                 case "scansem": return CmdScanSemantics.Run(args);
                 case "bodyhex": return CmdBodyHex.Run(args);
-                case "rawbody": return CmdRawBody.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;
