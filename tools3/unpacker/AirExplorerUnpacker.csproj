@@ -16,4 +16,9 @@
     <PackageReference Include="dnlib" Version="4.4.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- VerifyTypes 是独立工程(自带 csproj), 不参与主编译 -->
+    <Compile Remove="VerifyTypes/**" />
+  </ItemGroup>
+
 </Project>
