@@ -1,0 +1,26 @@
+== 0. baseline ==
+size=9668976 md5=a12b5c573e1b54e98cccc29351eaa066
+
+== 1. resource layout (4B LE length prefix immediately before each ct) ==
+Viewer   prefix@0x6213C0= 0x56fe8 ct=[0x6213C4,0x6783AC) len=356328  prefix:OK contiguous:yes
+Emitter  prefix@0x6783AC=   0x100 ct=[0x6783B0,0x6784B0) len=256  prefix:OK contiguous:yes
+Proc     prefix@0x6784B0=  0xbb2b ct=[0x6784B4,0x683FDF) len=47915  prefix:OK contiguous:yes
+Project  prefix@0x683FDF=  0x6610 ct=[0x683FE3,0x68A5F3) len=26128  prefix:OK contiguous:yes
+mainlib  prefix@0x68A5F3=0x23a907 ct=[0x68A5F7,0x8C4EFE) len=2337031  prefix:OK contiguous:yes
+Factory  prefix@0x8C4EFE= 0x615ca ct=[0x8C4F02,0x9264CC) len=398794  prefix:OK contiguous:yes
+blob end 0x9264CC < 0x936000 (overlay untouched): True
+
+== 2. implementation cross-check vs reference decrypt_prng.py ==
+my zero-key keystream == dp.keystream (Project, 6532 dwords): True
+regenerated mainlib keystream == work_a1/mainlib_ks.bin (2337031/2337031 B): True
+
+== 3. decrypt + roundtrip + cross-references ==
+Viewer   dec 356328B roundtrip:True  ==work_a1/dec_Viewer.bin:True (ref 356328B)
+Project  dec 26128B roundtrip:True  ==work_a1/zdec/Project.bin:True (ref 26128B)
+Factory  dec 398794B roundtrip:True  header int32=0x34 utf16-ok:True first='{{ alg = {0}, typ = {1} '  ==zdec/Factory_keyed prefix:True
+mainlib  stream 2337031B roundtrip(stream):True  inflate 4260864B eof=True unused=0 ==mainlib_plain.bin:True (ref 4260864B)
+         re-deflate(level9,mem9): len 0x239112 (slot 0x23A907) reproduces-orig-stream:False  full-reencrypt==orig ct:False
+Proc     NOT DECRYPTED (no key). raw passthrough 47915B write-read-back:True entropy=6.177 bits/B sha256=bed44a3024f0bfb2
+Emitter  NOT DECRYPTED (no key). raw passthrough 256B write-read-back:True entropy=7.137 bits/B sha256=adf39e7f784b0999
+Proc head16=3a9c012e0106018b0184014f05a80134 (2B header 3a9c) u16 after skip: 2E01 0601 8B01 8401 4F01 A805 3401 0801
+entropy: Viewer-ct=7.999 Project-ct=7.994 Proc=6.177 Emitter=7.137

@@ -1,0 +1,12 @@
+{
+ "total": 30886,
+ "rva0": 7956,
+ "nonzero": 22930,
+ "dump_full": 16598,
+ "slot_plaintext": 5567,
+ "full_recoverable": 22165,
+ "vault_partial": 765,
+ "unrecoverable": 0,
+ "vault_entries": 5106,
+ "eh_files": 2218
+}

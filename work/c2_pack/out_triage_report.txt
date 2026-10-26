@@ -1,0 +1,103 @@
+== OUT_* triage (baseline md5 verified) ==
+files found: 101
+OUT_Proc_1f6fe147140_1.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=000102030405060708090a0b0c0d0e0f
+OUT_Proc_1f6fe15e8b0_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=000102030405060708090a0b0c0d0e0f
+OUT_Emitter_23181fce300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_231820cd660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Emitter_231829659e0_4.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffffffffffffffffffff
+OUT_Emitter_231829659e0_5.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_231829659e0_6.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98589682310200000000000000000000
+OUT_Emitter_231829659e0_7.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=58d99d7cfc7f00000000000000000000
+OUT_Proc_23182026500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e451ffc7f00002065028231020000
+OUT_Emitter_20e8c2de300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_20e8c3dd660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Emitter_20e8ccd3348_4.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffffffffffffffffffff
+OUT_Emitter_20e8ccd3348_5.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=b831cd8c0e0200000000000000000000
+OUT_Proc_20e8c336500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e461ffc7f00002065338c0e020000
+OUT_Emitter_23c8003e300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_23c8013d660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Emitter_23c809cbaa0_10.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=604a87803c020000604a87803c020000
+OUT_Emitter_23c809cbaa0_12.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=482b87803c020000482b87803c020000
+OUT_Emitter_23c809cbaa0_14.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=0000000000000000608686803c020000
+OUT_Emitter_23c809cbaa0_5.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffffffffffffffffffff
+OUT_Emitter_23c809cbaa0_6.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=683a00803c0200000000000000000000
+OUT_Emitter_23c809cbaa0_7.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=201876803c020000501776803c020000
+OUT_Emitter_23c809cbaa0_8.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=f82876803c020000d02976803c020000
+OUT_Emitter_23c80f2e5a0_11.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=58d99d7cfc7f00000000000000000000
+OUT_Emitter_23c80f2e5a0_13.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_23c80f2e5a0_15.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=000000000000000050d62861fc7f0000
+OUT_Emitter_23c80f2e5a0_4.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_23c80f2e5a0_9.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=000000000000000048c39f7cfc7f0000
+OUT_Proc_23c80096500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e451ffc7f0000206509803c020000
+OUT_Emitter_2a8e7f6e300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_2a8e806d660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Emitter_2a8e88f4760_10.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=105179e8a8020000b8448fe8a8020000
+OUT_Emitter_2a8e88f4760_13.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=60ed27e8a80200000000000000000000
+OUT_Emitter_2a8e88f4760_15.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffff0000000000000000
+OUT_Emitter_2a8e88f4760_4.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffffffffffffffffffff
+OUT_Emitter_2a8e88f4760_6.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000001800000008000000
+OUT_Emitter_2a8e88f4760_7.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_2a8e88f4760_8.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=01000000000000000000000000000000
+OUT_Emitter_2a8e8e520a0_11.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_2a8e8e520a0_11_late.bin        len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffffffffffffffffffff
+OUT_Emitter_2a8e8e520a0_12.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffffffffffffffffffff
+OUT_Emitter_2a8e8e520a0_14.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_2a8e8e520a0_16.bin             len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_2a8e8e520a0_5.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=6020e5e8a80200000000000000000000
+OUT_Emitter_2a8e8e520a0_9.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=f020e5e8a80200000000000000000000
+OUT_Proc_2a8e7fc6500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e471ffc7f00002065fce7a8020000
+OUT_Emitter_240cba2e300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_240cbb2d660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=70d6b2cb400200000000000000000000
+OUT_Emitter_240cc934360_4.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffffffffffffffffffff
+OUT_Emitter_240cc934360_5.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=000000000000000088cf9f7cfc7f0000
+OUT_Emitter_240cc934360_6.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=18000000080000000100000006000000
+OUT_Emitter_240cc934360_7.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_240cc934360_8.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_240cc934360_9.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=04000000000000000000000000000000
+OUT_Proc_240cba86500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=68339e7cfc7f00000f00000000000000
+OUT_Emitter_180c042e300.bin                len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_180c042e300_late.bin           len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_180c052d660.bin                len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Emitter_180c052d660_late.bin           len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Factory_180d04c1b80.bin                len=   47915 reslen=  398794 DIFF-from-ct@0 vs-pt-prefix0  head=00000000000000000000000000000000
+OUT_Factory_180d04c1b80_late.bin           len=  398794 reslen=  398794 DIFF-from-ct@0 vs-pt-prefix0  head=00000000000000000000000000000000
+OUT_Proc_180c0486500.bin                   len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e461ffc7f0000206548c080010000
+OUT_Proc_180c0486500_late.bin              len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e461ffc7f0000206548c080010000
+OUT_Project_180c044b210.bin                len=   26128 reslen=   26128 DIFF-from-ct@0 vs-pt-prefix0  head=086346c080010000286346c080010000
+OUT_Project_180c044b210_late.bin           len=   26128 reslen=   26128 DIFF-from-ct@0 vs-pt-prefix0  head=086346c080010000286346c080010000
+OUT_Viewer_180d0413b40.bin                 len=   47915 reslen=  356328 DIFF-from-ct@0 vs-pt-prefix0  head=4d5a90000300000004000000ffff0000
+OUT_Viewer_180d0413b40_late.bin            len=  356328 reslen=  356328 DIFF-from-ct@0 vs-pt-prefix0  head=4d5a90000300000004000000ffff0000
+OUT_mainlib_180d0584790.bin                len=   47915 reslen= 2337031 DIFF-from-ct@0 vs-pt-prefix0  head=424dda39090000000000360000002800
+OUT_mainlib_180d0584790_late.bin           len= 2337031 reslen= 2337031 DIFF-from-ct@0 vs-pt-prefix0  head=424dda39090000000000360000002800
+OUT_Emitter_2a81c23e300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_2a81c33d660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Emitter_2a81c33d660_5.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=80000000000000000000100008001800
+OUT_Proc_2a81c296500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e451ffc7f00002065291ca8020000
+OUT_Proc_2a81c296500_4.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=68339e7cfc7f00000700000000000000
+OUT_Emitter_21f5ccae300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_21f5cdad660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Proc_21f5cd06500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e471ffc7f00002065d05c1f020000
+OUT_Emitter_25dab6ee300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_25dab7ed660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Emitter_2668003e300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_2668013d660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Proc_25dab746500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e451ffc7f0000206574ab5d020000
+OUT_Proc_26680096500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e451ffc7f00002065098066020000
+OUT_Emitter_1cac335e300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_1cac345d660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Proc_1cac33b6500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e451ffc7f000020653bc3ca010000
+OUT_Emitter_248d30ae300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_248d31ad660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Proc_248d3106500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e461ffc7f0000206510d348020000
+OUT_Emitter_22c2642e300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_22c2652d660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Emitter_22c27264ab8_4.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=ffffffffffffffffffffffffffffffff
+OUT_Emitter_22c27264ab8_5.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=3832c5262c0200000000000000000000
+OUT_Emitter_22c27264ab8_6.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=d815b5262c0200000815b5262c020000
+OUT_Emitter_22c27264ab8_7.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=00000000000000000000000000000000
+OUT_Emitter_22c27264ab8_8.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=88199e7cfc7f0000104b26272c020000
+OUT_Emitter_22c27264ab8_9.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=18d42861fc7f0000684b26272c020000
+OUT_Proc_22c26486500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e461ffc7f0000206548262c020000
+OUT_Emitter_20e8003e300_1.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=468ca88281409cb88281400c9fc9abe8
+OUT_Emitter_20e8013d660_3.bin              len=     256 reslen=     256 DIFF-from-ct@0  head=98e49f7cfc7f00000000000000000000
+OUT_Proc_20e80096500_2.bin                 len=   47915 reslen=   47915 DIFF-from-ct@0  head=a87e441ffc7f0000206509800e020000

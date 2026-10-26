@@ -1,0 +1,186 @@
+[
+ {
+  "grp": "validator",
+  "tok": "06004192",
+  "rva": "3FAFD0",
+  "name": "InstantiateGlobalCalculator",
+  "il": 8970,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06004192_InstantiateGlobalCalculator.il"
+ },
+ {
+  "grp": "validator",
+  "tok": "0600419C",
+  "rva": "3FDE7C",
+  "name": "DefineEfficientProfiler",
+  "il": 37072,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\0600419C_DefineEfficientProfiler.il"
+ },
+ {
+  "grp": "validator",
+  "tok": "06004198",
+  "rva": "3FDC94",
+  "name": "InstantiateSegmentedRunner",
+  "il": 311,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06004198_InstantiateSegmentedRunner.il"
+ },
+ {
+  "grp": "validator",
+  "tok": "060041A2",
+  "rva": "407228",
+  "name": "FormatContainer",
+  "il": 97,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\060041A2_FormatContainer.il"
+ },
+ {
+  "grp": "validator",
+  "tok": "060041A3",
+  "rva": "407298",
+  "name": "UpdatePredictor",
+  "il": 85,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\060041A3_UpdatePredictor.il"
+ },
+ {
+  "grp": "debugger",
+  "tok": "06004194",
+  "rva": "3FDA24",
+  "name": "DefineActiveEvent",
+  "il": 22,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06004194_DefineActiveEvent.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "060028BF",
+  "rva": "205200",
+  "name": "ExecuteFormatter",
+  "il": 123,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\060028BF_ExecuteFormatter.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "060028C0",
+  "rva": "205288",
+  "name": "DirectEngine",
+  "il": 232,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\060028C0_DirectEngine.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "060028C1",
+  "rva": "20537C",
+  "name": "SumScopeChooser",
+  "il": 165,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\060028C1_SumScopeChooser.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "06002AF6",
+  "rva": "2410DC",
+  "name": "InstantiateExtendedInspector",
+  "il": 61,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06002AF6_InstantiateExtendedInspector.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "06001260",
+  "rva": "0BCED8",
+  "name": "IncludeWriter",
+  "il": 454,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06001260_IncludeWriter.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "06002CC2",
+  "rva": "2619C8",
+  "name": "SolveBuilder",
+  "il": 871,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06002CC2_SolveBuilder.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "06002F2F",
+  "rva": "286AC4",
+  "name": "RunPolicy",
+  "il": 1464,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06002F2F_RunPolicy.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "06003D01",
+  "rva": "359170",
+  "name": "SumOrderedManager",
+  "il": 2076,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06003D01_SumOrderedManager.il"
+ },
+ {
+  "grp": "gfp",
+  "tok": "060004AA",
+  "rva": "01F760",
+  "name": "RequestAdvancedCompressor",
+  "il": 847,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\060004AA_RequestAdvancedCompressor.il"
+ },
+ {
+  "grp": "proc_reflection",
+  "tok": "060041FF",
+  "rva": "4079BC",
+  "name": "ReplaceUser",
+  "il": 7,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\060041FF_ReplaceUser.il"
+ },
+ {
+  "grp": "proc_reflection",
+  "tok": "06004200",
+  "rva": "4079C4",
+  "name": "ValidateFlexibleErrorSpec",
+  "il": 10,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06004200_ValidateFlexibleErrorSpec.il"
+ },
+ {
+  "grp": "proc_reflection",
+  "tok": "06004201",
+  "rva": "4079D0",
+  "name": "OpenService",
+  "il": 10,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06004201_OpenService.il"
+ },
+ {
+  "grp": "proc_reflection",
+  "tok": "06004208",
+  "rva": "407A30",
+  "name": "TestVerifier",
+  "il": 10,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\06004208_TestVerifier.il"
+ },
+ {
+  "grp": "proc_reflection",
+  "tok": "0600420B",
+  "rva": "407A54",
+  "name": "ValidatePassiveFormatterEngine",
+  "il": 10,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\0600420B_ValidatePassiveFormatterEngine.il"
+ },
+ {
+  "grp": "proc_reflection",
+  "tok": "0600420E",
+  "rva": "407A7C",
+  "name": "AssessCompressor",
+  "il": 10,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\0600420E_AssessCompressor.il"
+ },
+ {
+  "grp": "proc_reflection",
+  "tok": "0600422D",
+  "rva": "407C20",
+  "name": "ValidateInterruptibleCacheAuthorizer",
+  "il": 10,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\0600422D_ValidateInterruptibleCacheAuthorizer.il"
+ },
+ {
+  "grp": "proc_reflection",
+  "tok": "0600423E",
+  "rva": "407D08",
+  "name": "AdaptWriter",
+  "il": 10,
+  "file": "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work\\c2_pack\\dis\\0600423E_AdaptWriter.il"
+ }
+]
