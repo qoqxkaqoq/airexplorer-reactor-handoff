@@ -89,7 +89,13 @@ jobs:
           BT_TOK: ${{ github.event.inputs.bodytest_tok }}
         run: |
           dotnet build tools3/unpacker -c Release 2>&1 | grep -E "error|Build succeeded" | head -3
-          dotnet tools3/unpacker/bin/Release/net8.0/AirExplorerUnpacker.dll bodytest cand/m1_s1_full.exe cand/m1_s1_full_v.exe "$BT_TOK"
+          TOK="${BT_TOK%%:*}"
+          MODE="${BT_TOK##*:}"
+          if [ "$MODE" = "$TOK" ]; then
+            dotnet tools3/unpacker/bin/Release/net8.0/AirExplorerUnpacker.dll bodytest cand/m1_s1_full.exe cand/m1_s1_full_v.exe "$TOK"
+          else
+            dotnet tools3/unpacker/bin/Release/net8.0/AirExplorerUnpacker.dll bodyvariant cand/m1_s1_full.exe cand/m1_s1_full_v.exe "$TOK" "$MODE"
+          fi
           mv -f cand/m1_s1_full_v.exe cand/m1_s1_full.exe
 
       - name: 准备运行目录 (候选 exe + 官方依赖)
