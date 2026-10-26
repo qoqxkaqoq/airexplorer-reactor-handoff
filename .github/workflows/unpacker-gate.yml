@@ -139,6 +139,36 @@ jobs:
           Add-Type -TypeDefinition $code
           [LoadDiag]::Run((Resolve-Path "app\AirExplorer.exe").Path)
 
+          # 成员级诊断: 逐 token ResolveMethod + 参数类型展开
+          $diag2 = @'
+          using System;
+          using System.Reflection;
+          public static class MemDiag {
+            public static void Run(string path) {
+              var asm = Assembly.LoadFrom(path);
+              var mod = asm.ManifestModule;
+              int bad = 0;
+              for (uint rid = 1; rid <= 30912; rid++) {
+                uint tok = 0x06000000 + rid;
+                try {
+                  var m = mod.ResolveMethod(tok);
+                  if (m == null) continue;
+                  var rt = m.ReturnType;
+                  foreach (var p in m.GetParameters()) { var t = p.ParameterType; }
+                }
+                catch (Exception ex) {
+                  bad++;
+                  if (bad <= 25)
+                    Console.WriteLine("  MFAIL " + tok.ToString("X8") + ": " + ex.GetType().Name + ": " + ex.Message);
+                }
+              }
+              Console.WriteLine("  MEMDONE bad=" + bad);
+            }
+          }
+          '@
+          Add-Type -TypeDefinition $diag2
+          [MemDiag]::Run((Resolve-Path "app\AirExplorer.exe").Path)
+
       - name: ILVerify 静态验证（诊断用, 不作门禁）
         if: always()
         shell: pwsh
