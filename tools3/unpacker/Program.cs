@@ -50,6 +50,8 @@ public static class Program
                 case "audittoks": return CmdAuditToks.Run(args);
                 case "tok2": return CmdTok2.Run(args);
                 case "noinline": return CmdNoInline.Run(args);
+                case "ehaudit": return CmdEhAudit.Run(args);
+                case "fulldiff": return CmdFullDiff.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;

@@ -151,6 +151,23 @@ type shells added=673（NRS 删除的类型补壳）
 - 附注：mt IL 里仅 27 个 ldstr（官方字符串大部分在 FactoryValidator 加密池，由运行时函数按 token 取回
   —— 即 S2 的回接对象，与 #US 无关）。
 
+## M1 当前死点与证据链（run 40375716905 = 回退排序版, 死点复现确认）
+
+- Windows: `InvalidProgramException at InstantiateGlobalCalculator (06004192)`（cctor 第 2 个调用）。
+- **已排除**（每项都有实证）：
+  - ldstr 越界（规范扫描 27 token 全合法；早前"越界"是粗扫误报）
+  - 指令流差异（fulldiff 06004192 = 2521/2521 条 0 差异；调用链 060041D1/D2/D3/D4/06004264 全 0 差异）
+  - EH 边界（4 子句全在指令边界）、CatchType 身份（0200003D 三方一致 = ExtendedProxy/<>c，类型存在健康）
+  - locals 对齐、签名/attrs 恢复、rid 复用、类型壳、ImplAttributes 差异(NoInlining 无碍)
+  - ILVerify StackUnexpected = 噪音（官方代码依赖 full-trust 跳过验证，基线同样报）
+- **EH 排序已回退**：CORINFO 原序满足 ECMA「内层在外层前」硬规则（run 40371984806 证明 0600419C 通过），
+  tryOff 升序反而破坏嵌套关系（run 40374303199 死点前移到第 1 个方法）。
+- **疑点收敛**：方法内容与基线一致但 JIT 拒 → 剩余差异只能在「写出层」——dnlib 重新编码的
+  方法体头 flags、EH fat/small 选择、#US 重编码、或 cctor 链上其它未 diff 的方法。
+- **下一棒工具已就绪**：fulldiff（任意方法全指令对比）——扫 InstantiateGlobalCalculator 的完整
+  调用闭包（用 cctor_closure.txt 扩展）；或 bodytest+CI 二分 06004192 体；或对比 dnlib 写出的
+  原始方法体字节（raw hex）与 mt 源。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员
