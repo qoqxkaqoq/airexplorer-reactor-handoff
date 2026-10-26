@@ -41,6 +41,9 @@ public static class Program
                 case "scanfrva": return CmdScanFrva.Run(args);
                 case "frvadetail": return CmdFrvaDetail.Run(args);
                 case "fixdummy": return CmdFixDummy.Run(args);
+                case "deepdummy": return CmdDeepDummy.Run(args);
+                case "reuse": return CmdReuse.Run(args);
+                case "disasm": return CmdDisasm.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;

@@ -394,6 +394,52 @@ public static class CmdS1
 
         if (noWrite) { Console.WriteLine("[s1] --no-write, not writing"); return ok > 0 ? 0 : 1; }
 
+        // ── NRS rid 复用完整恢复 ──
+        // NRS rem-junks 把 177 个方法 + 129 个字段的 MethodDef/FieldDef 行"搬"进
+        // dummy_ptr.{GUID}(同 rid, 改名 mXXXXXX/fXXXXXX + stub 签名)。mt IL 是基线空间,
+        // call/ldsfld 的 token 在 Slayed 解析会命中 dummy_ptr.{GUID} 的成员 → 触发加载该类型。
+        // 恢复 = 搬回基线的 DeclaringType + 真名(+真签名, 前面已做) → token 语义与基线一致,
+        // dummy_ptr.{GUID} 只剩 26 个 NRS 新造的 mp* stub。
+        int movedM = 0, movedF = 0;
+        if (baseSigs != null)
+        {
+            foreach (var t in mod.GetTypes().Where(x => x.FullName.Contains("dummy")).ToList())
+            {
+                foreach (var m in t.Methods.ToList())
+                {
+                    if (bmodKeep == null || bmodKeep.ResolveToken(m.MDToken.Raw) is not MethodDef bm) continue;
+                    var bOwner = bm.DeclaringType;
+                    if (bOwner == null) continue;
+                    TypeDef target;
+                    if (bOwner.FullName == "<Module>") target = mod.GlobalType;
+                    else if (!s_tdByFull.TryGetValue(bOwner.FullName, out target)) continue;
+                    if (ReferenceEquals(target, t)) continue;
+                    m.Name = bm.Name;
+                    t.Methods.Remove(m);
+                    target.Methods.Add(m);
+                    movedM++;
+                }
+                foreach (var f in t.Fields.ToList())
+                {
+                    if (bmodKeep == null || bmodKeep.ResolveToken(f.MDToken.Raw) is not FieldDef bf) continue;
+                    var bOwner = bf.DeclaringType;
+                    if (bOwner == null) continue;
+                    TypeDef target;
+                    if (bOwner.FullName == "<Module>") target = mod.GlobalType;
+                    else if (!s_tdByFull.TryGetValue(bOwner.FullName, out target)) continue;
+                    if (ReferenceEquals(target, t)) continue;
+                    f.Name = bf.Name;
+                    // 字段签名恢复(类型映射回本模块)
+                    if (bf.FieldSig != null)
+                        f.FieldSig = new FieldSig(CloneTypeInto(bf.FieldSig.Type));
+                    t.Fields.Remove(f);
+                    target.Fields.Add(f);
+                    movedF++;
+                }
+            }
+        }
+        Console.WriteLine("[s1] rid-reuse restored: methods={0} fields={1}", movedM, movedF);
+
         // ── dummy 后处理 ──
         // NRS dummy 化的部分方法不在 manifest(无真体可注入), 保持 abstract+无体。
         // 桌面 CLR 对这种残留(特别是 static/abstract 混搭后的 vtable 布局)比 mono 严,
