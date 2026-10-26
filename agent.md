@@ -38,13 +38,17 @@
 | 便携方案 | `portable/AirExplorer_Portable.cmd` + `deps.zip`（71 项官方依赖） |
 | 脱壳机立项 | `docs/UNPACKER_PLAN.md`（M0-M5） |
 | C 线历史归档 | `docs/ARCHIVE_c-line.md` |
+| Wine 调试环（Linux） | `scripts/air-on-linux.sh`（一键启动）+ `docs/wine-wpf-verification.md`（验证记录） |
 
 ## 4. 当前进行中：自研脱壳机（2026-10-26 立项）
 
 计划书 `docs/UNPACKER_PLAN.md`。状态 **M1 工程侧完成（Linux）**：S1 体注入已实现（`tools3/unpacker/`，net8 + NuGet dnlib 4.4.0），产物 `out/m1_s1_full.exe`（22753 方法注入 / 0 失败 / 177 NRS-dummy 跳过）。**核心数据源定案**：运行时快照 `work_a1_pack/memdump/module_text.bin`（偏移=RVA−0x2000）给出全部 22930 方法的运行时方法头（maxstack/locals token）与运行时 IL（与 JIT dump 全量逐字节全等）；EH 用 dump zip 的 m_*.eh（CORINFO）转 CLI fat clause——c2_pack 的 slot_plaintext 有 905 个假体、vault_partial 765 的完整真体都在 mt 里，全部消解。细节账本：`tools3/unpacker/PROGRESS.md`。**下一步 = M1 门禁**：CI workflow `unpacker-gate.yml`（ubuntu 构建 → windows-latest probe_iso/soak_iso）跑死法分类。五段流水线：体注入✓ → 字符串池回接(199K) → 委托表重接(3266) → 资源重嵌 → dnlib 写出✓(PreserveAll|KeepOldMaxStack)。
 
+**Wine 本地调试环（2026-10-27 建成）**：Wine 9.0 + dotnet48 已装好并用最小 WPF 程序验证**渲染管线完整可用**（文字/按钮/布局全部正常，需禁硬件加速）。当前加壳基线在 Wine 下死点 = Windows 死点（Necrobit 类型加载），与 Wine 无关；脱壳完成后 `scripts/air-on-linux.sh` 即可在 Linux 直接跑成品。CI 多轮死法分类结论与坏点定位见 `tools3/unpacker/PROGRESS.md`。
+
 ## 5. 工作纪律
 
+- **测试/调试优先 Wine 本地跑（2026-10-27 定案）**：环境 = Wine 9.0 + 真微软 .NET Framework 4.8（winetricks dotnet48），`WINEPREFIX=/root/.wine64`。**先 Wine 后 CI**：类型加载/签名/坏 IL 类问题本地秒级复现（Wine 死点 = Windows 死点，已验证），不要每个实验都烧 10 分钟 windows CI；CI 只留给验收（probe_iso/soak_iso 门禁）。注意：①wine 命令必须带 `WINEPREFIX=/root/.wine64`，否则会误建空 prefix；②WPF 渲染必须禁硬件加速（`HKCU\Software\Microsoft\Avalon.Graphics\DisableHWAcceleration=1`，启动脚本已内置），否则窗口黑屏；③无显示时用 Xvfb（脚本自动拉起）。csc 编译小工具可直接用 prefix 内 csc.exe（WPF 引用全路径 `...\v4.0.30319\WPF\*.dll` + `/win32manifest`）。
 - 验收唯一口径 = 隔离探针 VERDICT 行 + soak exit code；自测不算数，官方门禁脚本统一跑。
 - 对分回填法定位回归（v 系列遗产）。
 - 提交信息带上下文；大文件白名单制（`.gitignore`：exes/ 只收基线与 A2_dist.zip；ci/probe_env、soak_env 不入库）。
