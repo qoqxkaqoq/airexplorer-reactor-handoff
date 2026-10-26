@@ -93,7 +93,11 @@ public static class CmdS1
             // (Could not load type)。补空类型壳(仅 ns/name/基类), 让签名引用可解析;
             // 其成员级恢复(字段/方法)留待 M2+。
             int shellAdded = 0;
-            var modTypeNames = new HashSet<string>(mod.Types.Select(x => x.FullName));
+            // 必须用 GetTypes() 全集(含嵌套类型): mod.Types 只含顶层, 若只用它会把
+            // 所有嵌套类型误判为"被删"而建壳, 且 s_tdByFull[FullName]=shell 无条件覆盖
+            // 真 Slayed 类型的映射 -> box/castclass 重映射指向壳, locals 签名指向真类型,
+            // 同一类型双身份 -> mono/CLR 验证 box(class壳) vs struct栈值 不匹配拒载。
+            var modTypeNames = new HashSet<string>(mod.GetTypes().Select(x => x.FullName));
             foreach (var bt in bmod.GetTypes())
             {
                 if (modTypeNames.Contains(bt.FullName)) continue;
@@ -174,7 +178,7 @@ public static class CmdS1
         Console.WriteLine("[s1] zip maxstack entries: {0}, eh entries: {1}", zipMax.Count, zipEh.Count);
 
         int ok = 0, fail = 0, skipNoTok = 0, skipNoBody = 0, ehDropped = 0;
-        int tokenMiss = 0, sigFixedTotal = 0, attrFixedTotal = 0;
+        int tokenMiss = 0, sigFixedTotal = 0, attrFixedTotal = 0, ldcFixed = 0;
         var failReasons = new Dictionary<string, int>();
         var failed = new List<string>();
         var ehNoSource = new List<string>();
@@ -236,20 +240,28 @@ public static class CmdS1
                 }
                 else
                 {
-                    // mt/磁盘兜底: 官方 CLR 格式段头 u32=(dsize<<8)|0x41, dsize 含头, clause 为 fat 24B
+                    // mt/磁盘兜底 EH 段: 两种格式
+                    // (a) fat: u32=(dsize<<8)|0x41, dsize 含头, 24B/子句
+                    // (b) 紧凑(dump 工具格式): flags byte=0x01, dsize=(u32>>8), 12B/子句:
+                    //     flags(2B) tryOff(2B) tryLen(1B) hOff(2B) hLen(1B) cls(4B=完整token)
+                    //     (三方法实证: 06000288/0600034F/060003AB 的 try/handler 边界与 cls=Exception 全吻合)
                     int sect = (off + hsz + codeSize + 3) & ~3;
-                    if (sect + 4 <= mt.Length && (mt[sect] & 0x40) != 0)
+                    if (sect + 4 <= mt.Length)
                     {
-                        int dsize = (int)((BitConverter.ToUInt32(mt, sect) >> 8) & 0xFFFFFF);
-                        int ncl = (dsize - 4) / 24;
-                        if (dsize >= 4 && dsize <= 0x10000 && sect + dsize <= mt.Length && (dsize - 4) % 24 == 0 && ncl > 0)
+                        uint hdr32 = BitConverter.ToUInt32(mt, sect);
+                        byte fl0 = mt[sect];
+                        int dsize = (int)((hdr32 >> 8) & 0xFFFFFF);
+                        if ((fl0 & 0x41) == 0x41 && dsize >= 4 && dsize <= 0x10000 && sect + dsize <= mt.Length && (dsize - 4) % 24 == 0)
                         {
+                            int ncl = (dsize - 4) / 24;
                             var cls2 = new List<EhClause>(ncl);
                             for (int ci = 0; ci < ncl; ci++)
                             {
                                 int b = sect + 4 + ci * 24;
-                                cls2.Add(new EhClause(
-                                    BitConverter.ToUInt32(mt, b),
+                                uint f = BitConverter.ToUInt32(mt, b);
+                                // CORINFO: 3=fault -> CLI 4
+                                uint cf = f == 3 ? 4u : (f <= 2 ? f : 0u);
+                                cls2.Add(new EhClause(cf,
                                     BitConverter.ToUInt32(mt, b + 4),
                                     BitConverter.ToUInt32(mt, b + 8),
                                     BitConverter.ToUInt32(mt, b + 12),
@@ -257,6 +269,30 @@ public static class CmdS1
                                     BitConverter.ToUInt32(mt, b + 20)));
                             }
                             ehData = BuildFatEh(cls2);
+                        }
+                        else if (fl0 == 0x01 && dsize >= 4 && dsize <= 0x10000 && sect + dsize <= mt.Length && (dsize - 4) % 12 == 0 && dsize > 4)
+                        {
+                            int ncl = (dsize - 4) / 12;
+                            var cls2 = new List<EhClause>(ncl);
+                            bool ok2 = true;
+                            for (int ci = 0; ci < ncl && ok2; ci++)
+                            {
+                                int b = sect + 4 + ci * 12;
+                                ushort f = BitConverter.ToUInt16(mt, b);
+                                ushort tryOff = BitConverter.ToUInt16(mt, b + 2);
+                                byte tryLen = mt[b + 4];
+                                ushort hOff = BitConverter.ToUInt16(mt, b + 5);
+                                byte hLen = mt[b + 7];
+                                uint clsTok = BitConverter.ToUInt32(mt, b + 8);
+                                // 边界校验: 全部必须落在 codeSize 内
+                                if (tryOff + tryLen > codeSize || hOff + hLen > codeSize) ok2 = false;
+                                else
+                                {
+                                    uint cf = f == 3 ? 4u : (f <= 2 ? f : 0u);
+                                    cls2.Add(new EhClause(cf, tryOff, tryLen, hOff, hLen, clsTok));
+                                }
+                            }
+                            if (ok2 && cls2.Count > 0) ehData = BuildFatEh(cls2);
                         }
                     }
                     if (ehData == null)
@@ -348,6 +384,37 @@ public static class CmdS1
                     md.Attributes = battr.attrs;
                     attrFixedTotal++;
                 }
+                // ldc.i4 token 立即数重映射: NRS 运行时解密函数以 int 参数接收元数据 token
+                // (ldc.i4 <tok>; call DecryptFunc), 这些立即数不经过 ITokenOperand resolver。
+                // 只修「Slayed 同 token 解析结果 FullName ≠ 基线」的错位 token (对齐的不动, 防误伤常量)。
+                var insList = body.Instructions;
+                for (int ii = 0; ii < insList.Count - 1; ii++)
+                {
+                    var cur = insList[ii];
+                    if (cur.OpCode.Code != Code.Ldc_I4) continue;
+                    if (ii + 1 >= insList.Count) break;
+                    var nxt = insList[ii + 1];
+                    if (nxt.OpCode.Code != Code.Call && nxt.OpCode.Code != Code.Callvirt) continue;
+                    int v;
+                    try { v = Convert.ToInt32(cur.Operand); } catch { continue; }
+                    if (v < 0x01000000 || v >= 0x02000000 + 0x00FFFFFF) continue;
+                    uint vt = (uint)v;
+                    byte tbl = (byte)(vt >> 24);
+                    if (tbl != 0x01 && tbl != 0x02) continue;
+                    try
+                    {
+                        if (bmodKeep.ResolveToken(vt) is not ITypeDefOrRef bt2) continue;
+                        string bFull = bt2.FullName;
+                        string sFull = (mod.ResolveToken(vt) as ITypeDefOrRef)?.FullName ?? "?";
+                        if (sFull == bFull) continue;   // 已对齐
+                        if (s_tdByFull.TryGetValue(bFull, out var hitT))
+                        {
+                            uint newTok = hitT.MDToken.Raw;
+                            if (newTok != vt) { cur.Operand = (int)newTok; ldcFixed++; }
+                        }
+                    }
+                    catch { }
+                }
                 md.Body = body;
                 ok++;
             }
@@ -365,8 +432,8 @@ public static class CmdS1
             }
         }
 
-        Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4} sig-restored={5} attr-restored={6}",
-            ok, fail, skipNoTok, skipNoBody, ehDropped, sigFixedTotal, attrFixedTotal);
+        Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4} sig-restored={5} attr-restored={6} ldc-token-fixed={7}",
+            ok, fail, skipNoTok, skipNoBody, ehDropped, sigFixedTotal, attrFixedTotal, ldcFixed);
         Console.WriteLine("[s1] eh-no-source: {0} (first: {1})", ehNoSource.Count, string.Join(",", ehNoSource.Take(8)));
         if (fail > 0)
         {
@@ -387,6 +454,7 @@ public static class CmdS1
         rep.AppendLine("ehDropped=" + ehDropped);
         rep.AppendLine("sigRestored=" + sigFixedTotal);
         rep.AppendLine("attrRestored=" + attrFixedTotal);
+        rep.AppendLine("ldcTokenFixed=" + ldcFixed);
         rep.AppendLine("ehNoSource=" + string.Join(",", ehNoSource));
         foreach (var kv in failReasons.OrderByDescending(x => x.Value))
             rep.AppendLine("fail x" + kv.Value + " " + kv.Key);

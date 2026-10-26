@@ -44,6 +44,12 @@ public static class Program
                 case "deepdummy": return CmdDeepDummy.Run(args);
                 case "reuse": return CmdReuse.Run(args);
                 case "disasm": return CmdDisasm.Run(args);
+                case "bodytest": return CmdBodyTest.Run(args);
+                case "finddup": return CmdFindDup.Run(args);
+                case "findcctor": return CmdFindCctor.Run(args);
+                case "audittoks": return CmdAuditToks.Run(args);
+                case "tok2": return CmdTok2.Run(args);
+                case "noinline": return CmdNoInline.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;
