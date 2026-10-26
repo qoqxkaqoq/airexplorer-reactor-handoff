@@ -112,6 +112,28 @@ jobs:
           "run=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           ./ci/soak_iso.ps1 -ExePath "app\AirExplorer.exe" -Minutes 7
 
+      - name: 反射加载诊断（抓 LoaderExceptions 精确成员）
+        if: always()
+        shell: pwsh
+        run: |
+          $code = @'
+          using System;
+          using System.Reflection;
+          public static class LoadDiag {
+            public static void Run(string path) {
+              var asm = Assembly.LoadFrom(path);
+              try { var ts = asm.GetTypes(); Console.WriteLine("[diag] GetTypes OK: " + ts.Length); }
+              catch (ReflectionTypeLoadException ex) {
+                Console.WriteLine("[diag] GetTypes FAIL: " + ex.Types.Count(t => t != null) + "/" + ex.Types.Length);
+                foreach (var le in ex.LoaderExceptions.Take(30))
+                  Console.WriteLine("  LOADER: " + le.GetType().Name + ": " + le.Message + (le.InnerException != null ? " || INNER: " + le.InnerException.Message : ""));
+              }
+            }
+          }
+          '@
+          Add-Type -TypeDefinition $code
+          [LoadDiag]::Run((Resolve-Path "app\AirExplorer.exe").Path)
+
       - name: ILVerify 静态验证（诊断用, 不作门禁）
         if: always()
         shell: pwsh
