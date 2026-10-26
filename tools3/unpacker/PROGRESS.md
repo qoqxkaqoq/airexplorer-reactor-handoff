@@ -185,6 +185,22 @@ type shells added=673（NRS 删除的类型补壳）
 - run 40388322484（bodytest 未生效版，md5 与全量版相同，结果复现死点=回退排序确认）。
 - run 40389150972（bodytest 06004192 生效版）= 定位死因是否在该方法体的决定性实验。
 
+## M1 bodytest 实验结果（run 40391057907）与下一棒
+
+- **bodytest 06004192（空体）实验生效**：死点从第 2 个调用跳过 06004192、06004194，
+  直达第 4 个调用 **06000001（m8DEEBCC2CD9F727, tiny pop 单指令）**，报
+  `BadImageFormatException: Bad IL range`。
+- **结论 A**：06004192 与 06004194 的"体"都通过了 JIT——主产物死在 06004192 是**体引用的环境**问题，
+  不是方法本身。
+- **结论 B**：06000001 = `pop` 空栈单指令（官方同款，官方 cctor 调用它时栈同样为空）。
+  `Bad IL range` 是 bodytest 变体布局下的新现象，与主死因独立，暂不追。
+- **bodytest CI 工具链三连修**：workflow 步骤路径(cand/)、先构建工具(probe job 无构建产物)、
+  写临时文件再 mv(dnlib mmap 占用)。dispatch 示例：`bodytest_tok: "06004192"`。
+- **bodyvariant 工具已就绪**（half1/catexc/noeh 三模式）：下一棒对 06004192 做变体二分——
+  catexc(CatchType→System.Exception) 判 catch 类型敏感性；noeh(去EH) 判 EH 结构敏感性。
+  另可对 06004192 的 0x1B TypeSpec/0x0A MemberRef 做「解析身份」级对比（fulldiff 只比 token 值，
+  不比 token 指向的内容——TypeSpec 的泛型实例化内容是剩余盲区）。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员

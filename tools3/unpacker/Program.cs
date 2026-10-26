@@ -52,6 +52,7 @@ public static class Program
                 case "noinline": return CmdNoInline.Run(args);
                 case "ehaudit": return CmdEhAudit.Run(args);
                 case "fulldiff": return CmdFullDiff.Run(args);
+                case "bodyvariant": return CmdBodyVariant.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;
