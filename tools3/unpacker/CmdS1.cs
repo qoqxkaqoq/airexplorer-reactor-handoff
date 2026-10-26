@@ -67,9 +67,15 @@ public static class CmdS1
         // call 非 static 方法缺 this -> InvalidProgramException。
         Dictionary<string, (MethodSig sig, MethodAttributes attrs)> baseSigs = null;
         Importer? sigImporter = null;
+        ModuleDefMD bmodKeep = null;
+        Dictionary<string, TypeRef> trMapAll = null;
         if (File.Exists(baselinePath))
         {
             var bmod = (ModuleDefMD)ModuleDefMD.Load(baselinePath);
+            bmodKeep = bmod;
+            trMapAll = new Dictionary<string, TypeRef>();
+            foreach (var tr in bmod.GetTypeRefs())
+                if (!trMapAll.ContainsKey(tr.FullName)) trMapAll[tr.FullName] = tr;
             baseSigs = new Dictionary<string, (MethodSig, MethodAttributes)>();
             foreach (var t in bmod.GetTypes())
                 foreach (var m in t.Methods)
@@ -108,6 +114,14 @@ public static class CmdS1
             }
             Console.WriteLine("[s1] baseline signatures loaded: {0}, type map: {1}, type shells added: {2}",
                 baseSigs.Count, s_tdByFull.Count, shellAdded);
+        }
+        RemapResolver remapResolver = null;
+        if (baseSigs != null && bmodKeep != null)
+        {
+            var slayedMr = new Dictionary<string, MemberRef>();
+            foreach (var mref in mod.GetMemberRefs())
+                if (!slayedMr.ContainsKey(RemapResolver.MemberKey(mref))) slayedMr[RemapResolver.MemberKey(mref)] = mref;
+            remapResolver = new RemapResolver(mod, bmodKeep, s_tdByFull, s_trByFull ?? trMapAll, slayedMr);
         }
 
         // token -> MethodDef (dummy 类型方法不再跳过: 签名将由基线恢复)
@@ -306,7 +320,7 @@ public static class CmdS1
                 }
                 else
                     pbind = md.Parameters;
-                var body = MethodBodyReader.CreateCilBody(mod, il, ehData, pbind, bodyFlags,
+                var body = MethodBodyReader.CreateCilBody(remapResolver, il, ehData, pbind, bodyFlags,
                     (ushort)maxStack, (uint)codeSize, localsTok, gp);
                 if (body == null) throw new Exception("CreateCilBody null");
                 if (ehData != null && body.ExceptionHandlers.Count == 0)
@@ -434,6 +448,82 @@ public static class CmdS1
         return BuildFatEh(clauses);
     }
 
+    /// <summary>
+    /// token 重映射 Resolver: mt IL 里的 TypeDef/TypeRef token 是基线空间, 而 NRS 删了
+    /// 673 个类型导致 Slayed 的 TypeDef rid 错位(castclass/ldtoken 会解析到错误类型甚至
+    /// 值类型, JIT 拒绝)。按 FullName 把基线 token 映射到 Slayed 对象。
+    /// </summary>
+    class RemapResolver : IInstructionOperandResolver
+    {
+        readonly IInstructionOperandResolver inner;   // Slayed 模块
+        readonly ModuleDefMD bmod;                    // 基线模块(token 空间权威)
+        readonly Dictionary<string, TypeDef> tdMap;   // FullName -> Slayed TypeDef(含壳)
+        readonly Dictionary<string, TypeRef> trMap;   // FullName -> Slayed TypeRef
+        readonly Dictionary<string, MemberRef> mrMap; // "类::名(sig)" -> Slayed MemberRef
+        readonly Dictionary<uint, IMDTokenProvider> cache = new();
+
+        public RemapResolver(IInstructionOperandResolver inner, ModuleDefMD bmod,
+            Dictionary<string, TypeDef> tdMap, Dictionary<string, TypeRef> trMap,
+            Dictionary<string, MemberRef> mrMap)
+        {
+            this.inner = inner; this.bmod = bmod; this.tdMap = tdMap; this.trMap = trMap; this.mrMap = mrMap;
+        }
+
+        // MemberRef 的身份 key: 引用类全名 + 成员名 + 签名串(区分重载)
+        public static string MemberKey(MemberRef mr)
+        {
+            var cls = mr.Class != null ? mr.Class.FullName : "?";
+            var sig = mr.MethodSig != null ? mr.MethodSig.ToString() : (mr.FieldSig != null ? mr.FieldSig.ToString() : "?");
+            return cls + "::" + mr.Name + "(" + sig + ")";
+        }
+
+        public string ReadUserString(uint token) => inner.ReadUserString(token);
+
+        public IMDTokenProvider ResolveToken(uint token, GenericParamContext gpContext)
+        {
+            byte table = (byte)(token >> 24);
+            if (table == 0x0A)
+            {
+                if (cache.TryGetValue(token, out var hitM)) return hitM;
+                IMDTokenProvider mappedM = null;
+                try
+                {
+                    if (bmod.ResolveToken(token) is MemberRef bmr)
+                    {
+                        var key = MemberKey(bmr);
+                        if (mrMap.TryGetValue(key, out var hit)) mappedM = hit;
+                    }
+                }
+                catch { }
+                if (mappedM != null) { cache[token] = mappedM; return mappedM; }
+                return (IMDTokenProvider)inner.ResolveToken(token, gpContext);
+            }
+            if (table == 0x01 || table == 0x02)
+            {
+                if (cache.TryGetValue(token, out var hit)) return hit;
+                ITypeDefOrRef mapped = null;
+                try
+                {
+                    var bt = bmod.ResolveToken(token) as ITypeDefOrRef;
+                    if (bt != null)
+                    {
+                        if (bt is TypeDef btd && tdMap.TryGetValue(btd.FullName, out var hitT))
+                            mapped = hitT;
+                        else if (bt is TypeRef btr && trMap.TryGetValue(btr.FullName, out var hitR))
+                            mapped = hitR;
+                        else if (tdMap.TryGetValue(bt.FullName, out var hit3))
+                            mapped = hit3;
+                    }
+                }
+                catch { /* 基线侧解析失败则回落 */ }
+                if (mapped != null) { cache[token] = mapped; return mapped; }
+                // 映射失败: 回落到 Slayed 直接解析(保持旧行为)
+                return (IMDTokenProvider)inner.ResolveToken(token, gpContext);
+            }
+            return inner.ResolveToken(token, gpContext);
+        }
+    }
+
     /// <summary>把基线模块的签名克隆进当前模块: TypeDefOrRef 按 token 解析, 保留调用约定。</summary>
     static MethodSig CloneSigInto(MethodSig src)
     {
@@ -489,6 +579,34 @@ public static class CmdS1
     static TypeSig CloneTypeInto(TypeSig t)
     {
         if (t == null) return null;
+        // corlib 内建类型(Void/Object/Int32/...)必须保留 CorLibTypeSig(写出 ELEMENT_TYPE_VOID 等):
+        // 若当普通 TypeDefOrRefSig 重建, System.Void 会写成 VALUETYPE+Void token —— mono 报
+        // "Expected value type but got type kind 1", 桌面 CLR 报签名错误。
+        if (t is CorLibTypeSig csig)
+        {
+            var cor = s_mod.CorLibTypes;
+            switch (csig.ElementType)
+            {
+                case ElementType.Void: return cor.Void;
+                case ElementType.Boolean: return cor.Boolean;
+                case ElementType.Char: return cor.Char;
+                case ElementType.I1: return cor.SByte;
+                case ElementType.U1: return cor.Byte;
+                case ElementType.I2: return cor.Int16;
+                case ElementType.U2: return cor.UInt16;
+                case ElementType.I4: return cor.Int32;
+                case ElementType.U4: return cor.UInt32;
+                case ElementType.I8: return cor.Int64;
+                case ElementType.U8: return cor.UInt64;
+                case ElementType.R4: return cor.Single;
+                case ElementType.R8: return cor.Double;
+                case ElementType.String: return cor.String;
+                case ElementType.Object: return cor.Object;
+                case ElementType.TypedByRef: return cor.TypedReference;
+                case ElementType.I: return cor.IntPtr;
+                case ElementType.U: return cor.UIntPtr;
+            }
+        }
         switch (t)
         {
             case TypeDefOrRefSig r:
