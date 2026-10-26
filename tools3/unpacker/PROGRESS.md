@@ -235,6 +235,19 @@ type shells added=673（NRS 删除的类型补壳）
 - **下一棒**：DispatcherInitializer 类型全成员 stub 化二分（定位类型内坏成员）；
   060041A5 的 ImplMap 残留检查；PEVerify 的 Unable to resolve token 清单逐个修。
 
+## 全类型 stub 实验（决定性）：死因锁定「写出层布局」
+
+- **DispatcherInitializer 全 219 方法 stub 化** → 死点变为
+  `BadImageFormatException: Bad IL range at InstantiateGlobalCalculator()`。
+- **两种 stub 化（bodytest 与 S1-exclude-stub）都触发 Bad IL range**——
+  **Bad IL range = CLR 读方法 IL 时范围越界（RVA/size 与 .text 段不符）**——
+  **这是 dnlib 写出层的布局问题，不是 IL/元数据语义问题**！
+- **主线死因（全注入版的 InvalidProgram）极可能同源**：dnlib 写出的方法体区
+  存在某处 RVA/大小/对齐错位，JIT 读到坏范围 → InvalidProgram/Bad IL range（随布局而异）。
+- **下一棒（本地 wine 秒级）**：写「全方法 RVA+codesize 越界扫描」工具，找出坏方法；
+  或对比 dnlib 写出的方法体表与 mt 源；或怀疑 PreserveAll 与方法搬移(rid复用恢复)的
+  交互导致 MethodDef RVA 表重排错位——尝试关掉部分 Preserve 选项二分。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员

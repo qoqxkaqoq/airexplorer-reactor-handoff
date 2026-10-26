@@ -55,6 +55,7 @@ public static class Program
                 case "bodyvariant": return CmdBodyVariant.Run(args);
                 case "pinvoke": return CmdScanPinvoke.Run(args);
                 case "findmethod": return CmdFindMethod.Run(args);
+                case "typetoks": return CmdTypeToks.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;

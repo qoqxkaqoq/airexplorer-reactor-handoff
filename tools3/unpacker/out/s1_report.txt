@@ -1,11 +1,11 @@
-S1 report 2026-10-26 23:29:30Z
+S1 report 2026-10-26 23:32:51Z
 in=work_a1_pack/nrs/AirExplorer_test_Slayed.exe
-injected=22925
+injected=22711
 fail=0
 skipNoTok=0
 skipNoBody=0
 ehDropped=0
-sigRestored=173
-attrRestored=175
+sigRestored=40
+attrRestored=42
 ldcTokenFixed=0
 ehNoSource=
