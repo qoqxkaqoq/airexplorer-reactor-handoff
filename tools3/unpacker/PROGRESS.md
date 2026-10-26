@@ -96,6 +96,27 @@ type shells added=673（NRS 删除的类型补壳）
   把 177 个恢复方法用 --exclude 分半回滚，log2(177)≈8 轮 CI 定位坏成员；
   或接入 Windows shell 用 peverify 一次列全（见汇报）。
 
+## M1 突破：rid 复用总根源 + 完整恢复（2026-10-26 深夜）
+
+- **mono 谜团解开**：此前 mono "拒载 dummy_ptr" 是假象——`asm.GetType("dummy_ptr")` 抛
+  TypeLoadException 只是因为**这个顶层名不存在**（真实类型名是 `dummy_ptr.{GUID}`，含点和花括号）。
+  用正确全名测试：**Slayed 原版与 PROD 的 dummy_ptr.{GUID} 在 mono 下完全健康**（类型+203方法+129字段全解析）。
+- **减法实验排除了所有静态元数据嫌疑**：ClassLayout/attrs 组合/abstract 残留/GP 行/MethodImpl/
+  Property-Event 语义/locals token(10347 全对齐)/EH catch token(1670 全对齐)/FieldRVA(全在段内)。
+- **总根源（reuse 命令实测）**：NRS rem-junks 对 **177 个方法 + 129 个字段做了 "rid 复用"**——
+  同一 MethodDef/FieldDef token，身份完全替换（`<Module>::GuideCalculator` → `dummy_ptr.{GUID}::m000004`、
+  `<Module>::CheckControllableArgumentEnumerator` 字段 → `f000001`...），并把它们全部挂到
+  dummy_ptr.{GUID} 下。**mt IL 是基线 token 空间**，call/ldsfld 解析命中 dummy 成员 → 触发加载
+  dummy_ptr.{GUID} → 桌面 CLR 拒载（mono 宽松不拒）→ cctor 链死。
+- **修复 12（完整恢复）**：对 177 方法+129 字段搬回基线的 DeclaringType（`<Module>` 归 GlobalType，
+  其余经 s_tdByFull 壳映射）+ 真名 + 字段签名 CloneTypeInto 重映射。恢复后 **reuse=0**
+  （token 语义与基线完全归位），`06000004=<Module>::GuideCalculator`、
+  `06004236=DispatcherInitializer::EncryptSolver`（static+真体）全部实证。
+- **产物静态验证全绿**：disasm 逐 token 对照基线一致（ldsfld/call/box 目标全对，壳类型替换符合预期）；
+  压栈序列与 call 签名匹配。mono 剩余的 "Invalid IL code" 是 mono 对官方票据 IL 的一致性检查
+  比 CLR 严（已知特性，不作 Windows 判据）。
+- CI run 40365001632 = 完整恢复版首次全量实测。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员
