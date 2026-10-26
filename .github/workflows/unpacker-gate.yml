@@ -43,7 +43,8 @@ jobs:
             ../../work_a1_pack/memdump/module_text.bin \
             ../../work/c2_pack/bodies_manifest.tsv \
             ../../work/dump_official_16598.zip \
-            out/m1_s1_full.exe
+            out/m1_s1_full.exe \
+            --baseline ../../exes/AirExplorer_baseline_verified.exe
           ls -la out/
           cat out/s1_report.txt
 

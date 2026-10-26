@@ -27,7 +27,8 @@ case "$MODE" in
     echo "[build.sh] build only"
     ;;
   s1)
-    $CLI s1 "$SLAYED" "$MT" "$MANIFEST" "$ZIP" out/m1_s1_full.exe
+    $CLI s1 "$SLAYED" "$MT" "$MANIFEST" "$ZIP" out/m1_s1_full.exe \
+      --baseline "$REPO_ROOT/exes/AirExplorer_baseline_verified.exe"
     ;;
   *)
     echo "unknown mode: $MODE"; exit 2

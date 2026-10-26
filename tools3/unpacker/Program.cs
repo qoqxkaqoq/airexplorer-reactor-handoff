@@ -27,6 +27,8 @@ public static class Program
                 case "s1": return CmdS1.Run(args);
                 case "ehprobe": return CmdEhProbe.Run(args);
                 case "checksig": return CmdCheckSig.Run(args);
+                case "scanil": return CmdScanIl.Run(args);
+                case "tokinfo": return CmdTokInfo.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;

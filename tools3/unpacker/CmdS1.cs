@@ -28,6 +28,8 @@ public static class CmdS1
         // s1 <exe> <mt> <manifest> <zip> <out> [opts...]
         if (args.Length < 6) { Console.WriteLine("usage: s1 <slayed.exe> <module_text.bin> <bodies_manifest.tsv> <dump_zip> <out.exe> [--only f] [--exclude f] [--limit N] [--no-write]"); return 2; }
         string exePath = args[1], mtPath = args[2], manifestPath = args[3], zipPath = args[4], outPath = args[5];
+        string baselinePath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(exePath)) ?? ".",
+            "AirExplorer_baseline_verified.exe");
 
         var only = new HashSet<string>();
         var exclude = new HashSet<string>();
@@ -47,6 +49,7 @@ public static class CmdS1
                     break;
                 case "--limit": limit = int.Parse(args[++i]); break;
                 case "--no-write": noWrite = true; break;
+                case "--baseline": baselinePath = args[++i]; break;
                 default: Console.WriteLine("unknown opt " + args[i]); return 2;
             }
         }
@@ -55,20 +58,36 @@ public static class CmdS1
         var mod = (ModuleDefMD)ModuleDefMD.Load(exePath);
         Console.WriteLine("[s1] module loaded: " + mod.Name);
 
-        // token -> MethodDef (跳过 NRS dummy 类型的方法: NRS rem-junks 可能改过它们的签名,
-        // 注入基线真体会参数越界 — 保持 NRS stub, 记账)
+        // 基线 exe (只读): NRS rem-junks 会把"未引用"方法 dummy 化(签名改 void() 非 static + 无体)
+        // 并删除调用点; 我们注入运行时真体恢复调用点后必须同步恢复基线签名, 否则
+        // call 非 static 方法缺 this -> InvalidProgramException。
+        Dictionary<string, (MethodSig sig, MethodAttributes attrs)> baseSigs = null;
+        Importer? sigImporter = null;
+        if (File.Exists(baselinePath))
+        {
+            var bmod = (ModuleDefMD)ModuleDefMD.Load(baselinePath);
+            baseSigs = new Dictionary<string, (MethodSig, MethodAttributes)>();
+            foreach (var t in bmod.GetTypes())
+                foreach (var m in t.Methods)
+                    if (m.MethodSig != null)
+                        baseSigs[m.MDToken.Raw.ToString("X8")] = (m.MethodSig, m.Attributes);
+            sigImporter = new Importer(mod);
+            Console.WriteLine("[s1] baseline signatures loaded: {0}", baseSigs.Count);
+        }
+
+        // token -> MethodDef (dummy 类型方法不再跳过: 签名将由基线恢复)
         var byTok = new Dictionary<string, MethodDef>();
-        int nDummySkip = 0;
+        int nDummy = 0;
         foreach (var t in mod.GetTypes())
         {
             bool dummy = t.FullName.Contains("dummy");
             foreach (var m in t.Methods)
             {
-                if (dummy) { nDummySkip++; continue; }
+                if (dummy) nDummy++;
                 byTok[m.MDToken.Raw.ToString("X8")] = m;
             }
         }
-        Console.WriteLine("[s1] token index: {0} methods ({1} in NRS-dummy types skipped)", byTok.Count, nDummySkip);
+        Console.WriteLine("[s1] token index: {0} methods ({1} in NRS-dummy types, will restore baseline sig)", byTok.Count, nDummy);
 
         // manifest
         var man = new List<(string rva, string tok, string name, string src)>();
@@ -106,7 +125,7 @@ public static class CmdS1
         Console.WriteLine("[s1] zip maxstack entries: {0}, eh entries: {1}", zipMax.Count, zipEh.Count);
 
         int ok = 0, fail = 0, skipNoTok = 0, skipNoBody = 0, ehDropped = 0;
-        int tokenMiss = 0;
+        int tokenMiss = 0, sigFixedTotal = 0;
         var failReasons = new Dictionary<string, int>();
         var failed = new List<string>();
         var ehNoSource = new List<string>();
@@ -127,26 +146,27 @@ public static class CmdS1
             byte b0 = mt[off];
             int kind = b0 & 3;
             int hsz, codeSize, maxStack, ehFlag;
-            uint localsTok, flags;
+            bool initLocals;
+            uint localsTok;
 
             if (kind == 2)
             {
                 // tiny: 无 locals/无 EH, maxstack 规范 8 (JIT dump 头可复核)
                 codeSize = b0 >> 2;
-                hsz = 1; maxStack = 8; localsTok = 0; flags = 0; ehFlag = 0;
+                hsz = 1; maxStack = 8; localsTok = 0; ehFlag = 0; initLocals = true;
                 var zmax = zipMax.GetValueOrDefault(tok, -1);
                 if (zmax > 0) maxStack = Math.Max(1, zmax);
             }
             else if (kind == 3)
             {
+                // ECMA II.25.4.4 fat 头: byte0=flags低8位(bit0-2=fat3,bit3=moreSects,bit4=initLocals),
+                // byte1 高4位=hdrsize(以4B计), byte2-3=maxstack(完整16位), [4:8]=codesize, [8:12]=localsTok
                 hsz = ((mt[off + 1] >> 4) & 0xF) * 4;
-                flags = BitConverter.ToUInt16(mt, off + 2);
-                maxStack = (int)(flags >> 12);
-                flags &= 0xFFF;
+                ehFlag = b0 & 0x08;
+                initLocals = (b0 & 0x10) != 0;
+                maxStack = BitConverter.ToUInt16(mt, off + 2);
                 codeSize = BitConverter.ToInt32(mt, off + 4);
                 localsTok = BitConverter.ToUInt32(mt, off + 8);
-                ehFlag = (int)(flags & 8);
-                flags &= 0xFFFF;
             }
             else { skipNoBody++; continue; }
 
@@ -187,9 +207,32 @@ public static class CmdS1
                 }
             }
 
-            var bodyFlags = (ushort)(3 | (ehData != null ? 8 : 0) | ((flags & 0x10) != 0 ? 0x10 : 0));
+            var bodyFlags = (ushort)(3 | (ehData != null ? 8 : 0) | (initLocals ? 0x10 : 0));
             try
             {
+                // 签名恢复: NRS dummy 化改过签名的方法用基线签名还原 (保持 call 约定一致)
+                int sigFixed = 0;
+                if (baseSigs != null && baseSigs.TryGetValue(tok, out var bsigT))
+                {
+                    var bsig = bsigT.sig;
+                    var cur = md.MethodSig;
+                    // HasThis/Static 是调用约定的一部分, ToString() 不体现, 必须显式比较
+                    bool same = cur != null && cur.ToString() == bsig.ToString() && cur.HasThis == bsig.HasThis;
+                    if (!same)
+                    {
+                        // 先 Import 换类型引用到本模块(Clone 会携带跨模块 TypeDef 导致写出失败),
+                        // 再手工修回调用约定(Import 会丢 HasThis/ExplicitThis/GenParamCount, 实测)
+                        var ns = sigImporter!.Value.Import(bsig);
+                        ns.HasThis = bsig.HasThis;
+                        ns.ExplicitThis = bsig.ExplicitThis;
+                        ns.GenParamCount = bsig.GenParamCount;
+                        md.Signature = ns;
+                        md.Attributes = bsigT.attrs;
+                        sigFixed++;
+                        sigFixedTotal++;
+                    }
+                }
+
                 var gp = new GenericParamContext();
                 var body = MethodBodyReader.CreateCilBody(mod, il, ehData, md.Parameters, bodyFlags,
                     (ushort)maxStack, (uint)codeSize, localsTok, gp);
@@ -223,7 +266,8 @@ public static class CmdS1
             }
         }
 
-        Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4}", ok, fail, skipNoTok, skipNoBody, ehDropped);
+        Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4} sig-restored={5}",
+            ok, fail, skipNoTok, skipNoBody, ehDropped, sigFixedTotal);
         Console.WriteLine("[s1] eh-no-source: {0} (first: {1})", ehNoSource.Count, string.Join(",", ehNoSource.Take(8)));
         if (fail > 0)
         {
@@ -242,6 +286,7 @@ public static class CmdS1
         rep.AppendLine("skipNoTok=" + skipNoTok);
         rep.AppendLine("skipNoBody=" + skipNoBody);
         rep.AppendLine("ehDropped=" + ehDropped);
+        rep.AppendLine("sigRestored=" + sigFixedTotal);
         rep.AppendLine("ehNoSource=" + string.Join(",", ehNoSource));
         foreach (var kv in failReasons.OrderByDescending(x => x.Value))
             rep.AppendLine("fail x" + kv.Value + " " + kv.Key);
