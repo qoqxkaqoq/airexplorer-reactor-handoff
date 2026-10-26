@@ -83,7 +83,24 @@ public static class CmdS1
             s_trByFull = new Dictionary<string, TypeRef>();
             foreach (var tr in mod.GetTypeRefs())
                 if (!s_trByFull.ContainsKey(tr.FullName)) s_trByFull[tr.FullName] = tr;
-            Console.WriteLine("[s1] baseline signatures loaded: {0}, type map: {1}", baseSigs.Count, s_tdByFull.Count);
+            // NRS rem-junks 删了基线的部分类型, 而恢复的方法签名会引用它们 -> 类型加载失败
+            // (Could not load type)。补空类型壳(仅 ns/name/基类), 让签名引用可解析;
+            // 其成员级恢复(字段/方法)留待 M2+。
+            int shellAdded = 0;
+            var modTypeNames = new HashSet<string>(mod.Types.Select(x => x.FullName));
+            foreach (var bt in bmod.GetTypes())
+            {
+                if (modTypeNames.Contains(bt.FullName)) continue;
+                if (bt.FullName.Contains("dummy")) continue;
+                ITypeDefOrRef baseType = null;
+                try { baseType = bt.BaseType == null ? null : MapTdorStatic(bt.BaseType); } catch { }
+                var shell = new TypeDefUser(bt.Namespace, bt.Name, baseType);
+                mod.Types.Add(shell);
+                s_tdByFull[bt.FullName] = shell;
+                shellAdded++;
+            }
+            Console.WriteLine("[s1] baseline signatures loaded: {0}, type map: {1}, type shells added: {2}",
+                baseSigs.Count, s_tdByFull.Count, shellAdded);
         }
 
         // token -> MethodDef (dummy 类型方法不再跳过: 签名将由基线恢复)
@@ -468,6 +485,9 @@ public static class CmdS1
     }
 
     static ITypeDefOrRef ResolveTdor(ITypeDefOrRef t) => MapTdor(t);
+
+    /// <summary>壳构造期的类型映射(不依赖循环变量, 直接复用 MapTdor)。</summary>
+    static ITypeDefOrRef MapTdorStatic(ITypeDefOrRef t) => MapTdor(t);
 
     static void ReadFull(Stream s, byte[] buf)
     {
