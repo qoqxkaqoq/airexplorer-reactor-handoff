@@ -178,7 +178,7 @@ public static class CmdS1
         Console.WriteLine("[s1] zip maxstack entries: {0}, eh entries: {1}", zipMax.Count, zipEh.Count);
 
         int ok = 0, fail = 0, skipNoTok = 0, skipNoBody = 0, ehDropped = 0;
-        int tokenMiss = 0, sigFixedTotal = 0, attrFixedTotal = 0, ldcFixed = 0;
+        int tokenMiss = 0, sigFixedTotal = 0, attrFixedTotal = 0, ldcFixed = 0, excludedStubbed = 0;
         var failReasons = new Dictionary<string, int>();
         var failed = new List<string>();
         var ehNoSource = new List<string>();
@@ -188,7 +188,48 @@ public static class CmdS1
         {
             if (done >= limit) break;
             if (only.Count > 0 && !only.Contains(tok)) continue;
-            if (exclude.Contains(tok)) continue;
+            if (exclude.Contains(tok))
+            {
+                // exclude = 不注入 mt 体, 但仍恢复签名/attrs 并补 stub 体
+                // (rid 复用恢复的方法若保持 abstract+无体且已搬回真类型 -> TypeLoad)
+                if (byTok.TryGetValue(tok, out var mdEx) && baseSigs != null && baseSigs.TryGetValue(tok, out var bsigEx))
+                {
+                    var curSigEx = mdEx.MethodSig;
+                    bool isDummyEx = mdEx.DeclaringType != null && mdEx.DeclaringType.FullName.Contains("dummy");
+                    if (isDummyEx)
+                    {
+                        var nsEx = CloneSigInto(bsigEx.sig);
+                        mdEx.Signature = nsEx;
+                        mdEx.Attributes = bsigEx.attrs;
+                        mdEx.ParamDefs.Clear();
+                        for (int pi = 0; pi < nsEx.Params.Count; pi++)
+                            mdEx.ParamDefs.Add(new ParamDefUser(string.Empty, (ushort)(pi + 1)));
+                    }
+                    mdEx.Attributes &= ~MethodAttributes.Abstract;
+                    if (!mdEx.HasBody)
+                    {
+                        var stubBody = new CilBody(true, new List<Instruction>(), new List<ExceptionHandler>(), new List<Local>());
+                        var retE = mdEx.MethodSig?.RetType;
+                        if (retE != null && retE.FullName != "System.Void")
+                        {
+                            switch (retE.ElementType)
+                            {
+                                case ElementType.Boolean: case ElementType.Char:
+                                case ElementType.I1: case ElementType.U1: case ElementType.I2: case ElementType.U2:
+                                case ElementType.I4: case ElementType.U4: case ElementType.I8: case ElementType.U8:
+                                case ElementType.R4: case ElementType.R8: case ElementType.I: case ElementType.U:
+                                    stubBody.Instructions.Add(Instruction.CreateLdcI4(0)); break;
+                                default: stubBody.Instructions.Add(Instruction.Create(OpCodes.Ldnull)); break;
+                            }
+                        }
+                        stubBody.Instructions.Add(Instruction.Create(OpCodes.Ret));
+                        mdEx.Body = stubBody;
+                        mdEx.Body.MaxStack = 8;
+                    }
+                }
+                excludedStubbed++;
+                continue;
+            }
             done++;
 
             if (!byTok.TryGetValue(tok, out var md)) { skipNoTok++; continue; }
@@ -432,8 +473,8 @@ public static class CmdS1
             }
         }
 
-        Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4} sig-restored={5} attr-restored={6} ldc-token-fixed={7}",
-            ok, fail, skipNoTok, skipNoBody, ehDropped, sigFixedTotal, attrFixedTotal, ldcFixed);
+        Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4} sig-restored={5} attr-restored={6} ldc-token-fixed={7} excluded-stubbed={8}",
+            ok, fail, skipNoTok, skipNoBody, ehDropped, sigFixedTotal, attrFixedTotal, ldcFixed, excludedStubbed);
         Console.WriteLine("[s1] eh-no-source: {0} (first: {1})", ehNoSource.Count, string.Join(",", ehNoSource.Take(8)));
         if (fail > 0)
         {

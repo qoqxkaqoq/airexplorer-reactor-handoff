@@ -214,6 +214,27 @@ type shells added=673（NRS 删除的类型补壳）
   3. **元数据表级**（- TKCA/ManifestResource/ExportedType 等）
   4. **cctor 链上游（0600419C 的调用闭包）的同类问题**
 
+## 线路1建成：Wine+dotnet48 本地调试回路（2026-10-27 早, 决定性基础设施）
+
+- **Wine 9.0 + wine32:i386 + winetricks 20260125-next + .NET Framework 4.8 全部装成**
+  （dotnet48 verb 在 wine9 下需新版 winetricks；prefix 需重建）。
+- **本地复现 Windows 死点成功**：`wine AirExplorer.exe` 与 CI windows-latest **一模一样**
+  （InvalidProgram at InstantiateGlobalCalculator at .cctor）——**迭代速度 10分钟/轮 → 秒级**。
+- **秒级二分实验**（本地跑通）：
+  - bodytest 06004192 空体 → 死点移到 06000001（与 CI run 40391057907 完全一致 ✓）
+  - excl4（4 个 cctor call 全空体+exclude stub 化）→ 死点进 DefineEfficientProfiler 内部：
+    **VerifyProcessor(IntPtr) 的 JIT**（新层暴露）
+  - **excl5（06004192+060041A5 都空体化）→ JIT 仍拒 VerifyProcessor**——
+    **空体 ret 都被拒 = 死因不在方法体，在方法元数据或声明类型**！
+- **PEVerify 上 CI**（.NET Framework SDK 真验证器，run 40418929017）：1245 错误三类——
+  Type load failed（系统性）/ Unable to resolve token（ExecutorTree::MonitorTransferableUser offset 0x6B
+  可精确查）/ found X expected COMException（token 身份错位）。peverify.log 已入 artifact。
+- **VerifyProcessor 是 NRS 运行时代理函数族**（keogyBbmx 取指针 → 动态拼 "Close"+"Handle" →
+  StopClient(P/Invoke GetProcAddress 变体) → GetDelegateForFunctionPointer → castclass TemplateBuilder
+  → callvirt Invoke）——全链引用与基线 0 差异。
+- **下一棒**：DispatcherInitializer 类型全成员 stub 化二分（定位类型内坏成员）；
+  060041A5 的 ImplMap 残留检查；PEVerify 的 Unable to resolve token 清单逐个修。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员

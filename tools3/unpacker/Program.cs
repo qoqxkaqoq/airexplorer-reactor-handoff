@@ -53,6 +53,8 @@ public static class Program
                 case "ehaudit": return CmdEhAudit.Run(args);
                 case "fulldiff": return CmdFullDiff.Run(args);
                 case "bodyvariant": return CmdBodyVariant.Run(args);
+                case "pinvoke": return CmdScanPinvoke.Run(args);
+                case "findmethod": return CmdFindMethod.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;
