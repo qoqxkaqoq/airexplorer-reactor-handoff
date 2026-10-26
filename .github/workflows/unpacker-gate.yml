@@ -189,6 +189,18 @@ jobs:
           Add-Type -TypeDefinition $diag2
           [MemDiag]::Run((Resolve-Path "app\AirExplorer.exe").Path)
 
+      - name: PEVerify 验证（.NET Framework SDK 真验证器, 诊断用）
+        if: always()
+        shell: pwsh
+        run: |
+          $pv = Get-ChildItem "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin" -Recurse -Filter PEVerify.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $pv) { Write-Host "PEVerify not found on runner, skip"; exit 0 }
+          Write-Host "PEVerify: $($pv.FullName)"
+          & $pv.FullName /il /hresult cand\m1_s1_full.exe 2>&1 | Out-File -Encoding utf8 peverify.log
+          $errs = (Select-String -Path peverify.log -Pattern '\[.*Error').Count
+          Write-Host "peverify errors: $errs"
+          Get-Content peverify.log -TotalCount 20
+
       - name: ILVerify 静态验证（诊断用, 不作门禁）
         if: always()
         shell: pwsh
@@ -217,6 +229,7 @@ jobs:
           name: m-gate-probe
           path: |
             probe
+            peverify.log
             ilverify.log
             app/_candidate.txt
           retention-days: 14
