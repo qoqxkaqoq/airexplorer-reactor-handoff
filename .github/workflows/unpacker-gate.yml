@@ -151,10 +151,10 @@ jobs:
               for (uint rid = 1; rid <= 30912; rid++) {
                 uint tok = 0x06000000 + rid;
                 try {
-                  var m = mod.ResolveMethod((int)tok);
-                  if (m == null) continue;
-                  var rt = m.ReturnType;
-                  foreach (var p in m.GetParameters()) { var t = p.ParameterType; }
+                  var mi2 = mod.ResolveMethod((int)tok) as MethodInfo;
+                  if (mi2 == null) continue;
+                  var rt = mi2.ReturnType;
+                  foreach (var p in mi2.GetParameters()) { var t = p.ParameterType; }
                 }
                 catch (Exception ex) {
                   bad++;
