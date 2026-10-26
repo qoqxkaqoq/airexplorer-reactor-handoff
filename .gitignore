@@ -18,3 +18,6 @@ ci/soak_env/
 exes/*
 !exes/AirExplorer_baseline_verified.exe
 !exes/A2_dist.zip
+
+# unpacker 产物 (CI 重建, 不入库)
+tools3/unpacker/out/*.exe

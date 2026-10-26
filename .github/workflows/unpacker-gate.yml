@@ -1,0 +1,132 @@
+name: Unpacker M-gate
+
+# 脱壳机流水线门禁: ubuntu 构建 + S1..Sn 产物, windows-latest 跑隔离探针 + 长稳。
+# VERDICT 判定只认 ci/probe.ps1 输出 (probe.log VERDICT 行) 与 soak exit code。
+
+on:
+  workflow_dispatch:
+    inputs:
+      stages:
+        description: "流水线阶段 (如 s1 / s1-s4 / full)"
+        required: false
+        default: "s1"
+  push:
+    branches: ["a1work"]
+    paths:
+      - "tools3/unpacker/**"
+
+permissions:
+  contents: write
+
+jobs:
+  build-unpacker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build unpacker
+        run: |
+          cd tools3/unpacker
+          dotnet build -c Release AirExplorerUnpacker.csproj
+
+      - name: Run pipeline (S1)
+        run: |
+          cd tools3/unpacker
+          dotnet bin/Release/net8.0/AirExplorerUnpacker.dll s1 \
+            ../../work_a1_pack/nrs/AirExplorer_test_Slayed.exe \
+            ../../work_a1_pack/memdump/module_text.bin \
+            ../../work/c2_pack/bodies_manifest.tsv \
+            ../../work/dump_official_16598.zip \
+            out/m1_s1_full.exe
+          ls -la out/
+          cat out/s1_report.txt
+
+      - name: Upload unpacked exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: unpacked-exe
+          path: |
+            tools3/unpacker/out/m1_s1_full.exe
+            tools3/unpacker/out/s1_report.txt
+          retention-days: 14
+
+  probe-windows:
+    runs-on: windows-2025
+    needs: build-unpacker
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download unpacked exe
+        uses: actions/download-artifact@v4
+        with:
+          name: unpacked-exe
+          path: cand
+
+      - name: 准备运行目录 (候选 exe + 官方依赖)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path app | Out-Null
+          if (-not (Test-Path "cand\m1_s1_full.exe")) { throw "unpacked exe missing" }
+          Copy-Item cand\m1_s1_full.exe app\AirExplorer.exe -Force
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp portable/deps.zip | Out-Null
+          if (-not (Test-Path "app\BouncyCastle.Crypto.dll")) { throw "deps extract failed" }
+          $md5 = (Get-FileHash 'app\AirExplorer.exe' -Algorithm MD5).Hash
+          Write-Host "candidate md5 = $md5"
+          Get-ChildItem app | Measure-Object | ForEach-Object { Write-Host ("app files: " + $_.Count) }
+          "# unpacker M1 candidate md5: $md5" | Out-File -Encoding utf8 app/_candidate.txt
+
+      - name: 隔离探针 (probe_iso, WaitSec=100)
+        shell: pwsh
+        run: ./ci/probe_iso.ps1 -ExePath "app\AirExplorer.exe" -WaitSec 100 -OutDir probe
+
+      - name: 隔离长稳 (soak_iso, 7min) — 探针 PASS 才跑
+        id: soak
+        if: ${{ success() }}
+        shell: pwsh
+        run: |
+          $v = Select-String -Path probe\probe.log -Pattern "VERDICT\s*=\s*(\S+)" | Select-Object -First 1
+          $verdict = if ($v) { $v.Matches[0].Groups[1].Value } else { "UNKNOWN" }
+          Write-Host "probe verdict = $verdict"
+          if ($verdict -ne "PASS") {
+            Write-Host "::warning::probe verdict=$verdict, skip soak (M1 死法分类阶段)"
+            "run=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+          "run=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          ./ci/soak_iso.ps1 -ExePath "app\AirExplorer.exe" -Minutes 7
+
+      - name: 收集结果
+        if: always()
+        shell: pwsh
+        run: |
+          Get-Content probe\probe.log -ErrorAction SilentlyContinue
+          Copy-Item cand\s1_report.txt probe\s1_report.txt -Force -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m-gate-probe
+          path: |
+            probe
+            app/_candidate.txt
+          retention-days: 14
+
+      - name: 回传结果到 ci-results 分支
+        if: always()
+        shell: pwsh
+        run: |
+          git config user.email "ci@local"
+          git config user.name "ci"
+          New-Item -ItemType Directory -Force -Path "results/m-gate-$env:GITHUB_RUN_ID" | Out-Null
+          Copy-Item probe\* "results/m-gate-$env:GITHUB_RUN_ID/" -Recurse -Force -ErrorAction SilentlyContinue
+          git add -f results
+          git commit -m "m-gate run $env:GITHUB_RUN_ID (M1 S1 probe)" -q --allow-empty
+          git push -f origin "HEAD:refs/heads/ci-results"

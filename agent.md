@@ -41,7 +41,7 @@
 
 ## 4. 当前进行中：自研脱壳机（2026-10-26 立项）
 
-计划书 `docs/UNPACKER_PLAN.md`。状态 **M0 完成**（NETReactorSlayer v6.4 剥得干净骨架：反篡改/反调试/静态字符串/cflow 已除，但 Necrobit 体解密与资源解密对定制方案崩 → 我方 22165 体库补其缺口）。**下一步 = M1 试金石**：Slayed 骨架 + 体注入 → 探针看死法分类。五段流水线：体注入 → 字符串池回接(199K) → 委托表重接(3266) → 资源重嵌 → dnlib 写出。
+计划书 `docs/UNPACKER_PLAN.md`。状态 **M1 工程侧完成（Linux）**：S1 体注入已实现（`tools3/unpacker/`，net8 + NuGet dnlib 4.4.0），产物 `out/m1_s1_full.exe`（22753 方法注入 / 0 失败 / 177 NRS-dummy 跳过）。**核心数据源定案**：运行时快照 `work_a1_pack/memdump/module_text.bin`（偏移=RVA−0x2000）给出全部 22930 方法的运行时方法头（maxstack/locals token）与运行时 IL（与 JIT dump 全量逐字节全等）；EH 用 dump zip 的 m_*.eh（CORINFO）转 CLI fat clause——c2_pack 的 slot_plaintext 有 905 个假体、vault_partial 765 的完整真体都在 mt 里，全部消解。细节账本：`tools3/unpacker/PROGRESS.md`。**下一步 = M1 门禁**：CI workflow `unpacker-gate.yml`（ubuntu 构建 → windows-latest probe_iso/soak_iso）跑死法分类。五段流水线：体注入✓ → 字符串池回接(199K) → 委托表重接(3266) → 资源重嵌 → dnlib 写出✓(PreserveAll|KeepOldMaxStack)。
 
 ## 5. 工作纪律
 
