@@ -9,7 +9,7 @@
 
 你接手 AirExplorer v5.11.0.0 / .NET Reactor 逆向恢复工程。唯一入口是公开仓库
 `https://github.com/qoqxkaqoq/airexplorer-reactor-handoff`（clone 后先读 `AGENTS.md`，
-再读 `board/agents/wb-reverser.md` 的 **第 VIII、IX、X、XI 段**——XI 是最新收尾段）。
+再读 `agent.md` 的 **第 VIII、IX、X、XI 段**——XI 是最新收尾段）。
 
 **方向已定（业主确认，不要重新讨论）**：只做 A 组——在官方 exe 上做静态改版，
 交付单个可用 exe。B 组（旁路）和 C 组（脱壳重建）已放弃，C 线资料已归档
@@ -58,7 +58,7 @@
 - `dotnet` 不在 PATH，用 `/opt/dotnet/dotnet`；tools2 多工程 build 必须显式 csproj + `-c Release`。
 - git push 走代理：`https://p.xixky.eu.org/https://...` 或 `scripts/gh_sync.py`。
 - 探针/等待一律设超时；每轮必须实际构建并验证后再报告。
-- 所有新发现写 `AGENTS.md` + `board/agents/wb-reverser.md`（只写自己的 board）。
+- 所有新发现写 `AGENTS.md` + `agent.md`（只写自己的 board）。
 - 不要重复已证伪实验：pefix/sigclose 签名、0600418B 型链、资源目录解析。
 
 **v7/v8 TTD 数据的含义（背景）**：官方 exe 的保护方法原位是 `nop;nop;nop;ret` 桩，

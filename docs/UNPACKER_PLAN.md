@@ -112,7 +112,7 @@ airexplorer-reactor-handoff/
 │   ├── src/*.cs                   (S1-S5 五段 + CLI)
 │   ├── out/                       (产物变体, gitignore 大文件)
 │   └── PROGRESS.md                (里程碑账本)
-└── board/agents/wb-reverser.md    (XXVI 节起记录本计划战况)
+└── agent.md                      (本计划战况记于此)
 ```
 
 ## 9. 决定记录
