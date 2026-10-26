@@ -14,6 +14,10 @@ on:
         description: "可选: 只注入此文件里的 token(对分定位), 路径相对仓库根"
         required: false
         default: ""
+      bodytest_tok:
+        description: "可选: S1 后将此 token 方法体替换为 ret-only(对分实验)"
+        required: false
+        default: ""
   push:
     branches: ["a1work"]
     paths:
