@@ -210,27 +210,31 @@ public static class CmdS1
             var bodyFlags = (ushort)(3 | (ehData != null ? 8 : 0) | (initLocals ? 0x10 : 0));
             try
             {
-                // 签名/flags 恢复: NRS dummy 化会改签名与 Attributes(如 abstract 化)。
-                // 两者解耦: 签名不同才换签名; Attributes 一律恢复为基线(否则
-                // abstract 位残留 + 注入体 -> TypeLoadException: Abstract method with non-zero RVA)
+                // 签名/flags 恢复: 只针对 NRS dummy 化的方法(签名必被改坏)。
+                // 非 dummy 方法签名是原版好的, 一律不碰(Importer 边角会弄坏复杂签名)。
+                // Attributes 则全量恢复(否则 NRS 的 abstract 位残留 + 注入体 ->
+                // TypeLoadException: Abstract method with non-zero RVA)。
                 if (baseSigs != null && baseSigs.TryGetValue(tok, out var bsigT))
                 {
                     var bsig = bsigT.sig;
                     var cur = md.MethodSig;
-                    // HasThis/Static 是调用约定的一部分, ToString() 不体现, 必须显式比较
-                    bool sigSame = cur != null && cur.ToString() == bsig.ToString()
-                                   && cur.HasThis == bsig.HasThis && cur.ExplicitThis == bsig.ExplicitThis
-                                   && cur.GenParamCount == bsig.GenParamCount;
-                    if (!sigSame)
+                    bool isDummy = md.DeclaringType != null && md.DeclaringType.FullName.Contains("dummy");
+                    if (isDummy)
                     {
-                        // 先 Import 换类型引用到本模块(Clone 会携带跨模块 TypeDef 导致写出失败),
-                        // 再手工修回调用约定(Import 会丢 HasThis/ExplicitThis/GenParamCount, 实测)
-                        var ns = sigImporter!.Value.Import(bsig);
-                        ns.HasThis = bsig.HasThis;
-                        ns.ExplicitThis = bsig.ExplicitThis;
-                        ns.GenParamCount = bsig.GenParamCount;
-                        md.Signature = ns;
-                        sigFixedTotal++;
+                        bool sigSame = cur != null && cur.ToString() == bsig.ToString()
+                                       && cur.HasThis == bsig.HasThis && cur.ExplicitThis == bsig.ExplicitThis
+                                       && cur.GenParamCount == bsig.GenParamCount;
+                        if (!sigSame)
+                        {
+                            // 先 Import 换类型引用到本模块(Clone 会携带跨模块 TypeDef 导致写出失败),
+                            // 再手工修回调用约定(Import 会丢 HasThis/ExplicitThis/GenParamCount, 实测)
+                            var ns = sigImporter!.Value.Import(bsig);
+                            ns.HasThis = bsig.HasThis;
+                            ns.ExplicitThis = bsig.ExplicitThis;
+                            ns.GenParamCount = bsig.GenParamCount;
+                            md.Signature = ns;
+                            sigFixedTotal++;
+                        }
                     }
                 }
 
