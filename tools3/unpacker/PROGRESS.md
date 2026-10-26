@@ -117,6 +117,27 @@ type shells added=673（NRS 删除的类型补壳）
   比 CLR 严（已知特性，不作 Windows 判据）。
 - CI run 40365001632 = 完整恢复版首次全量实测。
 
+## M1 终局突破：四大雷连除（2026-10-27 凌晨, run 40371984806）
+
+- **雷 1（修复 12 补充）rid 复用完整恢复生效**：mono 实证 06000004=<Module>::GuideCalculator、
+  06004236=EncryptSolver（真名+真归属+真体），reuse=0。
+- **雷 2（修复 13）EH 紧凑段格式**：mt 快照的 EH 区是 dump 工具自定义紧凑格式
+  （flags2B+tryOff2B+tryLen1B+hOff2B+hLen1B+cls4B，共 12B/子句，段头 flags byte=0x01+dsize3B）。
+  三方法（06000288/0600034F/060003AB）反汇编 IL 边界实证全吻合，cls=System.Exception token 合理。
+  S1 兜底解析加此分支（带边界校验防误判）→ **eh-dropped 53→0**。
+  此前 53 个方法的 try 块悬空 = dnlib GetMaxStack 炸点（bodytest 意外暴露）= Windows BadImageFormat 源。
+- **雷 3（修复 14）壳循环 GetTypes 全集**：mod.Types 只含顶层，嵌套类型全部被误判"被删"建壳，
+  且 s_tdByFull[FullName]=shell 无条件覆盖真类型映射 → 同一类型双身份（box→壳 class，locals→真 struct）
+  → mono/CLR 验证不匹配拒载。修后 **shells 673→2**（真被删的只有 2 个），mono 的
+  DefineEfficientProfiler InvalidProgram 立即消失。
+- **雷 4（诊断认知）mono 内联 bug**：4 指令小函数（ldsflda+ldarg.0+call
+  GetRuntimeTypeHandleFromMetadataToken+ret）被 mono 内联后 intrinsic 上下文坏 →
+  ArgumentNullException: Invalid handle。NoInlining 标记后消失。**Windows CLR 无此问题，不需改产物**。
+- **mono 环境极限**：cctor 链推进到 GenerateConfigurableSpec 的 kernel32 P/Invoke（Windows-only），
+  Linux/mono 无法再深。到此 **mono 已验证：5581 类型全载、DefineEfficientProfiler JIT 通过、
+  cctor 运行至 Windows-only API** —— 元数据/IL 层面产物健康。
+- run 40371984806 = 全修复后的 Windows 实测。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员
