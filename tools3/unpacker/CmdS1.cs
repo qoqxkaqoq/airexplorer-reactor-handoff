@@ -219,12 +219,14 @@ public static class CmdS1
             }
 
             var bodyFlags = (ushort)(3 | (ehData != null ? 8 : 0) | (initLocals ? 0x10 : 0));
+            // 回滚快照: 注入失败则完全还原 NRS 原状(坏签名会拖死整个 dummy_ptr 类型, 连累 cctor 链)
+            MethodSig rollbackSig = md.MethodSig;
+            MethodAttributes rollbackAttrs = md.Attributes;
+            var rollbackParams = md.ParamDefs.ToList();
             try
             {
-                // 签名/flags 恢复: 只针对 NRS dummy 化的方法(签名必被改坏)。
-                // 非 dummy 方法签名是原版好的, 一律不碰(Importer 边角会弄坏复杂签名)。
-                // Attributes 则全量恢复(否则 NRS 的 abstract 位残留 + 注入体 ->
-                // TypeLoadException: Abstract method with non-zero RVA)。
+                // 签名恢复: 只针对 NRS dummy 化的方法(签名必被改坏)。
+                // 非 dummy 方法签名是原版好的, 一律不碰。
                 if (baseSigs != null && baseSigs.TryGetValue(tok, out var bsigT))
                 {
                     var bsig = bsigT.sig;
@@ -238,7 +240,7 @@ public static class CmdS1
                         if (!sigSame)
                         {
                             // 手工克隆: 保留调用约定与 token (基线/Slayed token 空间一致),
-                            // 每个 TypeDefOrRef 节点按 token 解析回本模块。
+                            // 每个 TypeDefOrRef 节点按 FullName 映射回本模块。
                             // Importer.Import 的两个坑: (1)跨模块 TypeDef 转成自引用 TypeRef
                             // (2)丢调用约定位 —— 都会产出坏签名/坏引用。
                             var ns = CloneSigInto(bsig);
@@ -300,8 +302,12 @@ public static class CmdS1
             }
             catch (Exception ex)
             {
+                // 完全回滚到 NRS 原状
+                md.Signature = rollbackSig;
+                md.Attributes = rollbackAttrs;
+                md.ParamDefs.Clear();
+                foreach (var pd in rollbackParams) md.ParamDefs.Add(pd);
                 fail++;
-                tokenMiss++;
                 failed.Add(tok);
                 var key = ex.Message.Length > 80 ? ex.Message.Substring(0, 80) : ex.Message;
                 failReasons[key] = failReasons.GetValueOrDefault(key) + 1;
