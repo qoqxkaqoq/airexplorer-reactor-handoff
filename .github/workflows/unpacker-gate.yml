@@ -40,18 +40,19 @@ jobs:
           dotnet build -c Release AirExplorerUnpacker.csproj
 
       - name: Run pipeline (S1)
+        env:
+          ONLY_TOKENS: ${{ github.event.inputs.only_tokens }}
         run: |
           cd tools3/unpacker
-          $only = "${{ github.event.inputs.only_tokens }}"
-          $extra = @()
-          if (-not [string]::IsNullOrWhiteSpace($only)) { $extra = @("--only", "../../$only") }
+          EXTRA=()
+          if [ -n "$ONLY_TOKENS" ]; then EXTRA=(--only "../../$ONLY_TOKENS"); fi
           dotnet bin/Release/net8.0/AirExplorerUnpacker.dll s1 \
             ../../work_a1_pack/nrs/AirExplorer_test_Slayed.exe \
             ../../work_a1_pack/memdump/module_text.bin \
             ../../work/c2_pack/bodies_manifest.tsv \
             ../../work/dump_official_16598.zip \
             out/m1_s1_full.exe \
-            --baseline ../../exes/AirExplorer_baseline_verified.exe @extra
+            --baseline ../../exes/AirExplorer_baseline_verified.exe "${EXTRA[@]}"
           ls -la out/
           cat out/s1_report.txt
 
