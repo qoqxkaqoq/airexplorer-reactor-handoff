@@ -2688,3 +2688,11 @@ guard7（解密循环现场快照：数组/槽位/寄存器）、guard9（key �
 - **资源解密 4/6**：Viewer（条目表）/ Project（零 key）/ mainlib（卫星包）/ Factory（字符串池）；Proc/Emitter 无 key 可解（见 §5 k 线：资源本身为明文表/AES 载体，非 keyed 密文）。
 - **IL 还原 22165/30886**（=71.76% 全方法；有体方法 22165/22930=96.66%；另 765 部分还原；**0 不可还原**）——来源 = 官方 JIT dump 16598 + exe 明文槽 5567（work/c2_pack/c2_coverage.json）。
 - 产物：`bodies/`×22165 + 765 partial、`vault_entries/`×5106、`dis/`×23 重点方法反汇编、`bodies_manifest.tsv` / `vault_index.tsv` / `IL_REPORT.md`；含便携化 GFP（Environment.GetFolderPath）9 调用点全实证表。业主完整交付报告：**work/A2C_final_report.md**。
+
+## XXVI · 自研脱壳机立项（2026-10-26）
+
+- **决策**：参考 GitHub 生态（NETReactorSlayer 架构蓝本 / de4dot 框架思想）自研 AirExplorer 定制款脱壳机。计划书：`docs/UNPACKER_PLAN.md`。
+- **依据**：NRS v6.4 实测（本节前）——标准层（反篡改/反调试/静态字符串/cflow）可剥，Necrobit 体解密与资源解密空引用崩（定制方案不兼容）→ 通用工具到此为止；我方资产（22,165 真体 + AOT 算法 + 4/6 key + 池/表解码 + Slayed 干净骨架）恰好补齐其缺口。
+- **五段流水线**：S1 体注入 → S2 字符串池回接(199K) → S3 委托表重接(3266) → S4 资源重嵌 → S5 dnlib 写出(PreserveAll|KeepOldMaxStack)；每段探针验收 + 对分回填收敛。
+- **里程碑 M0-M5**（各带 Kill 条件）：M0 骨架就绪=本节；M1 体注入试金石=下一步（1 会话内出死法分类信号）。
+- **纪律**：与 A 线同源约束（基线只读/禁注入交付/隔离验收/落盘记账）；只参考 NRS 架构思想不拷码（GPLv3 规避）。
