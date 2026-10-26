@@ -7,3 +7,7 @@ obj/
 core.*
 # OCR 中间产物
 ui-shots/big*.png
+
+# 隔离验收环境的运行时产物
+airexplorer-reactor-handoff/ci/probe_env/
+airexplorer-reactor-handoff/ci/soak_env/
