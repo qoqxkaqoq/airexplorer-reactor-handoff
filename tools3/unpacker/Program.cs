@@ -33,6 +33,7 @@ public static class Program
                 case "scansem": return CmdScanSemantics.Run(args);
                 case "bodyhex": return CmdBodyHex.Run(args);
                 case "scanmi": return CmdScanMethodImpl.Run(args);
+                case "checkgp": return CmdCheckGP.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;

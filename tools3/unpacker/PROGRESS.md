@@ -75,6 +75,27 @@ type shells added=673（NRS 删除的类型补壳）
 - 工具已就绪：`scanmi`（MethodImpl 表级扫描，dnlib 4.4 表 API 待适配）、`dumptype`、`scansem`、
   CI 诊断步骤（反射 GetTypes + ResolveMethod 逐成员）常驻每轮门禁。
 
+## M1 续（mono 本地调试回路 + 两个关键修复, 2026-10-26 晚）
+
+- **mono 本地调试回路建立**：`mono --verify-all` 拒载（元数据严格校验），但 `mono 直接运行` 能加载到 cctor；
+  配合 `/tmp/mhost/host*.exe` 宿主（ResolveMethod 定点 + RunClassConstructor + 异常链展开）实现**秒级 Linux 本地定位**，
+  替代 3 分钟/轮的 CI 迭代。注意：mono 的一致性检查比桌面 CLR 严（stloc 类型不匹配它必拦，官方票据 IL 依赖
+  full-trust 验证豁免），mono 的 "Invalid IL code" ≠ Windows 死因——但它抓的**签名级错误是真 bug**。
+- **修复 9（mono 点名）：签名克隆丢 CorLibTypeSig** —— System.Void 被当普通 TypeDefOrRefSig 重建 →
+  写出 ELEMENT_TYPE_VALUETYPE + Void token（应为 ELEMENT_TYPE_VOID）。mono 直接报
+  "Could not load signature of dummy_ptr::m004192"。修法：CloneTypeInto 对 CorLibTypeSig 按 ElementType
+  映射回 s_mod.CorLibTypes（Void/Boolean/.../IntPtr/UIntPtr 全表）。修复后 mono 签名错误消失。
+- **修复 10（RemapResolver）：mt IL 的 TypeDef/TypeRef/MemberRef token 是基线空间**，NRS 删 673 类型后
+  Slayed 的 rid 错位（如 castclass 0x02000628 在 Slayed 解析到错位类型、box 0x01000066/0x02000629、
+  callvirt 0x0A000025 错位 MemberRef）。修法：IInstructionOperandResolver 包装（RemapResolver），
+  对 0x01/0x02 表按基线解析→FullName→Slayed 对象映射（TypeDef 含壳、TypeRef 按全名），0x0A 表按
+  "类::名(签名)" key 映射 Slayed MemberRef。
+- **GenericParam 排除**：177 个 dummy 方法的 GP 行与基线全一致（checkgp 0 mismatch）。
+- **当前 Windows 状态**（run 40346499628，Void 修复+重映射后首次全量实测）：VERDICT 仍
+  FAIL-EXITED，dummy_ptr 仍拒载（GetTypes 5580/5581）。**下一步 = dummy_ptr 成员对分**：
+  把 177 个恢复方法用 --exclude 分半回滚，log2(177)≈8 轮 CI 定位坏成员；
+  或接入 Windows shell 用 peverify 一次列全（见汇报）。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员
