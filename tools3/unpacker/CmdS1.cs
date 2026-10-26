@@ -268,6 +268,8 @@ public static class CmdS1
                                     BitConverter.ToUInt32(mt, b + 16),
                                     BitConverter.ToUInt32(mt, b + 20)));
                             }
+                            // CLI 规范: EH 子句必须按 tryStart 升序(嵌套内层在外层后), 乱序=JIT拒(InvalidProgram)
+                            cls2.Sort((x, y) => x.TryOff != y.TryOff ? x.TryOff.CompareTo(y.TryOff) : y.TryLen.CompareTo(x.TryLen));
                             ehData = BuildFatEh(cls2);
                         }
                         else if (fl0 == 0x01 && dsize >= 4 && dsize <= 0x10000 && sect + dsize <= mt.Length && (dsize - 4) % 12 == 0 && dsize > 4)
@@ -292,7 +294,12 @@ public static class CmdS1
                                     cls2.Add(new EhClause(cf, tryOff, tryLen, hOff, hLen, clsTok));
                                 }
                             }
-                            if (ok2 && cls2.Count > 0) ehData = BuildFatEh(cls2);
+                            if (ok2 && cls2.Count > 0)
+                            {
+                                // 同上: tryStart 升序
+                                cls2.Sort((x, y) => x.TryOff != y.TryOff ? x.TryOff.CompareTo(y.TryOff) : y.TryLen.CompareTo(x.TryLen));
+                                ehData = BuildFatEh(cls2);
+                            }
                         }
                     }
                     if (ehData == null)
@@ -604,6 +611,8 @@ public static class CmdS1
             uint cliFlags = f == 3 ? 4u : (f <= 2 ? f : 0u);
             clauses.Add(new EhClause(cliFlags, tryOff, tryLen, hOff, hLen, cls));
         }
+        // CLI 规范: 子句按 tryStart 升序(嵌套内层在后); CORINFO dump 顺序是运行时内部序, 直接透传=乱序=JIT拒
+        clauses.Sort((x, y) => x.TryOff != y.TryOff ? x.TryOff.CompareTo(y.TryOff) : y.TryLen.CompareTo(x.TryLen));
         return BuildFatEh(clauses);
     }
 
