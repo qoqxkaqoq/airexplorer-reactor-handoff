@@ -92,12 +92,16 @@ public static class CmdS1
             {
                 if (modTypeNames.Contains(bt.FullName)) continue;
                 if (bt.FullName.Contains("dummy")) continue;
-                ITypeDefOrRef baseType = null;
-                try { baseType = bt.BaseType == null ? null : MapTdorStatic(bt.BaseType); } catch { }
                 // 壳名必须唯一: 基线嵌套类型(如 X.<>c)的 Name 不含外层, 直接用会互相撞名
                 // (BadImageFormatException: Duplicate type '<>c')。用 FullName 展平 + 专用 ns。
+                // 壳一律继承 System.Object 的普通密封类: 原基类可能是 enum(须有实例字段)/
+                // Delegate(须 sealed)/抽象类(须实现抽象成员), 照抄会 TypeLoad
+                // (No Instance Field in an Enum / delegate classes must be sealed)。
+                // 签名引用只要求类型存在, 继承链不影响方法签名解析。
                 var shell = new TypeDefUser("__ReactorRemoved",
-                    bt.FullName.Replace('.', '_').Replace('/', '_'), baseType);
+                    bt.FullName.Replace('.', '_').Replace('/', '_'), mod.CorLibTypes.Object.TypeDefOrRef);
+                shell.Attributes = TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
+                    | TypeAttributes.BeforeFieldInit;
                 mod.Types.Add(shell);
                 s_tdByFull[bt.FullName] = shell;
                 shellAdded++;
