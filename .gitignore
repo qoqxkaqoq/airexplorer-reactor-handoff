@@ -11,3 +11,10 @@ ui-shots/big*.png
 # 隔离验收环境的运行时产物
 airexplorer-reactor-handoff/ci/probe_env/
 airexplorer-reactor-handoff/ci/soak_env/
+
+# 隔离验收运行时产物与exe变体不入库(白名单除外)
+ci/probe_env/
+ci/soak_env/
+exes/*
+!exes/AirExplorer_baseline_verified.exe
+!exes/A2_dist.zip
