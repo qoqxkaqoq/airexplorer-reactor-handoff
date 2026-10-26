@@ -201,6 +201,19 @@ type shells added=673（NRS 删除的类型补壳）
   另可对 06004192 的 0x1B TypeSpec/0x0A MemberRef 做「解析身份」级对比（fulldiff 只比 token 值，
   不比 token 指向的内容——TypeSpec 的泛型实例化内容是剩余盲区）。
 
+## M1 双变体实验（run 40392959428/40392954476）：EH 整体排除
+
+- **catexc**（06004192 的全部 catch CatchType→System.Exception）：死点不变。
+- **noeh**（06004192 去 EH + leave→br）：死点不变。
+- **结论：06004192 的 InvalidProgram 与 EH 无关**（类型与结构双重排除）。
+- bodytest_tok 已支持 `token:mode` 格式（bodytest 空体 / bodyvariant catexc|noeh|half1|half2）。
+- **剩余嫌疑（按序）**：
+  1. **0x1B TypeSpec 解析身份**（fulldiff 只比 token 值，TypeSpec 的泛型实例化内容是盲区；
+     ILVerify 的 "expected ICryptoTransform/Stream" 系列指向泛型调用链）
+  2. **#US/字符串运行时取回调用的参数错位**（NRS 字符串加密函数群，S2 范围）
+  3. **元数据表级**（- TKCA/ManifestResource/ExportedType 等）
+  4. **cctor 链上游（0600419C 的调用闭包）的同类问题**
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员
