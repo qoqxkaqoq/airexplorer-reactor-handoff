@@ -14,9 +14,10 @@ public static class CmdDumpType
         foreach (var t in mod.GetTypes())
         {
             if (!t.FullName.Contains(pat)) continue;
-            Console.WriteLine("TYPE {0} base={1} attrs={2} ifaces={3} methods={4} fields={5} ca={6}",
+            Console.WriteLine("TYPE {0} base={1} attrs={2} ifaces={3} methods={4} fields={5} ca={6} layout={7} classLayout={8}",
                 t.FullName, t.BaseType?.FullName ?? "null", t.Attributes,
-                t.Interfaces.Count, t.Methods.Count, t.Fields.Count, t.CustomAttributes.Count);
+                t.Interfaces.Count, t.Methods.Count, t.Fields.Count, t.CustomAttributes.Count,
+                t.Layout, t.ClassLayout != null ? string.Format("pack={0} size={1}", t.ClassLayout.PackingSize, t.ClassLayout.ClassSize) : "none");
             foreach (var ca in t.CustomAttributes.Take(5))
                 Console.WriteLine("  typeCA: {0} blob={1}B", ca.TypeFullName, ca.ConstructorArguments.Count + ca.NamedArguments.Count);
             foreach (var f in t.Fields.Take(10))
