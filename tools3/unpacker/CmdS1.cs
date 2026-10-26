@@ -94,7 +94,10 @@ public static class CmdS1
                 if (bt.FullName.Contains("dummy")) continue;
                 ITypeDefOrRef baseType = null;
                 try { baseType = bt.BaseType == null ? null : MapTdorStatic(bt.BaseType); } catch { }
-                var shell = new TypeDefUser(bt.Namespace, bt.Name, baseType);
+                // 壳名必须唯一: 基线嵌套类型(如 X.<>c)的 Name 不含外层, 直接用会互相撞名
+                // (BadImageFormatException: Duplicate type '<>c')。用 FullName 展平 + 专用 ns。
+                var shell = new TypeDefUser("__ReactorRemoved",
+                    bt.FullName.Replace('.', '_').Replace('/', '_'), baseType);
                 mod.Types.Add(shell);
                 s_tdByFull[bt.FullName] = shell;
                 shellAdded++;
