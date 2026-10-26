@@ -390,7 +390,8 @@ public static class CmdS1
             uint hOff = BitConverter.ToUInt32(cor, b + 12);
             uint hLen = BitConverter.ToUInt32(cor, b + 16);
             uint cls = BitConverter.ToUInt32(cor, b + 20);
-            uint cliFlags = f; // 0=catch 1=filter 2=finally 3/4=fault (CORINFO 与 CLI 同值)
+            // CORINFO: 0=catch 1=filter 2=finally 3=fault; CLI: 0/1/2/4(fault) —— fault 3→4
+            uint cliFlags = f == 3 ? 4u : (f <= 2 ? f : 0u);
             int o = 4 + i * 24;
             BitConverter.GetBytes(cliFlags).CopyTo(outp, o);
             BitConverter.GetBytes(tryOff).CopyTo(outp, o + 4);
