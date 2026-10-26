@@ -168,6 +168,23 @@ type shells added=673（NRS 删除的类型补壳）
   调用闭包（用 cctor_closure.txt 扩展）；或 bodytest+CI 二分 06004192 体；或对比 dnlib 写出的
   原始方法体字节（raw hex）与 mt 源。
 
+## M1 写出层验证 + bodytest CI 工具链（2026-10-27 凌晨, run 40388322484/40389150972）
+
+- **写出层字节级验证（06004192）**：PROD 原始方法体与 mt 源完全一致——
+  head `1b 30 07 00...`（flags=0x301B: fat+InitLocals+MoreSects, maxstack=7）、IL 8970B 逐字节相等、
+  EH fat 段 0x41/dsize=100/4 子句一致。（脚本曾把 offset2 的 MaxStack=0x0007 误读为 flags——虚惊。）
+- **调用闭包全 diff**：06004192 的 49 个 call 目标（43 个在 manifest）fulldiff **全部 0 差异**。
+- **结论**：InstantiateGlobalCalculator 及其调用链与基线**逐指令逐字节一致**——
+  Windows JIT 拒的原因不在 IL/方法定义层，剩余嫌疑：
+  (a) cctor 链上其它方法的关联状态（再上游）；
+  (b) dnlib 写出的其它方法（0600419C/06004194/06000001 的写出层）；
+  (c) 元数据表级（Assembly/Module/ManifestResource 等）；
+  (d) 某个"运行时取串调用"的参数错位（NRS 字符串加密的运行时函数群）。
+- **bodytest_tok CI 工具链就绪**：dispatch 带 `bodytest_tok=06004192` 即空体化该方法再探针
+  （注意第一版步骤未拷贝到 cand\ 导致不生效，已修）。
+- run 40388322484（bodytest 未生效版，md5 与全量版相同，结果复现死点=回退排序确认）。
+- run 40389150972（bodytest 06004192 生效版）= 定位死因是否在该方法体的决定性实验。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员
