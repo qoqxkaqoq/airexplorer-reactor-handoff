@@ -82,6 +82,15 @@ jobs:
           name: unpacked-exe
           path: cand
 
+      - name: Bodytest 对分变体（空体化指定方法, CI 对分）
+        if: ${{ github.event.inputs.bodytest_tok != '' }}
+        shell: bash
+        env:
+          BT_TOK: ${{ github.event.inputs.bodytest_tok }}
+        run: |
+          cd tools3/unpacker
+          dotnet bin/Release/net8.0/AirExplorerUnpacker.dll bodytest ../../cand/m1_s1_full.exe ../../cand/m1_s1_full.exe "$BT_TOK"
+
       - name: 准备运行目录 (候选 exe + 官方依赖)
         shell: pwsh
         run: |
