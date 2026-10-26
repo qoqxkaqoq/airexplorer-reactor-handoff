@@ -10,6 +10,10 @@ on:
         description: "流水线阶段 (如 s1 / s1-s4 / full)"
         required: false
         default: "s1"
+      only_tokens:
+        description: "可选: 只注入此文件里的 token(对分定位), 路径相对仓库根"
+        required: false
+        default: ""
   push:
     branches: ["a1work"]
     paths:
@@ -38,13 +42,16 @@ jobs:
       - name: Run pipeline (S1)
         run: |
           cd tools3/unpacker
+          $only = "${{ github.event.inputs.only_tokens }}"
+          $extra = @()
+          if (-not [string]::IsNullOrWhiteSpace($only)) { $extra = @("--only", "../../$only") }
           dotnet bin/Release/net8.0/AirExplorerUnpacker.dll s1 \
             ../../work_a1_pack/nrs/AirExplorer_test_Slayed.exe \
             ../../work_a1_pack/memdump/module_text.bin \
             ../../work/c2_pack/bodies_manifest.tsv \
             ../../work/dump_official_16598.zip \
             out/m1_s1_full.exe \
-            --baseline ../../exes/AirExplorer_baseline_verified.exe
+            --baseline ../../exes/AirExplorer_baseline_verified.exe @extra
           ls -la out/
           cat out/s1_report.txt
 

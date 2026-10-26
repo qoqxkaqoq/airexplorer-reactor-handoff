@@ -29,6 +29,8 @@ public static class Program
                 case "checksig": return CmdCheckSig.Run(args);
                 case "scanil": return CmdScanIl.Run(args);
                 case "tokinfo": return CmdTokInfo.Run(args);
+                case "dumptype": return CmdDumpType.Run(args);
+                case "scansem": return CmdScanSemantics.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;
