@@ -124,9 +124,14 @@ jobs:
               var asm = Assembly.LoadFrom(path);
               try { var ts = asm.GetTypes(); Console.WriteLine("[diag] GetTypes OK: " + ts.Length); }
               catch (ReflectionTypeLoadException ex) {
-                Console.WriteLine("[diag] GetTypes FAIL: " + ex.Types.Count(t => t != null) + "/" + ex.Types.Length);
-                foreach (var le in ex.LoaderExceptions.Take(30))
+                int ok = 0; foreach (var t in ex.Types) if (t != null) ok++;
+                Console.WriteLine("[diag] GetTypes FAIL: " + ok + "/" + ex.Types.Length);
+                int n = 0;
+                foreach (var le in ex.LoaderExceptions) {
+                  if (n >= 30) break;
+                  n++;
                   Console.WriteLine("  LOADER: " + le.GetType().Name + ": " + le.Message + (le.InnerException != null ? " || INNER: " + le.InnerException.Message : ""));
+                }
               }
             }
           }
