@@ -31,6 +31,7 @@ public static class Program
                 case "tokinfo": return CmdTokInfo.Run(args);
                 case "dumptype": return CmdDumpType.Run(args);
                 case "scansem": return CmdScanSemantics.Run(args);
+                case "bodyhex": return CmdBodyHex.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;

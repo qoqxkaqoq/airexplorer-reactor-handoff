@@ -218,16 +218,27 @@ public static class CmdS1
                 }
                 else
                 {
-                    // mt/磁盘兜底: 段头 u32, byte0&0x40 == small-flag(但数据是 fat clause)
+                    // mt/磁盘兜底: 官方 CLR 格式段头 u32=(dsize<<8)|0x41, dsize 含头, clause 为 fat 24B
                     int sect = (off + hsz + codeSize + 3) & ~3;
                     if (sect + 4 <= mt.Length && (mt[sect] & 0x40) != 0)
                     {
                         int dsize = (int)((BitConverter.ToUInt32(mt, sect) >> 8) & 0xFFFFFF);
-                        if (dsize >= 4 && dsize <= 0x10000 && sect + dsize <= mt.Length && (dsize - 4) % 24 == 0)
+                        int ncl = (dsize - 4) / 24;
+                        if (dsize >= 4 && dsize <= 0x10000 && sect + dsize <= mt.Length && (dsize - 4) % 24 == 0 && ncl > 0)
                         {
-                            ehData = new byte[dsize];
-                            Array.Copy(mt, sect, ehData, 0, dsize);
-                            ehData[0] = 0x20; // 强制 fat 段标志
+                            var cls2 = new List<EhClause>(ncl);
+                            for (int ci = 0; ci < ncl; ci++)
+                            {
+                                int b = sect + 4 + ci * 24;
+                                cls2.Add(new EhClause(
+                                    BitConverter.ToUInt32(mt, b),
+                                    BitConverter.ToUInt32(mt, b + 4),
+                                    BitConverter.ToUInt32(mt, b + 8),
+                                    BitConverter.ToUInt32(mt, b + 12),
+                                    BitConverter.ToUInt32(mt, b + 16),
+                                    BitConverter.ToUInt32(mt, b + 20)));
+                            }
+                            ehData = BuildFatEh(cls2);
                         }
                     }
                     if (ehData == null)
@@ -294,6 +305,8 @@ public static class CmdS1
                 var body = MethodBodyReader.CreateCilBody(mod, il, ehData, pbind, bodyFlags,
                     (ushort)maxStack, (uint)codeSize, localsTok, gp);
                 if (body == null) throw new Exception("CreateCilBody null");
+                if (ehData != null && body.ExceptionHandlers.Count == 0)
+                    throw new Exception("ehData " + ehData.Length + "B parsed as 0 clauses");
                 body.MaxStack = (ushort)maxStack;
                 body.KeepOldMaxStack = true;
                 // 兼容性校验: 参数/局部变量绑定必须完整, 否则写出阶段崩
@@ -371,16 +384,36 @@ public static class CmdS1
         return 0;
     }
 
-    /// <summary>CORINFO EH dump (4B count + 28B/条) -> CLI fat EH 段 (4B 头 + 24B/条)。</summary>
+    /// <summary>clause 六元组 (flags, tryOff, tryLen, hOff, hLen, cls)。</summary>
+    record struct EhClause(uint Flags, uint TryOff, uint TryLen, uint HOff, uint HLen, uint Cls);
+
+    /// <summary>构建 dnlib 可解析的 fat EH 段: 段头 byte0=0x41(0x40|kind1), dsize 不含头。</summary>
+    static byte[] BuildFatEh(List<EhClause> clauses)
+    {
+        int dsize = clauses.Count * 24;
+        var outp = new byte[4 + dsize];
+        BitConverter.GetBytes((uint)((dsize << 8) | 0x41)).CopyTo(outp, 0);
+        for (int i = 0; i < clauses.Count; i++)
+        {
+            var c = clauses[i];
+            int o = 4 + i * 24;
+            BitConverter.GetBytes(c.Flags).CopyTo(outp, o);
+            BitConverter.GetBytes(c.TryOff).CopyTo(outp, o + 4);
+            BitConverter.GetBytes(c.TryLen).CopyTo(outp, o + 8);
+            BitConverter.GetBytes(c.HOff).CopyTo(outp, o + 12);
+            BitConverter.GetBytes(c.HLen).CopyTo(outp, o + 16);
+            BitConverter.GetBytes(c.Cls).CopyTo(outp, o + 20);
+        }
+        return outp;
+    }
+
+    /// <summary>CORINFO EH dump (4B count + 28B/条) -> dnlib fat EH 段。</summary>
     static byte[] CorInfoToCliEh(byte[] cor)
     {
         if (cor.Length < 4) return null;
         int cnt = BitConverter.ToInt32(cor, 0);
         if (cnt <= 0 || cor.Length < 4 + cnt * 28) return null;
-        int dsize = 4 + cnt * 24;
-        var outp = new byte[dsize];
-        // 段头: u32 = (dsize << 8) | 0x20 (fat EH 段)
-        BitConverter.GetBytes((uint)((dsize << 8) | 0x20)).CopyTo(outp, 0);
+        var clauses = new List<EhClause>(cnt);
         for (int i = 0; i < cnt; i++)
         {
             int b = 4 + i * 28;
@@ -392,15 +425,9 @@ public static class CmdS1
             uint cls = BitConverter.ToUInt32(cor, b + 20);
             // CORINFO: 0=catch 1=filter 2=finally 3=fault; CLI: 0/1/2/4(fault) —— fault 3→4
             uint cliFlags = f == 3 ? 4u : (f <= 2 ? f : 0u);
-            int o = 4 + i * 24;
-            BitConverter.GetBytes(cliFlags).CopyTo(outp, o);
-            BitConverter.GetBytes(tryOff).CopyTo(outp, o + 4);
-            BitConverter.GetBytes(tryLen).CopyTo(outp, o + 8);
-            BitConverter.GetBytes(hOff).CopyTo(outp, o + 12);
-            BitConverter.GetBytes(hLen).CopyTo(outp, o + 16);
-            BitConverter.GetBytes(cls).CopyTo(outp, o + 20);
+            clauses.Add(new EhClause(cliFlags, tryOff, tryLen, hOff, hLen, cls));
         }
-        return outp;
+        return BuildFatEh(clauses);
     }
 
     /// <summary>把基线模块的签名克隆进当前模块: TypeDefOrRef 按 token 解析, 保留调用约定。</summary>
