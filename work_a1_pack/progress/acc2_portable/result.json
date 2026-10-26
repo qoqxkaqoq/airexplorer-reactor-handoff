@@ -1,0 +1,23 @@
+{
+    "scratch":  "C:\\Users\\xaxka\\.zcode\\workspace\\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\\work_a1\\accept_scratch",
+    "cmdPid":  15628,
+    "waitedSec":  70,
+    "airExplorerPid":  15016,
+    "windowSeen":  true,
+    "windowTitle":  "Air Explorer v5.11.0",
+    "firstWindowSec":  5,
+    "dataFilesBefore":  0,
+    "dataFilesAfter":  16,
+    "sampleDataFiles":  [
+                            "data\\profile\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_1280.db\t0\t06:57:52",
+                            "data\\profile\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_16.db\t1048576\t06:57:52",
+                            "data\\profile\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_1920.db\t0\t06:57:52",
+                            "data\\profile\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_256.db\t1048576\t06:57:52",
+                            "data\\profile\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_2560.db\t0\t06:57:52",
+                            "data\\profile\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_32.db\t1048576\t06:57:52",
+                            "data\\profile\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_48.db\t1048576\t06:57:52",
+                            "data\\profile\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_768.db\t0\t06:57:52"
+                        ],
+    "leftoverScratchProcesses":  0,
+    "totalAirExplorerLeft":  0
+}

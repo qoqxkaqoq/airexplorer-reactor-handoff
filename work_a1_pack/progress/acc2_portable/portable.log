@@ -1,0 +1,15 @@
+06:57:49.696 scratch = C:\Users\xaxka\.zcode\workspace\draft-7d4f519b-6da7-4fdf-befe-8fe2605c4eff\work_a1\accept_scratch
+06:57:49.708 data files before launch = 0
+06:57:49.812 CMD_PID = 15628
+06:57:52.342 AirExplorer pid = 15016 pathMatched=True
+06:57:55.006 WINDOW at 5s handle=6816882 title=[Air Explorer v5.11.0] responding=True
+06:59:00.300 wait done at 70s
+06:59:00.304 data files after run = 16
+06:59:00.363 Accounts.xml size=104 content=<?xml version="1.0"?>
+<CloudAccounts version="1.0">
+  <accounts />
+  <categories />
+</CloudAccounts>
+06:59:00.540 taskkill cmd tree: ??: ??? PID 17004 (?? PID 15628 ???)???? | ??: ??? PID 15016 (?? PID 15628 ???)???? | ??: ??? PID 15628 (?? PID 1320 ???)????
+06:59:02.553 leftover AirExplorer from scratch = 0 ; total AirExplorer on box = 0
+06:59:02.557 cmd alive = False
