@@ -138,6 +138,19 @@ type shells added=673（NRS 删除的类型补壳）
   cctor 运行至 Windows-only API** —— 元数据/IL 层面产物健康。
 - run 40371984806 = 全修复后的 Windows 实测。
 
+## M1 雷五（修复 15, run 40374303199）：CORINFO EH 子句乱序
+
+- Windows 死法推进到 `InstantiateGlobalCalculator (06004192)` 的
+  `InvalidProgramException: CLR detected an invalid program`（mono 被 kernel32 P/Invoke 挡住没验到此方法）。
+- 排除 ldstr 越界（规范边界扫描 27 个 token 全在 #US 范围内；此前的"越界"是粗扫把操作数字节误当指令）。
+- **真凶**：**CORINFO EH dump 的子句顺序是 CLR 运行时内部序，直接透传给 CLI 元数据后违反
+  ECMA-335 的子句排序规则（必须按 tryStart 升序、嵌套内层排在外层之后）→ JIT 直接拒整个方法**。
+  全量统计：**792 个多子句方法中 626 个乱序**（如 06004192 的 tryStart 序 0xA9B,0xBE0,0xFB,0xB51）。
+- **修复 15**：三处 EH 构建路径（zip CORINFO 源 / mt fat 兜底 / mt 紧凑兜底）统一按
+  `(tryOff asc, tryLen desc)` 排序。
+- 附注：mt IL 里仅 27 个 ldstr（官方字符串大部分在 FactoryValidator 加密池，由运行时函数按 token 取回
+  —— 即 S2 的回接对象，与 #US 无关）。
+
 ## 下一步（按优先级）
 
 1. **成员级定位**：CI 已加 `Module.ResolveMethod` 逐成员诊断（workflow 诊断步骤），下一轮门禁读 MFAIL 输出，精确定位 dummy_ptr 里加载失败的成员
