@@ -34,6 +34,13 @@ public static class Program
                 case "bodyhex": return CmdBodyHex.Run(args);
                 case "scanmi": return CmdScanMethodImpl.Run(args);
                 case "checkgp": return CmdCheckGP.Run(args);
+                case "dummyaudit": return CmdDummyAudit.Run(args);
+                case "tokalign": return CmdTokAlign.Run(args);
+                case "scanloc": return CmdScanLoc.Run(args);
+                case "scaneh": return CmdScanEh.Run(args);
+                case "scanfrva": return CmdScanFrva.Run(args);
+                case "frvadetail": return CmdFrvaDetail.Run(args);
+                case "fixdummy": return CmdFixDummy.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;

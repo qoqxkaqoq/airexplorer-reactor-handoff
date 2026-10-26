@@ -394,6 +394,51 @@ public static class CmdS1
 
         if (noWrite) { Console.WriteLine("[s1] --no-write, not writing"); return ok > 0 ? 0 : 1; }
 
+        // ── dummy 后处理 ──
+        // NRS dummy 化的部分方法不在 manifest(无真体可注入), 保持 abstract+无体。
+        // 桌面 CLR 对这种残留(特别是 static/abstract 混搭后的 vtable 布局)比 mono 严,
+        // 会拒载整个类型(dummy_ptr.{GUID})并连累 cctor 调用链 → 统一补 stub 体。
+        int stubbed = 0;
+        foreach (var t in mod.GetTypes())
+        {
+            if (!t.FullName.Contains("dummy")) continue;
+            foreach (var m in t.Methods)
+            {
+                bool mAbs = (m.Attributes & MethodAttributes.Abstract) != 0;
+                if (!mAbs && m.HasBody) continue;
+                m.Attributes &= ~MethodAttributes.Abstract;
+                if (!m.HasBody)
+                {
+                    var body = new CilBody();
+                    var ret = m.MethodSig?.RetType;
+                    if (ret != null && ret.FullName != "System.Void")
+                    {
+                        switch (ret.ElementType)
+                        {
+                            case ElementType.Boolean:
+                            case ElementType.Char:
+                            case ElementType.I1: case ElementType.U1:
+                            case ElementType.I2: case ElementType.U2:
+                            case ElementType.I4: case ElementType.U4:
+                            case ElementType.I8: case ElementType.U8:
+                            case ElementType.R4: case ElementType.R8:
+                            case ElementType.I: case ElementType.U:
+                                body.Instructions.Add(Instruction.CreateLdcI4(0));
+                                break;
+                            default:
+                                body.Instructions.Add(Instruction.Create(OpCodes.Ldnull));
+                                break;
+                        }
+                    }
+                    body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+                    m.Body = body;
+                    m.Body.MaxStack = 8;
+                }
+                stubbed++;
+            }
+        }
+        Console.WriteLine("[s1] dummy stubbed: {0}", stubbed);
+
         var opts = new ModuleWriterOptions(mod);
         opts.MetadataOptions.Flags |= MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack;
         mod.Write(outPath, opts);
