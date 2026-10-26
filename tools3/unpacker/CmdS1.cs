@@ -22,6 +22,9 @@ namespace AirExplorerUnpacker;
 public static class CmdS1
 {
     const int MT_SHIFT = 0x2000;
+    static ModuleDefMD s_mod;
+    static Dictionary<string, TypeDef> s_tdByFull;
+    static Dictionary<string, TypeRef> s_trByFull;
 
     public static int Run(string[] args)
     {
@@ -56,6 +59,7 @@ public static class CmdS1
 
         var mt = File.ReadAllBytes(mtPath);
         var mod = (ModuleDefMD)ModuleDefMD.Load(exePath);
+        s_mod = mod;
         Console.WriteLine("[s1] module loaded: " + mod.Name);
 
         // 基线 exe (只读): NRS rem-junks 会把"未引用"方法 dummy 化(签名改 void() 非 static + 无体)
@@ -72,7 +76,14 @@ public static class CmdS1
                     if (m.MethodSig != null)
                         baseSigs[m.MDToken.Raw.ToString("X8")] = (m.MethodSig, m.Attributes);
             sigImporter = new Importer(mod);
-            Console.WriteLine("[s1] baseline signatures loaded: {0}", baseSigs.Count);
+            // NRS rem-junks 也会删类型行 -> TypeDef rid 可能错位, 按 FullName 建映射
+            s_tdByFull = new Dictionary<string, TypeDef>();
+            foreach (var t in mod.GetTypes())
+                if (!s_tdByFull.ContainsKey(t.FullName)) s_tdByFull[t.FullName] = t;
+            s_trByFull = new Dictionary<string, TypeRef>();
+            foreach (var tr in mod.GetTypeRefs())
+                if (!s_trByFull.ContainsKey(tr.FullName)) s_trByFull[tr.FullName] = tr;
+            Console.WriteLine("[s1] baseline signatures loaded: {0}, type map: {1}", baseSigs.Count, s_tdByFull.Count);
         }
 
         // token -> MethodDef (dummy 类型方法不再跳过: 签名将由基线恢复)
@@ -226,12 +237,11 @@ public static class CmdS1
                                        && cur.GenParamCount == bsig.GenParamCount;
                         if (!sigSame)
                         {
-                            // 先 Import 换类型引用到本模块(Clone 会携带跨模块 TypeDef 导致写出失败),
-                            // 再手工修回调用约定(Import 会丢 HasThis/ExplicitThis/GenParamCount, 实测)
-                            var ns = sigImporter!.Value.Import(bsig);
-                            ns.HasThis = bsig.HasThis;
-                            ns.ExplicitThis = bsig.ExplicitThis;
-                            ns.GenParamCount = bsig.GenParamCount;
+                            // 手工克隆: 保留调用约定与 token (基线/Slayed token 空间一致),
+                            // 每个 TypeDefOrRef 节点按 token 解析回本模块。
+                            // Importer.Import 的两个坑: (1)跨模块 TypeDef 转成自引用 TypeRef
+                            // (2)丢调用约定位 —— 都会产出坏签名/坏引用。
+                            var ns = CloneSigInto(bsig);
                             md.Signature = ns;
                             sigFixedTotal++;
                         }
@@ -239,7 +249,27 @@ public static class CmdS1
                 }
 
                 var gp = new GenericParamContext();
-                var body = MethodBodyReader.CreateCilBody(mod, il, ehData, md.Parameters, bodyFlags,
+                // 不用 md.Parameters: dnlib 的 Parameters 列表是懒缓存, 签名恢复前若已被物化
+                // 就不会反映新签名。手工按恢复后的签名构建参数绑定列表 (index0 = this 若实例方法)。
+                var curSig = md.MethodSig;
+                IList<Parameter> pbind;
+                if (curSig != null && curSig.HasThis)
+                {
+                    var pl = new List<Parameter>(curSig.Params.Count + 1) { new Parameter(0, Parameter.HIDDEN_THIS_METHOD_SIG_INDEX) };
+                    for (int pi = 0; pi < curSig.Params.Count; pi++)
+                        pl.Add(new Parameter(pi + 1, pi + 1));
+                    pbind = pl;
+                }
+                else if (curSig != null)
+                {
+                    var pl = new List<Parameter>(curSig.Params.Count);
+                    for (int pi = 0; pi < curSig.Params.Count; pi++)
+                        pl.Add(new Parameter(pi, pi + 1));
+                    pbind = pl;
+                }
+                else
+                    pbind = md.Parameters;
+                var body = MethodBodyReader.CreateCilBody(mod, il, ehData, pbind, bodyFlags,
                     (ushort)maxStack, (uint)codeSize, localsTok, gp);
                 if (body == null) throw new Exception("CreateCilBody null");
                 body.MaxStack = (ushort)maxStack;
@@ -345,6 +375,93 @@ public static class CmdS1
         }
         return outp;
     }
+
+    /// <summary>把基线模块的签名克隆进当前模块: TypeDefOrRef 按 token 解析, 保留调用约定。</summary>
+    static MethodSig CloneSigInto(MethodSig src)
+    {
+        var ret = CloneTypeInto(src.RetType);
+        var ms = new MethodSig(src.CallingConvention, src.GenParamCount, ret);
+        ms.Params.Clear();
+        foreach (var p in src.Params) ms.Params.Add(CloneTypeInto(p));
+        if (src.ParamsAfterSentinel != null && src.ParamsAfterSentinel.Count > 0)
+        {
+            var pas = new List<TypeSig>();
+            foreach (var p in src.ParamsAfterSentinel) pas.Add(CloneTypeInto(p));
+            ms.ParamsAfterSentinel = pas;
+        }
+        return ms;
+    }
+
+    /// <summary>按 FullName 把基线类型映射到本模块; TypeSpec 递归重建。</summary>
+    static ITypeDefOrRef MapTdor(ITypeDefOrRef src)
+    {
+        if (src == null) return null;
+        var td = src as TypeDef;
+        if (td != null)
+        {
+            if (s_tdByFull.TryGetValue(td.FullName, out var hit)) return hit;
+            throw new Exception("sig clone: typedef not in map: " + td.FullName);
+        }
+        var tr = src as TypeRef;
+        if (tr != null)
+        {
+            // token 解析后必须全名一致(NRS 删行导致 rid 错位, 盲 resolve 会拿到错误类型)
+            var resolved = s_mod.ResolveToken(src.MDToken.Raw) as TypeRef;
+            if (resolved != null && resolved.FullName == tr.FullName) return resolved;
+            if (s_trByFull.TryGetValue(tr.FullName, out var hitR)) return hitR;
+            if (s_tdByFull.TryGetValue(tr.FullName, out var hit2)) return hit2;
+            // corlib fallback
+            if (tr.ResolutionScope is AssemblyRef ar && ar.Name == s_mod.CorLibTypes.AssemblyRef.Name)
+                return new TypeRefUser(s_mod, tr.Namespace, tr.Name, s_mod.CorLibTypes.AssemblyRef);
+            throw new Exception("sig clone: typeref not mapped: " + tr.FullName);
+        }
+        var ts = src as TypeSpec;
+        if (ts != null)
+        {
+            // 递归重建签名内容, 生成新 TypeSpec
+            var inner = ts.TypeSig;
+            if (inner != null) return new TypeSpecUser(CloneTypeInto(inner));
+            var resolved2 = s_mod.ResolveToken(src.MDToken.Raw) as TypeSpec;
+            if (resolved2 != null) return resolved2;
+            throw new Exception("sig clone: typespec unmapped: " + src.MDToken.Raw.ToString("X8"));
+        }
+        throw new Exception("sig clone: unknown tdor " + src.GetType().Name);
+    }
+
+    static TypeSig CloneTypeInto(TypeSig t)
+    {
+        if (t == null) return null;
+        switch (t)
+        {
+            case TypeDefOrRefSig r:
+            {
+                var mapped = MapTdor(r.TypeDefOrRef);
+                return r.IsValueType ? (TypeSig)new ValueTypeSig(mapped) : new ClassSig(mapped);
+            }
+            case SZArraySig a: return new SZArraySig(CloneTypeInto(a.Next));
+            case GenericInstSig g:
+            {
+                var gen = CloneTypeInto(g.GenericType) as ClassOrValueTypeSig
+                    ?? throw new Exception("sig clone: bad generic base");
+                var list = new List<TypeSig>();
+                foreach (var x in g.GenericArguments) list.Add(CloneTypeInto(x));
+                return new GenericInstSig(gen, list);
+            }
+            case ByRefSig b: return new ByRefSig(CloneTypeInto(b.Next));
+            case PtrSig p: return new PtrSig(CloneTypeInto(p.Next));
+            case GenericVar gv: return new GenericVar(gv.Number);
+            case GenericMVar mv: return new GenericMVar(mv.Number);
+            case CModReqdSig cm:
+                return new CModReqdSig(ResolveTdor(cm.Modifier), CloneTypeInto(cm.Next));
+            case CModOptSig co:
+                return new CModOptSig(ResolveTdor(co.Modifier), CloneTypeInto(co.Next));
+            case PinnedSig ps: return new PinnedSig(CloneTypeInto(ps.Next));
+            default:
+                throw new Exception("sig clone: unsupported node " + t.GetType().Name);
+        }
+    }
+
+    static ITypeDefOrRef ResolveTdor(ITypeDefOrRef t) => MapTdor(t);
 
     static void ReadFull(Stream s, byte[] buf)
     {
