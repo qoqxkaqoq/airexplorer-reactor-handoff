@@ -298,7 +298,8 @@ public static class CmdS1
         opts.MetadataOptions.Flags |= MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack;
         mod.Write(outPath, opts);
         Console.WriteLine("[s1] written: " + outPath);
-        return fail == 0 ? 0 : 1;
+        // fail>0 = 安全降级(保持 NRS 原状), 不是硬失败; 硬门禁在 probe
+        return 0;
     }
 
     /// <summary>CORINFO EH dump (4B count + 28B/条) -> CLI fat EH 段 (4B 头 + 24B/条)。</summary>
