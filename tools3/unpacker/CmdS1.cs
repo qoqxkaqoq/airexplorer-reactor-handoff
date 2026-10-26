@@ -125,7 +125,7 @@ public static class CmdS1
         Console.WriteLine("[s1] zip maxstack entries: {0}, eh entries: {1}", zipMax.Count, zipEh.Count);
 
         int ok = 0, fail = 0, skipNoTok = 0, skipNoBody = 0, ehDropped = 0;
-        int tokenMiss = 0, sigFixedTotal = 0;
+        int tokenMiss = 0, sigFixedTotal = 0, attrFixedTotal = 0;
         var failReasons = new Dictionary<string, int>();
         var failed = new List<string>();
         var ehNoSource = new List<string>();
@@ -210,15 +210,18 @@ public static class CmdS1
             var bodyFlags = (ushort)(3 | (ehData != null ? 8 : 0) | (initLocals ? 0x10 : 0));
             try
             {
-                // 签名恢复: NRS dummy 化改过签名的方法用基线签名还原 (保持 call 约定一致)
-                int sigFixed = 0;
+                // 签名/flags 恢复: NRS dummy 化会改签名与 Attributes(如 abstract 化)。
+                // 两者解耦: 签名不同才换签名; Attributes 一律恢复为基线(否则
+                // abstract 位残留 + 注入体 -> TypeLoadException: Abstract method with non-zero RVA)
                 if (baseSigs != null && baseSigs.TryGetValue(tok, out var bsigT))
                 {
                     var bsig = bsigT.sig;
                     var cur = md.MethodSig;
                     // HasThis/Static 是调用约定的一部分, ToString() 不体现, 必须显式比较
-                    bool same = cur != null && cur.ToString() == bsig.ToString() && cur.HasThis == bsig.HasThis;
-                    if (!same)
+                    bool sigSame = cur != null && cur.ToString() == bsig.ToString()
+                                   && cur.HasThis == bsig.HasThis && cur.ExplicitThis == bsig.ExplicitThis
+                                   && cur.GenParamCount == bsig.GenParamCount;
+                    if (!sigSame)
                     {
                         // 先 Import 换类型引用到本模块(Clone 会携带跨模块 TypeDef 导致写出失败),
                         // 再手工修回调用约定(Import 会丢 HasThis/ExplicitThis/GenParamCount, 实测)
@@ -227,8 +230,6 @@ public static class CmdS1
                         ns.ExplicitThis = bsig.ExplicitThis;
                         ns.GenParamCount = bsig.GenParamCount;
                         md.Signature = ns;
-                        md.Attributes = bsigT.attrs;
-                        sigFixed++;
                         sigFixedTotal++;
                     }
                 }
@@ -253,6 +254,13 @@ public static class CmdS1
                     if (bad) break;
                 }
                 if (bad) throw new Exception("unbound arg/local operand (sig mismatch)");
+                // Attributes 恢复必须在注入成功后: 若注入失败保持 NRS 的 abstract+无体组合
+                // (合法), 否则变成 非 abstract+无体(RVA=0) 的非法状态
+                if (baseSigs != null && baseSigs.TryGetValue(tok, out var battr) && md.Attributes != battr.attrs)
+                {
+                    md.Attributes = battr.attrs;
+                    attrFixedTotal++;
+                }
                 md.Body = body;
                 ok++;
             }
@@ -266,8 +274,8 @@ public static class CmdS1
             }
         }
 
-        Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4} sig-restored={5}",
-            ok, fail, skipNoTok, skipNoBody, ehDropped, sigFixedTotal);
+        Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4} sig-restored={5} attr-restored={6}",
+            ok, fail, skipNoTok, skipNoBody, ehDropped, sigFixedTotal, attrFixedTotal);
         Console.WriteLine("[s1] eh-no-source: {0} (first: {1})", ehNoSource.Count, string.Join(",", ehNoSource.Take(8)));
         if (fail > 0)
         {
@@ -287,6 +295,7 @@ public static class CmdS1
         rep.AppendLine("skipNoBody=" + skipNoBody);
         rep.AppendLine("ehDropped=" + ehDropped);
         rep.AppendLine("sigRestored=" + sigFixedTotal);
+        rep.AppendLine("attrRestored=" + attrFixedTotal);
         rep.AppendLine("ehNoSource=" + string.Join(",", ehNoSource));
         foreach (var kv in failReasons.OrderByDescending(x => x.Value))
             rep.AppendLine("fail x" + kv.Value + " " + kv.Key);
