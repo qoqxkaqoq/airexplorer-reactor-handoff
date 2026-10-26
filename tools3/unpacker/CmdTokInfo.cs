@@ -16,14 +16,14 @@ public static class CmdTokInfo
             var r = mod.ResolveToken(raw);
             if (r is MethodDef m)
             {
-                Console.WriteLine("[{0}] {1}::{2} static={3} HasThis={4} sig={5} instrs={6} maxstack={7} locals={8} eh={9} impl={10}",
+                Console.WriteLine("[{0}] {1}::{2} static={3} HasThis={4} sig={5} instrs={6} maxstack={7} locals={8} eh={9} impl={10} rva=0x{11:X}",
                     args[i], m.DeclaringType?.FullName, m.Name, m.IsStatic, m.MethodSig?.HasThis,
                     m.MethodSig != null ? m.MethodSig.ToString() : "null",
                     m.HasBody ? m.Body.Instructions.Count : -1,
                     m.HasBody ? m.Body.MaxStack : 0,
                     m.HasBody ? m.Body.Variables.Count : -1,
                     m.HasBody ? m.Body.ExceptionHandlers.Count : -1,
-                    m.ImplAttributes);
+                    m.ImplAttributes, (uint)m.RVA);
                 if (m.HasBody && m.Body.Instructions.Count <= 24)
                     foreach (var ins in m.Body.Instructions)
                         Console.WriteLine("      IL_{0:X4} {1} {2}", ins.Offset, ins.OpCode,
