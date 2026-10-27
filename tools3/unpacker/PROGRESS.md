@@ -466,3 +466,14 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 2. 注意 fail=217 的方法被跳过注入（rollback）——需修好后再全量
 3. VerifyProcessor 的 `Bad format 0x8007000B`（E_INVALIDARG）= GetDelegateForFunctionPointer 参数错——S2/S3 层
 4. 修好后预期：cctor 链全通 → 窗口出现 → probe/soak
+
+## ehData 打印诊断（2026-10-27 13:xx）：217 fail 的样本数据
+
+- fail 点已打印 ehData hex（x5 样例：`41 18 00 00 00 00 00 00 5B 00 00 00 AD 00 00 00 5E 00 00 00 00 00 00 00 00 00 00 00`）
+- 解析：flags=0x41(EHTable|Fat) DataSize=0x18=24、子句=[flags=0][tryOff=91][tryLen=173][hOff=94][hLen=0][cls=0]
+- **异常点 1**：hOff=94 < tryOff+tryLen=264（handler 在 try 区间内 = 非法 EH 结构）
+- **异常点 2**：hLen=0、cls=0（空 handler）
+- **异常点 3**：这些方法 IL 较短（tryOff=91 可能越界）→ dnlib 指令绑定失败 → "parsed as 0 clauses"
+- **判断**：这批 EH 数据来自 mt 磁盘段兜底路径（修复21 偏移修正后 mt 票据解析出的"新垃圾"），
+  需要对 mt 兜底路径补与 CorInfoToCliEh 相同的有效性校验（hOff >= tryOff+tryLen、cls 有效、指令边界）
+- 或者更干净：**直接禁用 mt 磁盘段兜底**（PROGRESS 早已证明 mt 的 EH 区不可用），只留 corEh + 官方兜底

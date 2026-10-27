@@ -448,7 +448,7 @@ public static class CmdS1
                     (ushort)maxStack, (uint)codeSize, localsTok, gp);
                 if (body == null) throw new Exception("CreateCilBody null");
                 if (ehData != null && body.ExceptionHandlers.Count == 0)
-                    throw new Exception("ehData " + ehData.Length + "B parsed as 0 clauses");
+                    throw new Exception("ehData " + ehData.Length + "B parsed as 0 clauses: " + Convert.ToHexString(ehData));
                 body.MaxStack = (ushort)maxStack;
                 body.KeepOldMaxStack = true;
                 // 兼容性校验: 参数/局部变量绑定必须完整, 否则写出阶段崩
