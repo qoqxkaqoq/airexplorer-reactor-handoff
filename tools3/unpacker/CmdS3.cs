@@ -52,6 +52,17 @@ public static class CmdS3
             if (mod.ResolveToken(mTok) is MemberRef mrm) member = mrm;
             else if (mod.ResolveToken(mTok) is MethodDef mdm) member = mdm;
             if (member == null) { skipMember++; continue; }
+            // 修复36: 可访问性过滤 —— 跨程序集 protected 方法（ContainerControl::Dispose 等）
+            // 经 ldftn 会 MethodAccessException。外部 TypeRef 无法静态查可见性, 用名称启发:
+            // Dispose/Dispose(Boolean)/Finalize/ComponentDispose 是常见 protected 族
+            if (member is MemberRef mref2 && mref2.Class != null)
+            {
+                var clsFull = mref2.Class.FullName ?? "";
+                var mn = mref2.Name.String;
+                bool external = mref2.Class is TypeRef trr && trr.ResolutionScope is AssemblyRef;
+                if (external && (mn == "Dispose" || mn == "Finalize" || mn.StartsWith("Dispose(")))
+                { skipMember++; continue; }
+            }
 
             body.Add(Instruction.Create(OpCodes.Ldnull));                       // 目标实例=null(静态方法)
             if (member is MethodDef mdm2)

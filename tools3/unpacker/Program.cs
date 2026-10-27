@@ -68,6 +68,7 @@ public static class Program
 					case "dumpgap": return CmdDumpGap.Run(args);
 					case "dumpfields": return CmdDumpFields.Run(args);
 					case "scanstubs": return CmdScanStubs.Run(args);
+					case "finddel": return CmdFindDel.Run(args);
 					case "uehook": return CmdUeHook.Run(args);
 				case "epinfo": return CmdScanRva.RunEpInfo(args);
 				case "scanres": return CmdScanRes.Run(args);

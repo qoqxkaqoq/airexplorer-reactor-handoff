@@ -967,3 +967,27 @@ lock (_VisibleStackObj) {
    不匹配的字段（如 0400241F）用**动态生成的 delegate 类型**或**直接跳过留给 TrackCompiler 族**
 3. **TrackCompiler 的字典型字段**（自引用单例）实际是"委托容器"——真实 sig 需运行时确认——
    或从 IL 的 ldsfld 后用法推断（如 ExecuteExplorer(obj, Boolean&, this) 的调用形态）
+
+## 本轮死点推进链（2026-10-28 00:xx-01:xx）
+
+```
+TrackCompiler KeyNotFound（资源 token 序）
+  → stub TrackCompiler（S3 功能等价论证成立）→ ExecuteExplorer NRE
+  → 发现合成管线漏了 S3（修复35 重跑后未重合成）→ 补 S3 → MethodAccessException
+  → 修复36: S3 可访问性过滤（23 个 Dispose 族跨程序集 protected 跳过，3243 绑定）
+  → 当前: failfast 无消息（EXIT=2，待 relay/SEH 定位）
+```
+
+### 管线合成顺序教训（重要）
+**完整管线 = S1 → S3 → S4 → patchstub，缺一不可**——修复35 重跑 S1 后必须重新跑 S3/S4
+（本次漏 S3 导致"字段 NULL"假象，浪费一轮排查）
+
+### 关键发现：ValidatorSharerRunner 本身是 delegate
+- CheckScheduledDecryptor fieldType=ValidatorSharerRunner（自引用）——**该类型就是 MulticastDelegate 子类**
+- Invoke 签名 = void(Object, Boolean&) = 绑定方法 Monitor::Enter 的签名——**finddel 工具验证 MATCH**
+- S1 的 sig 没问题（"Field 签名混淆"假设撤销）——真正问题是合成管线漏步骤
+
+### 下一棒
+1. final3t.exe 的 failfast 定位（relay 或 SEH，同前方法）
+2. TrackCompiler stub 后其字典功能是否被其它路径依赖——观察后续死点
+3. 窗口出现判断：每轮测 xwininfo 窗口树
