@@ -830,3 +830,30 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
    value 的构造）→ 确定资源内容的正确解析方式
 3. 或 **资源还原路径修正**：dec 文件可能需要按官方解密器的"最终输出"重新 dump
    （官方运行时把解密结果交给业务代码的那一瞬间的状态）
+
+## dec_Project 结构解码 + TrackCompiler 逻辑（2026-10-27 22:xx）
+
+### dec_Project.bin (26128B) = [Field token][MemberRef token] 对表
+- [0]=0x04002102(Field) [4]=0x0A000B10(MemberRef)、[8]=0x04002103 [12]=0x0A000B11 ……
+- **与 S3 的 Project.bin（zdec）同构** —— 是委托绑定数据的池型资源版
+- token 为**官方/运行时序**（Slayed 表序一致可解析）
+
+### TrackCompiler (06004193, 633条, 3EH) 完整逻辑
+```
+Type t = Type.GetTypeFromHandle(arg0);
+if (m_LogicalProcessorMap != null) return;          // 已初始化
+lock (_VisibleStackObj) {
+  dict = new Dictionary();
+  asm = VerifyScopeAnnotationInspector(0x02000622) → GetTypeFromHandle → Assembly
+  bytes = new BinaryReader(asm.GetManifestResourceStream("CollectorTransaction.ValidatorProject")).ReadBytes(all)
+  if (bytes.Length == 0) → 无资源分支
+  … 解析 token 对 → Field→Member → 按 Field 所属类型建字典 …
+  m_LogicalProcessorMap = dict;  → get_Item(t) ← KeyNotFound 在此
+}
+```
+- **InstantiateJoinedService (06004183, 821条, Byte[]→Byte[])** = 资源解密/变换函数
+  （512 对齐、长度扩展计算）——**TrackCompiler 是否先调它变换资源**待确认（633 条里找 call 06004183）
+- **KeyNotFound = 嵌入的 dec_Project 与 TrackCompiler 期望不一致**：可能 (a) 缺 InstantiateJoinedService
+  变换步骤 (b) token 解析序问题 (c) dec_Project dump 状态非最终态
+- **下一棒**：TrackCompiler 的 633 条里搜 call 06004183（确认资源变换链）→ 按链修正嵌入内容；
+  token 对的 Field 归属类型应包含 ValidatorSharerRunner（查询 key）——用 dumpmt 校对
