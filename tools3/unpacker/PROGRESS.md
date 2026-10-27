@@ -350,3 +350,21 @@ cd tools3/unpacker && ./build.sh s1
 - **根因下沉：EH 子句数据本身畸形** — hOff=0x0600（1536）远超 18B 体 → 子句解析/转换错位
   （疑 slot_plaintext 的"mt fat 兜底"解析路径或 CORINFO→CLI 转换 offset 基准错）
 - 官方磁盘 0600419A 为明文桩（官方 EH 可直接对照）→ 下一步对比官方 EH 原始字节即可修 S1 解析
+
+## 死点突破进入 S3 层（2026-10-27 12:xx 下午）
+
+- **0600419A prune 实验**：保留前 2 条（避开 EH）→ `Bad IL range` 消失
+- **新死点**：`BadImageFormatException: Bad binary signature (0x80131192) at VerifyProcessor(IntPtr) ← DefineEfficientProfiler`
+- **VerifyProcessor = NRS 运行时代理函数族**（GetDelegateForFunctionPointer → castclass → callvirt Invoke）
+- **Bad binary signature 根因**：函数指针来自 NRS 运行时（未回接的委托表/字符串池）→ 非托管签名与托管签名不匹配
+- **= S2（字符串池回接 dec_Factory.bin 8539 条）+ S3（委托表 zdec/Project.bin 3266 条）的范畴**
+- **结论：JIT/元数据层已全通（修复16-20），剩余死点全部在 S2/S3 运行时回接层**
+
+### 完整修复清单（本轮新增）
+- 修复19：fix_eh_sections.py EH 段畸形字节级重建（11 段）→ InvalidProgram 清零
+- 修复20：CorInfoToCliEh 子句有效性校验（cls<0x01000000/越界/全零 → drop）+ mt 磁盘段兜底同款校验 + 官方明文体 EH 兜底（OfficialEhToCli）
+
+### 下一棒（S2/S3 直道）
+1. S2：ldstr/取串调用回接（dec_Factory.bin，8539 条 [int32 byteLen][UTF-16]）
+2. S3：委托表回接（zdec/Project.bin，3266 条 [Field 0x04][MemberRef 0x0A|0x4A]）——VerifyProcessor 在此消解
+3. 每完成一段 → dumpall + fix_eh_sections.py + wine 验证死点前进

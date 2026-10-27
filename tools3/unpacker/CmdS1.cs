@@ -204,7 +204,7 @@ public static class CmdS1
         }
         Console.WriteLine("[s1] zip maxstack entries: {0}, eh entries: {1}", zipMax.Count, zipEh.Count);
 
-        int ok = 0, fail = 0, skipNoTok = 0, skipNoBody = 0, ehDropped = 0;
+        int ok = 0, fail = 0, skipNoTok = 0, skipNoBody = 0, ehDropped = 0, officialEhUsed = 0;
         int tokenMiss = 0, sigFixedTotal = 0, attrFixedTotal = 0, ldcFixed = 0, excludedStubbed = 0;
         var failReasons = new Dictionary<string, int>();
         var failed = new List<string>();
@@ -303,7 +303,7 @@ public static class CmdS1
             {
                 if (zipEh.TryGetValue(tok, out var corEh))
                 {
-                    ehData = CorInfoToCliEh(corEh);
+                    ehData = CorInfoToCliEh(corEh, (uint)codeSize);
                     if (ehData == null) ehDropped++;
                 }
                 else
@@ -323,20 +323,28 @@ public static class CmdS1
                         {
                             int ncl = (dsize - 4) / 24;
                             var cls2 = new List<EhClause>(ncl);
-                            for (int ci = 0; ci < ncl; ci++)
+                            bool okFat = true;
+                            for (int ci = 0; ci < ncl && okFat; ci++)
                             {
                                 int b = sect + 4 + ci * 24;
                                 uint f = BitConverter.ToUInt32(mt, b);
-                                // CORINFO: 3=fault -> CLI 4
-                                uint cf = f == 3 ? 4u : (f <= 2 ? f : 0u);
-                                cls2.Add(new EhClause(cf,
-                                    BitConverter.ToUInt32(mt, b + 4),
-                                    BitConverter.ToUInt32(mt, b + 8),
-                                    BitConverter.ToUInt32(mt, b + 12),
-                                    BitConverter.ToUInt32(mt, b + 16),
-                                    BitConverter.ToUInt32(mt, b + 20)));
+                                uint tOff = BitConverter.ToUInt32(mt, b + 4);
+                                uint tLen = BitConverter.ToUInt32(mt, b + 8);
+                                uint hOff = BitConverter.ToUInt32(mt, b + 12);
+                                uint hLen = BitConverter.ToUInt32(mt, b + 16);
+                                uint clsTok = BitConverter.ToUInt32(mt, b + 20);
+                                // 修复20: 边界+token 有效性校验 —— dump_full 方法的 mt EH 区是加密票据,
+                                // 解析出垃圾(hOff 越界/cls 非法 token)会让 JIT 直接 InvalidProgram
+                                if (tOff + tLen > codeSize || hOff + hLen > codeSize) okFat = false;
+                                if (clsTok != 0 && clsTok < 0x01000000) okFat = false;
+                                if (tLen == 0 && hLen == 0) okFat = false;
+                                if (okFat)
+                                {
+                                    uint cf = f == 3 ? 4u : (f <= 2 ? f : 0u);
+                                    cls2.Add(new EhClause(cf, tOff, tLen, hOff, hLen, clsTok));
+                                }
                             }
-                            ehData = BuildFatEh(cls2);
+                            if (okFat && cls2.Count > 0) ehData = BuildFatEh(cls2);
                         }
                         else if (fl0 == 0x01 && dsize >= 4 && dsize <= 0x10000 && sect + dsize <= mt.Length && (dsize - 4) % 12 == 0 && dsize > 4)
                         {
@@ -361,6 +369,18 @@ public static class CmdS1
                                 }
                             }
                             if (ok2 && cls2.Count > 0) ehData = BuildFatEh(cls2);
+                        }
+                    }
+                    if (ehData == null)
+                    {
+                        // 修复20 兜底: dump EH 无效时用官方 exe 明文体的 EH
+                        if (bmodKeep == null) Console.WriteLine("[dbg] bmodKeep null for " + tok);
+                        else if (bmodKeep.ResolveToken(md.MDToken.Raw) is not MethodDef om) Console.WriteLine("[dbg] official method missing " + tok);
+                        else
+                        {
+                            ehData = OfficialEhToCli(om);
+                            if (ehData == null) Console.WriteLine("[dbg] official EH empty for " + tok);
+                            officialEhUsed += ehData != null ? 1 : 0;
                         }
                     }
                     if (ehData == null)
@@ -502,6 +522,7 @@ public static class CmdS1
 
         Console.WriteLine("[s1] injected={0} fail={1} no-tok={2} bad-body={3} eh-dropped={4} sig-restored={5} attr-restored={6} ldc-token-fixed={7} excluded-stubbed={8}",
             ok, fail, skipNoTok, skipNoBody, ehDropped, sigFixedTotal, attrFixedTotal, ldcFixed, excludedStubbed);
+        Console.WriteLine("[s1] official-eh-fallback: {0}", officialEhUsed);
         Console.WriteLine("[s1] eh-no-source: {0} (first: {1})", ehNoSource.Count, string.Join(",", ehNoSource.Take(8)));
         if (fail > 0)
         {
@@ -739,7 +760,7 @@ public static class CmdS1
     }
 
     /// <summary>CORINFO EH dump (4B count + 28B/条) -> dnlib fat EH 段。</summary>
-    static byte[] CorInfoToCliEh(byte[] cor)
+    static byte[] CorInfoToCliEh(byte[] cor, uint codesize)
     {
         if (cor.Length < 4) return null;
         int cnt = BitConverter.ToInt32(cor, 0);
@@ -754,11 +775,51 @@ public static class CmdS1
             uint hOff = BitConverter.ToUInt32(cor, b + 12);
             uint hLen = BitConverter.ToUInt32(cor, b + 16);
             uint cls = BitConverter.ToUInt32(cor, b + 20);
+            // 修复20: 子句有效性校验 —— 部分 dump 条目数据畸形（tryLen=0/cls<0x01000000/
+            // 越界），JIT 对非法 CatchType 直接 InvalidProgram。无效条目直接丢弃本 EH。
+            if (cls != 0 && cls < 0x01000000) return null;
+            if (tryOff + tryLen > codesize || hOff + hLen > codesize) return null;
+            if (tryLen == 0 && hLen == 0) return null;
             // CORINFO: 0=catch 1=filter 2=finally 3=fault; CLI: 0/1/2/4(fault) —— fault 3→4
             uint cliFlags = f == 3 ? 4u : (f <= 2 ? f : 0u);
             clauses.Add(new EhClause(cliFlags, tryOff, tryLen, hOff, hLen, cls));
         }
+        if (clauses.Count == 0) return null;
         return BuildFatEh(clauses);
+    }
+
+    /// <summary>修复20 兜底: 从官方 exe 的明文方法体读 EH（官方磁盘非加密方法可直接对照）。</summary>
+    static byte[] OfficialEhToCli(MethodDef official)
+    {
+        if (official == null || !official.HasBody || official.Body.ExceptionHandlers.Count == 0) return null;
+        var clauses = new List<EhClause>();
+        foreach (var eh in official.Body.ExceptionHandlers)
+        {
+            uint tryOff = GetOffset(official.Body.Instructions, eh.TryStart);
+            uint tryEnd = GetOffset(official.Body.Instructions, eh.TryEnd);
+            uint hOff = GetOffset(official.Body.Instructions, eh.HandlerStart);
+            uint hEnd = eh.HandlerEnd != null ? GetOffset(official.Body.Instructions, eh.HandlerEnd) : 0;
+            if (tryOff == uint.MaxValue || tryEnd == uint.MaxValue || hOff == uint.MaxValue) return null;
+            uint cliFlags = eh.HandlerType == ExceptionHandlerType.Finally ? 2u
+                : eh.HandlerType == ExceptionHandlerType.Fault ? 4u
+                : eh.HandlerType == ExceptionHandlerType.Filter ? 1u : 0u;
+            clauses.Add(new EhClause(cliFlags, tryOff, tryEnd - tryOff, hOff, hEnd - hOff,
+                eh.CatchType != null ? eh.CatchType.MDToken.Raw : 0));
+        }
+        if (clauses.Count == 0) return null;
+        return BuildFatEh(clauses);
+    }
+
+    static uint GetOffset(IList<Instruction> ins, Instruction target)
+    {
+        if (target == null) return uint.MaxValue;
+        uint o = 0;
+        foreach (var i in ins)
+        {
+            if (ReferenceEquals(i, target)) return o;
+            o += (uint)i.GetSize();
+        }
+        return uint.MaxValue;
     }
 
     /// <summary>
