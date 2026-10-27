@@ -100,9 +100,30 @@ public static class CmdScanS2
         return 0;
     }
 
+    /// <summary>scans2 <exe> appdom — 找现有 AppDomain TypeRef 与 UnhandledException MemberRef。</summary>
+    public static int ScanAppDomain(string[] args)
+    {
+        if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe> appdom"); return 2; }
+        var mod = ModuleDefMD.Load(args[1]);
+        foreach (var tr in mod.GetTypeRefs())
+            if (tr.FullName == "System.AppDomain")
+            {
+                Console.WriteLine("TypeRef 0x{0:X8} {1} scope={2}", (uint)tr.MDToken.Raw, tr.FullName, tr.ResolutionScope);
+                break;
+            }
+        foreach (var mr in mod.GetMemberRefs())
+        {
+            if (mr.Name.String.Contains("UnhandledException") || (mr.Name.String == "get_CurrentDomain" && mr.Class?.FullName == "System.AppDomain"))
+                Console.WriteLine("MemberRef 0x{0:X8} {1}::{2} sig={3}", (uint)mr.MDToken.Raw, mr.Class?.FullName, mr.Name,
+                    mr.MethodSig != null ? mr.MethodSig.ToString() : "?");
+        }
+        return 0;
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length >= 3 && args[2] == "concat") return ScanConcat(args);
+        if (args.Length >= 3 && args[2] == "appdom") return ScanAppDomain(args);
         if (args.Length >= 3 && args[2] == "resref") return ScanResRef(args);
         if (args.Length >= 3 && args[2] == "idxinv") return ScanIdxInvoke(args);
         if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe>"); return 2; }

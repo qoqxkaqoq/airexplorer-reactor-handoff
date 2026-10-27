@@ -807,3 +807,26 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 2. **两路**：(a) 找 Startup 读这些字段的代码 → 推断字段应有的托管值 → patchstub 新模式 initfield 补写
    (b) 0600419C 控制流解剖（9992 条平坦化）分离"初始化段"与"native 自检段"
 3. **工具全就绪**：uehook(异常日志)/patchstub 全模式/scanrva/tokmap/dumpgap/resinfo/s4/findthread
+
+## 死点再推进（2026-10-27 22:xx）：修复35 生效 + TrackCompiler 字典问题
+
+- **修复35 实证**：ArgumentGateway cctor 的前置依赖已通——死点从"共享桩逻辑错乱"推进到
+  `TrackCompiler(RuntimeTypeHandle) → Dictionary.get_Item KeyNotFoundException`
+- **TrackCompiler (06004183)** = 读 ValidatorProject 资源（dec_Project.bin 26KB）建立
+  RuntimeTypeHandle→映射表 的方法（业务资源的**池型资源消费**模式）
+- **KeyNotFound 根因**：嵌入的 dec_Project 内容与 TrackCompiler 建字典时期望的格式/内容不匹配
+  （dec_* 文件是运行时 dump 的中间态——可能含 NRS 私有头/顺序差异/未完成转换）
+- **三次稳定性测试**：final.exe 每次都在同一死点崩（可复现 ✓ 非随机）
+
+### uehook 工具状态
+- 已实现（现成 token 版——引用全用产物已有 MemberRef/TypeRef）
+- 遗留：<Module> cctor 的 EH 与插入指令交互细节待调（InvalidProgram）——价值降低（
+  稳定测试已给出清晰死点），优先级下降
+
+### 下一棒（功能等价的真正最后一步）
+1. **dec_Project 内容验证**：与官方资源的密文对照（官方密文 26128B vs dec_Project 26128B 同大小
+   ——逐字节 diff 找"解密差异规律"，推断运行时的二次处理）
+2. **TrackCompiler (06004183) 反汇编**：分析字典建立逻辑（key=RuntimeTypeHandle 的来源、
+   value 的构造）→ 确定资源内容的正确解析方式
+3. 或 **资源还原路径修正**：dec 文件可能需要按官方解密器的"最终输出"重新 dump
+   （官方运行时把解密结果交给业务代码的那一瞬间的状态）
