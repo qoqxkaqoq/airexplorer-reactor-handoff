@@ -309,3 +309,25 @@ cd tools3/unpacker && ./build.sh s1
 - 反射诊断新线索：MFAIL 06004667/06004668 "Could not load type System.Security.Principal.WindowsImpersonationContext from mscorlib" — mscorlib TypeRef scope/版本错位待查
 - PEVerify 诊断错误 1245→2325（诊断步骤非门禁；样例=匿名类型 ctor 的 this 未初始化告警）
 - 结论：Windows 侧死点=06004181 failfast 族（与本地 Wine 一致），mono 侧 JIT 全通 → S2 开发可在 mono 驱动下先行
+
+## 06004181 最终定位（2026-10-27 中午）：dnlib 写出的 EH 段头畸形
+
+**决定性发现**（磁盘字节级对比）：
+- 0600419C（9EH、CLR 过）：EH 段头 `41 dc 00 00` = flags 0x41(EHTable|FatFormat) + DataSize 0xDC=220（9 fat 子句）✓
+- 06004181（1EH、CLR 拒）：EH 段头 `01 10 00 00` = flags 0x01(**缺 EHTable 位 0x40**) + DataSize 0x10=16（4 头+12B=1 个 **small** 子句）
+- → dnlib 写出了"FatFormat 标志 + small 子句"的混合畸形段：CLR 读出非 EHTable 段 → EH 全部丢失 → leave 失效 → InvalidProgram
+- → mono 容忍此格式（mono 过 JIT）；Windows CLR 不容忍
+
+**实验矩阵**（全部本地 Wine 秒级）：
+- 手动补 0x40 位（41 10 00 00）：仍 InvalidProgram（DataSize=16 与 FatFormat 的 24B 子句矛盾）
+- 重建 small 段（44 00 00 4a 01...）：仍 InvalidProgram → 段头之外还有问题或多个方法有同类畸形
+- noeh（删 EH+leave→br）：InvalidProgram 消失 ✓ → 拒因确系 EH
+- copybody 06004181 到 22711 基座（体相同）：InvalidProgram 消失 → 体本身无辜
+
+**下一棒修复路径（高置信）**：
+1. S1 写出后处理：遍历全部 MoreSects 方法体的 EH 段，校验段头（EHTable 位 0x40 必须在、
+   DataSize 必须与子句数匹配 small=4+12n/fat=4+24n、FatFormat 位与子句格式一致），
+   畸形段用 dnlib 重新写出（先在 CilBody 层破坏性重设 ExceptionHandlers 强制 dnlib 重编码），或字节级重建。
+2. 找 dnlib 4.4 写出 0x01 段头的触发条件（疑与"1 个子句/small 段"相关，0600419C 9 子句 fat 正常）。
+3. 批量统计：全产物有多少 MoreSects 方法的段头异常（06004181 决非唯一）。
+4. 修完后 wine probe → 预期 InvalidProgram 清零 → 死点进入 S2 运行时层（BinaryReader null / Invalid handle）→ 接 S2。
