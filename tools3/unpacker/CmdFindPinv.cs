@@ -10,6 +10,18 @@ public static class CmdFindPinv
         if (args.Length < 2) { Console.WriteLine("usage: findpinv <exe> [filter]"); return 2; }
         var mod = ModuleDefMD.Load(args[1]);
         string? filter = args.Length > 2 ? args[2].ToLowerInvariant() : null;
+        if (args.Length > 2 && args[2] == "dumpmt")
+        {
+            // findpinv <exe> dumpmt <typename> — dump 类型的方法表
+            foreach (var t in mod.GetTypes())
+            {
+                if (!t.FullName.Contains(args.Length > 3 ? args[3] : "")) continue;
+                Console.WriteLine("TypeDef 0x{0:X8} {1} (methods={2}):", (uint)t.MDToken.Raw, t.FullName, t.Methods.Count);
+                foreach (var m in t.Methods)
+                    Console.WriteLine("  [{0}] {1} rva=0x{2:X} body={3}", (uint)m.MDToken.Raw, m.Name, (uint)m.RVA, m.HasBody);
+            }
+            return 0;
+        }
         foreach (var t in mod.GetTypes())
             foreach (var m in t.Methods)
             {

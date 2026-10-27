@@ -689,3 +689,27 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
   → NRS 无法 patch 自己/无法重启 → 父进程逻辑失效 → 程序以单进程模式继续跑
   （0600419C 保留，其初始化字段照常写入——但重启分支自然失效）
 - **验证命令**：`patchstub out/m1_s1_full.exe out/nopm.exe stubfile <(echo 06004182; echo 06004184)` + wine
+
+## 单进程模式实验 np.exe（2026-06-27 19:xx 收官）
+
+- **实验**：stub 06004182(WriteProcessMemory)+06004184(OpenProcess) 两个危险代理 → np.exe
+- **结果（Wine 实测）**：进程存活 15s+（t=3..15s 全程 procs=2）→ 之后 thread 11c 抛
+  0xe0434352（未处理 CLR 异常）→ Wine 崩溃对话框
+- **mono probe 佐证**：加载 np.exe → cctor FAIL → ArgumentNullException: Invalid handle
+  （authenticatorNotifier default）——**触发链**：RunClassConstructor(ObserverValue) 先触发
+  <Module> cctor（mono 语义）→ DispatcherInitializer cctor 失败 → 整链挂
+- **结构验证**：ObserverValue TypeDef 0x0200132E 方法表完全正常（06004284 VerifyScope +
+  06004287 .cctor 同类型、真体都在）——**CLR 触发语义无问题**
+- **根因浮出**：**stub 的代理返回 null → 调用方 Invoke(null) → 崩**——代理不能简单 stub
+  （它们被 cctor 初始化链依赖），**正确姿势 = patch 0600419C 里调用这些代理的分支**
+  （跳过"重启准备"段、保留字段初始化段）
+
+### 下一棒（单进程模式的最后一步）
+1. **0600419C 控制流解剖**：9992 条平坦化里定位"调 06004182/06004184 的分支"——
+   该分支 = NRS 重启准备（OpenProcess(自己)→WriteProcessMemory(自patch)→CreateProcess），
+   patch 为跳过；**其余初始化段保留**
+2. **或逆向代理返回语义**：给 stub 代理返回合法 delegate（new TemplateBuilder(null, IntPtr.Zero)
+   ——delegate 包装的 IntPtr.Zero 函数在 Invoke 时才炸，绕过初始化期）
+3. **或从 Main 侧切断**：Main 的 args[0] 检查分支（NRS 子进程标记）——让 Main 直接走"正常启动"
+   路径、跳过一切 NRS 判定（需 Main IL 的分支分析）
+4. 每步都离"窗口出现"更近：进程存活已证明，剩余 = 初始化链的精确切断
