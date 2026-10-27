@@ -36,9 +36,47 @@ public static class CmdScanS2
         return 0;
     }
 
+    /// <summary>scans2 <exe> idxinv — 扫 ldc.i4 <n> 后 4 条内出现 ldsfld+callvirt 的模式（委托式取串）。</summary>
+    public static int ScanIdxInvoke(string[] args)
+    {
+        if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe> idxinv"); return 2; }
+        var mod = ModuleDefMD.Load(args[1]);
+        var freq = new Dictionary<uint, (int cnt, string name)>();
+        var idxSamples = new Dictionary<uint, List<int>>();
+        foreach (var t in mod.GetTypes())
+            foreach (var m in t.Methods)
+            {
+                if (!m.HasBody) continue;
+                var ins = m.Body.Instructions;
+                for (int i = 0; i < ins.Count; i++)
+                {
+                    if (ins[i].OpCode.Code != Code.Ldc_I4 && ins[i].OpCode.Code != Code.Ldc_I4_S) continue;
+                    int idx = ins[i].OpCode.Code == Code.Ldc_I4 ? (int)ins[i].Operand : (sbyte)ins[i].Operand;
+                    // 向后看 4 条内: ldsfld(委托字段) + callvirt(Invoke)
+                    bool hasField = false, hasInvoke = false;
+                    FieldDef fld = null;
+                    for (int j = i + 1; j < Math.Min(i + 5, ins.Count); j++)
+                    {
+                        if (ins[j].OpCode.Code == Code.Ldsfld || ins[j].OpCode.Code == Code.Ldsflda) { hasField = true; fld = ins[j].Operand as FieldDef; }
+                        if (ins[j].OpCode.Code == Code.Callvirt && ins[j].Operand is IMethod im && im.Name.String == "Invoke") hasInvoke = true;
+                    }
+                    if (!hasField || !hasInvoke || fld == null) continue;
+                    uint fk = (uint)fld.MDToken.Raw;
+                    if (!freq.TryGetValue(fk, out var v)) { freq[fk] = (0, fld.DeclaringType?.FullName + "::" + fld.Name); idxSamples[fk] = new List<int>(); }
+                    freq[fk] = (freq[fk].cnt + 1, freq[fk].name);
+                    if (idxSamples[fk].Count < 8) idxSamples[fk].Add(idx);
+                }
+            }
+        foreach (var kv in freq.OrderByDescending(x => x.Value.cnt).Take(15))
+            Console.WriteLine("  field 0x{0:X8} x{1}  {2}  idx样本: [{3}]", kv.Key, kv.Value.cnt, kv.Value.name,
+                string.Join(",", idxSamples[kv.Key]));
+        return 0;
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length >= 3 && args[2] == "concat") return ScanConcat(args);
+        if (args.Length >= 3 && args[2] == "idxinv") return ScanIdxInvoke(args);
         if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe>"); return 2; }
         var mod = ModuleDefMD.Load(args[1]);
         // 统计: ldc.i4(或ldc.i4.s/n) 后紧跟 call/callvirt 的目标方法频率

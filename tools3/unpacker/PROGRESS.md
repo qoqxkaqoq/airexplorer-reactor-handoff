@@ -713,3 +713,35 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 3. **或从 Main 侧切断**：Main 的 args[0] 检查分支（NRS 子进程标记）——让 Main 直接走"正常启动"
    路径、跳过一切 NRS 判定（需 Main IL 的分支分析）
 4. 每步都离"窗口出现"更近：进程存活已证明，剩余 = 初始化链的精确切断
+
+## 资源全对照完成 + S2 真相（2026-10-27 20:xx）
+
+### S4 资源映射（全部 6 个官方资源 ↔ 解密文件一一对应）
+| 官方资源名（NRS 混淆名） | 大小 | 解密文件 |
+|---|---|---|
+| ErrorReceiver.ValidatorViewer | 356328 | dec_Viewer.bin |
+| ValidatorGenerator.DefinitionError | 2337031 | dec_mainlib_stream.bin |
+| GlobalValidator.FactoryValidator | 398794 | dec_Factory.bin |
+| ValidatorAllocator.ValidatorProc | 47915 | dec_Proc.bin |
+| CollectorTransaction.ValidatorProject | 26128 | dec_Project.bin |
+| ValidatorArgument.EmitterReporter | 256 | dec_Emitter.bin |
+- 产物 ManifestResource 5 行（缺 FactoryValidator）——S4 = 嵌回 6 个解密资源
+- dec_mainlib.bin (4.26MB) ≈ 全部资源合并体
+
+### S2 真相修正
+- **mt IL 的 ldstr 在 Slayed #US 里语义已正确**（06004192 三串验证全对："is tampered."/"SHA1"/"ValidatorArgument.EmitterReporter"）——**业务字符串的 ldstr 通路天然可用**
+- **GlobalValidator.FactoryValidator = 业务字符串池**（dec_Factory.bin = [int32 len][UTF-16] × 8539，
+  #0-5 全是 string.Format 模板）——**运行时由解密函数按索引取**
+- 取串调用模式仍未定位（scans2 的 ldc.i4+call 与 ldc.i4+委托Invoke 均空）——
+  **新假设**：池取串走 **ldc.i4 <idx> + callvirt 到接口** 或 **自定义泛型字典**，需运行时 hook
+- ldstr 密度外推 ~9000 ≈ 8539 + NRS 自有串 → 两条通路并存：ldstr(#US) + 池取串
+
+### "功能与原版一样"完成度
+| 项 | 状态 |
+|---|---|
+| S1 体注入 | ✅ 22930/22930 |
+| S3 委托表 | ✅ 3266/3266 |
+| S2 字符串 ldstr 通路 | ✅ 天然可用（#US 语义对） |
+| S2 池取串通路 | ⏳ 模式待定位 |
+| S4 资源 | ⏳ 解密数据全齐，待嵌入 |
+| 保护链短路 | ⏳ 0600419C 分支 patch（np 实验存活 15s+ 证明可行）|
