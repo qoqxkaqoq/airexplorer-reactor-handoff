@@ -1035,3 +1035,11 @@ S1(修复35: 22930 全注入) → S3(修复36/37: 3239 委托, 过滤 Dispose族
 3. **App 类的方法排查**：Main(SearchAdapter 213条) 的 switch 分支、App.OnStartup、
    Application_Startup 事件的处理器
 4. 每步都朝"窗口出现"收敛——托管层已全通，剩余是启动决策逻辑
+
+## 补充（2026-10-28 01:xx）：无 Application 子类
+
+- 产物中**无 System.Windows.Application 子类**——AirExplorer 用**纯 Main 启动**（手工 new Application 或 Dispatcher）
+- PostQuitMessage 来自 Dispatcher 内部（Main 的启动逻辑里某条件触发 InvokeShutdown）
+- Main（SearchAdapter 06002D22，213 条平坦化）是唯一启动路径——**下一棒从 Main 的 213 条逐分支分析**
+- 关键分支已知：IL_0040（ValidateAccessibleResponderManager→EvaluateVisibleAttribute→UpdateState 初始化链）、
+  IL_0055（args[0]→InstantiateTransferableProgram→ExecuteExplorer 链）

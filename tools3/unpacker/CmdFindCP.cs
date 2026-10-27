@@ -52,9 +52,37 @@ public static class CmdFindCP
         return 0;
     }
 
+    /// <summary>findcp <exe> app — 找 Application 子类与其 Shutdown/MainWindow/Startup 引用。</summary>
+    public static int ScanApp(string[] args)
+    {
+        if (args.Length < 2) { Console.WriteLine("usage: findcp <exe> app"); return 2; }
+        var mod = ModuleDefMD.Load(args[1]);
+        foreach (var t in mod.GetTypes())
+        {
+            if (t.BaseType?.FullName != "System.Windows.Application") continue;
+            Console.WriteLine("App class: [0x{0:X8}] {1} (methods={2})", (uint)t.MDToken.Raw, t.FullName, t.Methods.Count);
+            foreach (var m in t.Methods)
+            {
+                if (!m.HasBody) continue;
+                foreach (var i in m.Body.Instructions)
+                {
+                    if (i.Operand is IMethod im && (im.Name.String.Contains("Shutdown") || im.Name.String.Contains("MainWindow") ||
+                        im.Name.String == "Run"))
+                        Console.WriteLine("  [0x{0:X8}] {1} @IL_{2:X4}: {3}::{4}", (uint)m.MDToken.Raw, m.Name, i.Offset,
+                            im.DeclaringType?.FullName, im.Name);
+                    if (i.OpCode.Code == Code.Ldstr && i.Operand is string sv && sv.Length < 60)
+                        Console.WriteLine("  [0x{0:X8}] {1} @IL_{2:X4}: ldstr \"{3}\"", (uint)m.MDToken.Raw, m.Name, i.Offset, sv);
+                }
+            }
+        }
+        return 0;
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length >= 3 && args[2] == "members") return ScanMembers(args);
+        if (args.Length >= 3 && args[2] == "pstart") return ScanProcessStart(args);
+        if (args.Length >= 3 && args[2] == "app") return ScanApp(args);
         if (args.Length >= 3 && args[2] == "pstart") return ScanProcessStart(args);
         if (args.Length < 2) { Console.WriteLine("usage: findcp <exe>"); return 2; }
         var mod = ModuleDefMD.Load(args[1]);
