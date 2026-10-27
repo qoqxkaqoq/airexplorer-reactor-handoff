@@ -120,9 +120,48 @@ public static class CmdScanS2
         return 0;
     }
 
+    /// <summary>scans2 <exe> concatall — 列出全部 ldstr+ldstr(+call) 组合。</summary>
+    public static int ScanConcatAll(string[] args)
+    {
+        if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe> concatall"); return 2; }
+        var mod = ModuleDefMD.Load(args[1]);
+        foreach (var t in mod.GetTypes())
+            foreach (var m in t.Methods)
+            {
+                if (!m.HasBody) continue;
+                var ins = m.Body.Instructions;
+                for (int i = 0; i < ins.Count - 2; i++)
+                {
+                    if (ins[i].OpCode.Code != Code.Ldstr || ins[i].Operand is not string s1 || s1.Length < 2) continue;
+                    // 允许中间有 ldstr 链: 收集连续 ldstr 序列（中间夹 call Trim/Concat）
+                    var parts = new List<string> { s1 };
+                    int j = i + 1;
+                    while (j < ins.Count)
+                    {
+                        if (ins[j].OpCode.Code == Code.Ldstr && ins[j].Operand is string s2) { parts.Add(s2); j++; continue; }
+                        if (ins[j].OpCode.Code == Code.Call && ins[j].Operand is MethodDef cm &&
+                            (cm.Name == "Trim" || cm.Name == "Concat")) { j++; continue; }
+                        break;
+                    }
+                    if (parts.Count < 2) continue;
+                    // 确认后面跟着 Concat（用于构造 API 名）
+                    bool hasConcat = false;
+                    for (int k = i + 1; k < Math.Min(j + 2, ins.Count); k++)
+                        if (ins[k].OpCode.Code == Code.Call && ins[k].Operand is MethodDef cm2 && cm2.Name == "Concat") hasConcat = true;
+                    if (!hasConcat) continue;
+                    string full = string.Join("", parts);
+                    Console.WriteLine("[0x{0:X8}] {1}::{2} IL_{3:X4}: {4} => \"{5}\"", (uint)m.MDToken.Raw,
+                        t.FullName, m.Name, ins[i].Offset, string.Join(" | ", parts), full);
+                    i = j;  // 跳过已消费
+                }
+            }
+        return 0;
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length >= 3 && args[2] == "concat") return ScanConcat(args);
+        if (args.Length >= 3 && args[2] == "concatall") return ScanConcatAll(args);
         if (args.Length >= 3 && args[2] == "appdom") return ScanAppDomain(args);
         if (args.Length >= 3 && args[2] == "resref") return ScanResRef(args);
         if (args.Length >= 3 && args[2] == "idxinv") return ScanIdxInvoke(args);

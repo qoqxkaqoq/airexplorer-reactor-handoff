@@ -991,3 +991,17 @@ TrackCompiler KeyNotFound（资源 token 序）
 1. final3t.exe 的 failfast 定位（relay 或 SEH，同前方法）
 2. TrackCompiler stub 后其字典功能是否被其它路径依赖——观察后续死点
 3. 窗口出现判断：每轮测 xwininfo 窗口树
+
+## 重大澄清（2026-10-28 01:xx）：双进程模式从未被切断
+
+- **st2b 的 relay 复查**：st2b（stub 0600419C+06004192）**同样调 CreateProcessW(self)**（ret=0x40240f 同一 JIT 地址）
+- **重启调用点在第三个方法**（非 0600419C/92）——**此前的"存活 15s+/30s+"全是假象**：
+  父 CreateProcess 子后等待，子（无 native 环境）挂起——父子互相等，procs=2 是两个进程！
+- **真正的单进程模式从未达成**——所有"存活"版本都在双进程等待态
+- **子进程 fail-fast(c0000602) 的原因**：产物子进程无官方 native bootstrap 建立的环境通道
+
+### 下一棒（精确定位重启调用点）
+1. **dec_Project/Project.bin 的 Member 全集扫描**：找出指向 CreateProcessW 相关的绑定对
+   （MemberRef 的 Class=KERNEL32/代理类型 + Name 含 Create/Proc）
+2. **或 relay 时间线**：final3t 的 CreateProcess 前最后 100 行的 API 模式对比 0600419C 已知行为
+3. **代理字段溯源**：CreateProcessW 代理存某字段 → findwr 反查字段 → 找 Invoke 该字段的托管方法
