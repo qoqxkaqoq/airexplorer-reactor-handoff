@@ -35,7 +35,7 @@ public static class CmdPatchStub
                     foreach (var m in kv.Value) targets.Add((uint)m.MDToken.Raw);
             Console.WriteLine($"[patchstub] shared-RVA methods -> {targets.Count}");
         }
-        else if (mode != "impl" && mode != "noeh" && mode != "copybody" && mode != "copybatch" && mode != "stubfile" && mode != "prune")
+        else if (mode != "impl" && mode != "noeh" && mode != "copybody" && mode != "copybatch" && mode != "stubfile" && mode != "prune" && mode != "untamper")
         {
             foreach (var s in mode.Split(','))
                 targets.Add(Convert.ToUInt32(s.Trim().Replace("0x", ""), 16));
@@ -217,6 +217,38 @@ public static class CmdPatchStub
             var optsP = new dnlib.DotNet.Writer.ModuleWriterOptions(mod);
             optsP.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.PreserveAll | dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack;
             mod.Write(args[2], optsP);
+            return 0;
+        }
+        if (mode == "untamper")
+        {
+            // args[4] = tok 清单: 把"newobj Exception.ctor; throw"模式中的 throw 换成 pop
+            // (栈平衡: 弹掉异常对象后直落正常流) —— NRS 反篡改校验失败时的外科绕行
+            foreach (var line in File.ReadLines(args[4]))
+            {
+                var t2 = line.Trim().Replace("0x", "");
+                if (t2.Length == 0) continue;
+                targets.Add(Convert.ToUInt32(t2, 16));
+            }
+            int patched = 0;
+            foreach (var t in mod.GetTypes())
+                foreach (var m in t.Methods)
+                {
+                    if (!targets.Contains((uint)m.MDToken.Raw) || !m.HasBody) continue;
+                    var ins = m.Body.Instructions;
+                    for (int i = 0; i < ins.Count - 1; i++)
+                    {
+                        if (ins[i].OpCode.Code == Code.Throw && ins[i-1].OpCode.Code == Code.Newobj
+                            && ins[i-1].Operand is IMethod im && im.FullName.Contains("Exception::.ctor"))
+                        {
+                            ins[i].OpCode = OpCodes.Pop;
+                            patched++;
+                        }
+                    }
+                }
+            Console.WriteLine($"[untamper] throw->pop patched {patched}");
+            var optsU = new dnlib.DotNet.Writer.ModuleWriterOptions(mod);
+            optsU.MetadataOptions.Flags |= dnlib.DotNet.Writer.MetadataFlags.PreserveAll | dnlib.DotNet.Writer.MetadataFlags.KeepOldMaxStack;
+            mod.Write(args[2], optsU);
             return 0;
         }
         if (mode == "stubfile")

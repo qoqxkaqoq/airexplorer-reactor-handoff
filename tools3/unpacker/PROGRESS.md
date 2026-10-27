@@ -531,3 +531,21 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 2. **验证产出窗口**：cctor 链全通后 WPF Main（06002D22 SearchAdapter 213 条已注入）应出现窗口
 3. **S2 字符串池回接**（dec_Factory.bin 8539 条）——官方字符串仍走运行时取串函数
 4. CI probe/soak 双门槛
+
+## 反调试桩族行为定性（2026-10-27 17:xx 末）
+
+- **untamper 工具落地**：`patchstub <in> <out> untamper <tok清单>` —— 把"newobj Exception.ctor; throw"
+  模式的 throw 换成 pop（1 字节 0x7A→0x26，偏移不变，栈平衡直落正常流）
+- **实验矩阵**（Windows CLR / Wine 实测）：
+  - stub 0600419C(DefineEfficientProfiler) → failfast 消失 → "AirExplorer is tampered"(06004192 throw)
+  - stub 0600419C+06004192(untamper 不够,全 stub) → **程序存活 45s+ 无异常 CPU=0 等待**（无窗口）
+  - 保留 0600419C+untamper 06004192 → **2 秒内静默死**（托管层无 Exit 调用 →
+    **native 反调试系统 TerminateProcess**——0600419C 初始化 NRS native 运行时后自检环境即杀进程）
+- **定性**：0600419C 是 NRS native 反调试系统的托管初始化入口；保留它=激活 native 自杀；
+  stub 它=存活但 NRS 代理初始化缺失（chooserObject 等字段 null → 后续等待/挂起）
+- **下一棒最高价值**：
+  1. WINEDEBUG=+relay 抓 st2b（stub 版）的最后调用序列 → 定位挂点调用
+  2. 0600419C 体内找到 native 初始化调用点（Marshal.GetDelegateForFunctionPointer/GetProcAddress 链）
+     → 只 patch native 自检调用、保留托管初始化
+  3. 或完整分析 0600419C 的 9992 条控制流平坦化结构，找"校验失败→杀进程"的分支
+  4. S2 字符串回接（dec_Factory.bin 8539 条）与窗口出现的距离已非常近
