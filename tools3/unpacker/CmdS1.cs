@@ -107,7 +107,7 @@ public static class CmdS1
                 // 但注入体 IL 的 call token 解析到的类型必须是官方真名(否则 JIT 拒)。
                 // 特殊类型照旧用扁平 Object 壳: enum(须实例字段)/delegate(须 sealed)/
                 // abstract(须实现抽象成员) 照抄会 TypeLoad。
-                bool special = bt.IsEnum || bt.IsDelegate || bt.IsAbstract || bt.IsInterface || bt.DeclaringType != null;
+                bool special = bt.IsEnum || bt.IsDelegate || bt.IsAbstract || bt.IsInterface;
                 TypeDef shell;
                 if (!special)
                 {
@@ -139,7 +139,22 @@ public static class CmdS1
                     shell.Attributes = TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
                         | TypeAttributes.BeforeFieldInit;
                 }
-                mod.Types.Add(shell);
+                // 修复24: 嵌套类型挂产物外层类型的 NestedTypes 下 (FullName 自动 = 外层/Name)
+                bool nestedMounted = false;
+                if (bt.DeclaringType != null)
+                {
+                    var outerFull = bt.DeclaringType.FullName;
+                    if (s_tdByFull.TryGetValue(outerFull, out var outer) && outer != null)
+                    {
+                        mod.Types.Remove(shell);
+                        outer.NestedTypes.Add(shell);
+                        shell.Attributes = (shell.Attributes & ~TypeAttributes.VisibilityMask)
+                            | TypeAttributes.NestedPublic;
+                        nestedMounted = true;
+                    }
+                }
+                if (!nestedMounted)
+                    mod.Types.Add(shell);
                 s_tdByFull[bt.FullName] = shell;
                 shellAdded++;
             }

@@ -492,3 +492,10 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 2. 手动 EH 绑定失败的 309 个方法逐类分析（tryOff/hOff 在指令边界的对齐）
 3. S2 字符串回接（dec_Factory.bin）
 4. 全流程: S1 → fix 段校验 → S3 → wine → CI probe/soak
+
+## 修复24（2026-10-27 13:xx）：嵌套类型真名壳挂产物外层
+
+- 壳构建的 special 判定移除 DeclaringType 条件——嵌套非特殊类型也走真名壳
+- 嵌套壳挂产物外层类型的 NestedTypes 下（FullName 自动=外层/Name，如 DispatcherInitializer/TemplateBuilder）
+- 死点稳定：VerifyProcessor `Index not found`（=GetDelegateForFunctionPointer 收到 NRS 未回接的无效指针 → S2/S3 层）
+- **JIT/元数据层修复完成度：修复16-24 全部落地**；剩余死点全部在 S2（字符串池）/S3（委托已回接 3266）运行时回接层
