@@ -341,3 +341,12 @@ cd tools3/unpacker && ./build.sh s1
   `Bad IL range at GenerateAdaptableCollection ← DefineEfficientProfiler ← .cctor`
   = 修复16 dedup 未覆盖的"非共享邻居交叉"残留（scanrva OVL 可定位）
 - 流程: dumpall → fix_eh_sections.py → wine 测试
+
+## 死点再前进（2026-10-27 12:xx）：0600419A 的 EH 子句数据畸形
+
+- fix19 后 InvalidProgram=0，新死点 `Bad IL range at GenerateAdaptableCollection(0600419A) ← DefineEfficientProfiler`
+- 0600419A = 又一个 6 条反调试桩（call IsAttached→throw），rva=0x23F24，EH=1
+- **其 EH 段已被 fix19 修为 small 正确头（44 00 00 00）但仍 Bad IL range**
+- **根因下沉：EH 子句数据本身畸形** — hOff=0x0600（1536）远超 18B 体 → 子句解析/转换错位
+  （疑 slot_plaintext 的"mt fat 兜底"解析路径或 CORINFO→CLI 转换 offset 基准错）
+- 官方磁盘 0600419A 为明文桩（官方 EH 可直接对照）→ 下一步对比官方 EH 原始字节即可修 S1 解析
