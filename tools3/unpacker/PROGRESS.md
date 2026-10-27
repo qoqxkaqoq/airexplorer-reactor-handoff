@@ -599,3 +599,27 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
    让产物单进程直接跑（跳过 bootstrap），需要补齐 native 代理的所有真实实现
    （StopClient=GetProcAddress 包装、keogyBbmx=LoadLibrary、代理字段 lazy init 全部托管化）
 3. **S2 字符串回接 + 代理字段托管重建** = 单进程模式的关键路径
+
+## 子进程 fail-fast 现场抓获（2026-10-27 19:xx 末）
+
+- **WINEDEBUG=+seh 抓 ut1 全程**：`RPC_S_SERVER_UNAVAILABLE (code=0x6ba)` 异常反复出现（线程 009c）
+- **定性**：NRS 子进程初始化时连接 NRS native 运行时的 **RPC/COM 服务**（父进程 bootstrap 应建立的
+  跨进程通道）——Wine 下该服务未建立/不可达 → 子进程 RPC 失败 → CLR fail-fast(c0000602) → 父传播退出
+- **双进程模型的 Wine 障碍 = 进程间运行时通道**（RPC/共享内存），非托管层问题
+
+### 全局状态盘点（本轮结束）
+| 层 | 状态 |
+|---|---|
+| JIT/元数据/EH | ✅ 全通（修复16-34，injected=22930 fail=0，mono/CLR 双侧验证）|
+| cctor 链 | ✅ 全通（stub 反调试族后无异常）|
+| WPF Dispatcher | ✅ 已启动（消息循环运行中）|
+| NRS 双进程模式 | ⚠️ 已破译（父=bootstrap+重启/子=程序），Wine 下 RPC 通道缺失 |
+| NRS native 代理 | ⚠️ stub 后 Startup 挂（chooserObject 等 lazy-init 依赖 native）|
+| S2 字符串池 | ⏳ 数据就绪（dec_Factory.bin 8539 条），未回接 |
+
+### 下一棒（三选一路径，均已明确）
+1. **单进程托管重建**（最工程化）：stub 全部 NRS bootstrap 方法 + 托管重建代理字段
+   （VerifyProcessor 的 lazy-init 块本身就是完整的 LoadLibrary→GetProcAddress→delegate 链，
+   关键是确认 Startup 挂点的具体调用并逐个补齐）
+2. **S2 字符串回接先行**：ldstr 化 dec_Factory.bin（8539 条），可能消除部分 NRS 运行时依赖
+3. **native 桥模拟**：分析 NRS 管道/共享内存协议，在 S1 生成托管模拟器（工程量大）
