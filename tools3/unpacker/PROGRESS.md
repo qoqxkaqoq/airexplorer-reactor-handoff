@@ -303,3 +303,9 @@ cd tools3/unpacker && ./build.sh s1
 2. **或直接切 S2**：mono 侧 JIT 全通，先用 mono 驱动 S2（字符串回接）/S3（委托表）开发，
    Windows CLR 布局问题随后收尾（06004181 单点）。
 3. **CI 回归**：修复16/17/18 后需跑一次完整 windows probe 确认死点与本地一致。
+
+### CI 回归（run 40446834843, 修复16/17/18 后）
+- probe VERDICT = FAIL-EXITED(code=-1073741819 = 0xC0000005 AV) — 与本地 failfast 同族，死点一致 ✓
+- 反射诊断新线索：MFAIL 06004667/06004668 "Could not load type System.Security.Principal.WindowsImpersonationContext from mscorlib" — mscorlib TypeRef scope/版本错位待查
+- PEVerify 诊断错误 1245→2325（诊断步骤非门禁；样例=匿名类型 ctor 的 this 未初始化告警）
+- 结论：Windows 侧死点=06004181 failfast 族（与本地 Wine 一致），mono 侧 JIT 全通 → S2 开发可在 mono 驱动下先行
