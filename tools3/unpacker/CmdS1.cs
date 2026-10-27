@@ -764,11 +764,14 @@ public static class CmdS1
     {
         if (cor.Length < 4) return null;
         int cnt = BitConverter.ToInt32(cor, 0);
+        // 修复21: m_*.eh 每条 28B 子句的第一个 DWORD 是前导（恒 0），真实字段从子句内偏移 4 开始：
+        // [4B count][每条 28B = 4B 前导 + 6 DWORD(flags/tryOff/tryLen/hOff/hLen/cls)]
+        // 旧代码从子句头部读（把前导当 flags）→ 全部字段错位 1 DWORD → EH 全错
         if (cnt <= 0 || cor.Length < 4 + cnt * 28) return null;
         var clauses = new List<EhClause>(cnt);
         for (int i = 0; i < cnt; i++)
         {
-            int b = 4 + i * 28;
+            int b = 8 + i * 28;
             uint f = BitConverter.ToUInt32(cor, b);
             uint tryOff = BitConverter.ToUInt32(cor, b + 4);
             uint tryLen = BitConverter.ToUInt32(cor, b + 8);

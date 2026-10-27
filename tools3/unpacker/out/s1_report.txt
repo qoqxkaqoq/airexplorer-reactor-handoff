@@ -1,11 +1,15 @@
-S1 report 2026-10-27 04:52:07Z
+S1 report 2026-10-27 05:46:59Z
 in=/workspace/repo_git/work_a1_pack/nrs/AirExplorer_test_Slayed.exe
-injected=22930
-fail=0
+injected=22713
+fail=217
 skipNoTok=0
 skipNoBody=0
-ehDropped=2
+ehDropped=2001
 sigRestored=175
 attrRestored=177
 ldcTokenFixed=0
 ehNoSource=
+fail x184 ehData 28B parsed as 0 clauses
+fail x24 ehData 52B parsed as 0 clauses
+fail x7 ehData 76B parsed as 0 clauses
+fail x2 ehData 148B parsed as 0 clauses

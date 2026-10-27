@@ -446,3 +446,23 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
   2. tokmap 官方/产物 operand 对比（注意补 ldstr：string operand 不是 ITokenOperand）
   3. InitDelegates 拆分/移位实验（布局敏感性隔离）
   4. 或者先跑 mono probe out/s3.exe 看 mono 侧死点（mono 可能容忍）
+
+## 修复21（2026-10-27 13:xx）：m_*.eh 前导 DWORD 偏移修正——部分生效
+
+**根因确认**（06004192/0600419A 双例对照）：
+- m_*.eh 的每条 28B 子句 = [4B 前导（恒 0）] + [flags][tryOff][tryLen][hOff][hLen][cls]（6 DWORD）
+- 旧代码从子句头读 flags → 全部字段错位 1 DWORD（06004192 读出 tryOff=0/tryLen=0xA9B/hLen=0xB46/cls=0x0B 全错）
+- **修复21**：字段读取起点从子句头 +4（跳过前导）→ 字段全部对上官方语义
+
+**当前状态**：
+- eh-dropped 从 2001（校验拦截错位子句）变化中；**新 fail=217："ehData 28B parsed as 0 clauses"**
+  ——BuildFatEh 输出正确 28B（41 1C 00 00 + fat 子句），但 dnlib CreateCilBody 解析报 0 子句
+- 死点变为 VerifyProcessor `Bad format (0x8007000B)`——EH 修复链路接近打通但 dnlib 解析环节卡壳
+- official-eh-fallback=0（官方兜底未触发，dbg 打印无输出=0600419A 的 mt 兜底仍"成功"给出垃圾，校验待复核）
+
+### 下一棒（最后一段直道）
+1. **"ehData 28B parsed as 0 clauses"**：dnlib CreateCilBody 对 BuildFatEh 输出的 28B 解析 0 子句——
+   打印 ehData hex（S1 内）+ 检查 dnlib 的 EH 段 flags 判定（0x41 应走 fat 分支）
+2. 注意 fail=217 的方法被跳过注入（rollback）——需修好后再全量
+3. VerifyProcessor 的 `Bad format 0x8007000B`（E_INVALIDARG）= GetDelegateForFunctionPointer 参数错——S2/S3 层
+4. 修好后预期：cctor 链全通 → 窗口出现 → probe/soak
