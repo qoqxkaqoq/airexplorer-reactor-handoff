@@ -477,3 +477,18 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 - **判断**：这批 EH 数据来自 mt 磁盘段兜底路径（修复21 偏移修正后 mt 票据解析出的"新垃圾"），
   需要对 mt 兜底路径补与 CorInfoToCliEh 相同的有效性校验（hOff >= tryOff+tryLen、cls 有效、指令边界）
 - 或者更干净：**直接禁用 mt 磁盘段兜底**（PROGRESS 早已证明 mt 的 EH 区不可用），只留 corEh + 官方兜底
+
+## 修复23（2026-10-27 13:xx）：手动 EH 构造绕过 dnlib 解析
+
+- **CorInfoToCliClauses**：corEh 校验后直接返回子句列表（不再经 BuildFatEh→ehData→dnlib 解析）
+- **CreateCilBody 不传 ehData**（MoreSects 标志去除），body 创建后手动构造 ExceptionHandler：
+  offset→指令映射 → TryStart/TryEnd/HandlerStart/HandlerEnd 绑定 → CatchType=mod.ResolveToken(cls)
+- 死点再前进：VerifyProcessor 从 `Bad format 0x8007000B` 变为 `Index not found 0x80131124`
+  （=castclass 02000630 TemplateBuilder 嵌套壳类型的元数据查找失败——修复18 的嵌套壳仍为扁平名）
+- fail=309（手动 EH 绑定失败率略高于 dnlib 路径 217，但 EH 数据正确性大幅提升）
+
+### 下一棒收尾清单
+1. 修复18 扩展：嵌套类型的壳也用真名（挂产物外层类型 NestedTypes 下）——02000630 TemplateBuilder 类
+2. 手动 EH 绑定失败的 309 个方法逐类分析（tryOff/hOff 在指令边界的对齐）
+3. S2 字符串回接（dec_Factory.bin）
+4. 全流程: S1 → fix 段校验 → S3 → wine → CI probe/soak

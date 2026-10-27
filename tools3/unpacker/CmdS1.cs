@@ -299,12 +299,13 @@ public static class CmdS1
 
             // EH 数据: 优先 zip CORINFO -> 转 CLI fat clause; 兜底 mt 磁盘段(仅 0x41 类)
             byte[] ehData = null;
+            List<EhClause> corClauses = null;
             if (ehFlag != 0)
             {
                 if (zipEh.TryGetValue(tok, out var corEh))
                 {
-                    ehData = CorInfoToCliEh(corEh, (uint)codeSize);
-                    if (ehData == null) ehDropped++;
+                    corClauses = CorInfoToCliClauses(corEh, (uint)codeSize);
+                    if (corClauses == null) ehDropped++;
                 }
                 else
                 {
@@ -338,6 +339,9 @@ public static class CmdS1
                                 if (tOff + tLen > codeSize || hOff + hLen > codeSize) okFat = false;
                                 if (clsTok != 0 && clsTok < 0x01000000) okFat = false;
                                 if (tLen == 0 && hLen == 0) okFat = false;
+                                // 修复22: handler 不得落在 try 区间内（mt 票据解析出的典型非法结构）
+                                if (tLen > 0 && hOff >= tOff && hOff < tOff + tLen) okFat = false;
+                                if (hLen == 0) okFat = false;
                                 if (okFat)
                                 {
                                     uint cf = f == 3 ? 4u : (f <= 2 ? f : 0u);
@@ -360,8 +364,11 @@ public static class CmdS1
                                 ushort hOff = BitConverter.ToUInt16(mt, b + 5);
                                 byte hLen = mt[b + 7];
                                 uint clsTok = BitConverter.ToUInt32(mt, b + 8);
-                                // 边界校验: 全部必须落在 codeSize 内
+                                // 边界校验: 全部必须落在 codeSize 内 + handler 不得在 try 内 + cls 有效性
                                 if (tryOff + tryLen > codeSize || hOff + hLen > codeSize) ok2 = false;
+                                else if (tryLen > 0 && hOff >= tryOff && hOff < tryOff + tryLen) ok2 = false;
+                                else if (hLen == 0) ok2 = false;
+                                else if (clsTok != 0 && clsTok < 0x01000000) ok2 = false;
                                 else
                                 {
                                     uint cf = f == 3 ? 4u : (f <= 2 ? f : 0u);
@@ -444,9 +451,32 @@ public static class CmdS1
                 }
                 else
                     pbind = md.Parameters;
-                var body = MethodBodyReader.CreateCilBody(remapResolver, il, ehData, pbind, bodyFlags,
-                    (ushort)maxStack, (uint)codeSize, localsTok, gp);
+                // 修复23: corClauses 直接手动构造 ExceptionHandler（绕过 dnlib 对自定义 ehData 的
+                // 解析不稳定问题）。ehData 不再传给 CreateCilBody，MoreSects 标志由 body 标志决定。
+                var body = MethodBodyReader.CreateCilBody(remapResolver, il, null, pbind,
+                    (ushort)(bodyFlags & ~8), (ushort)maxStack, (uint)codeSize, localsTok, gp);
                 if (body == null) throw new Exception("CreateCilBody null");
+                if (corClauses != null && corClauses.Count > 0)
+                {
+                    // 建立 offset→指令 映射
+                    var offMap = new Dictionary<uint, Instruction>();
+                    uint o2 = 0;
+                    foreach (var i2 in body.Instructions) { offMap[o2] = i2; o2 += (uint)i2.GetSize(); }
+                    foreach (var c2 in corClauses)
+                    {
+                        if (!offMap.TryGetValue(c2.TryOff, out var ts) || !offMap.TryGetValue(c2.TryOff + c2.TryLen, out var te) ||
+                            !offMap.TryGetValue(c2.HOff, out var hs)) continue;
+                        Instruction he2 = null;
+                        if (c2.HLen > 0 && !offMap.TryGetValue(c2.HOff + c2.HLen, out he2)) continue;
+                        var neh = new ExceptionHandler(ExceptionHandlerType.Catch)
+                        { TryStart = ts, TryEnd = te, HandlerStart = hs };
+                        if (c2.HLen > 0) neh.HandlerEnd = he2; else neh.HandlerEnd = te;
+                        neh.CatchType = c2.Cls == 0 ? null : (mod.ResolveToken(c2.Cls) as ITypeDefOrRef);
+                        if (c2.Cls != 0 && neh.CatchType == null) continue;
+                        body.ExceptionHandlers.Add(neh);
+                    }
+                    if (body.ExceptionHandlers.Count == 0) throw new Exception("corClauses bound to 0 handlers");
+                }
                 if (ehData != null && body.ExceptionHandlers.Count == 0)
                     throw new Exception("ehData " + ehData.Length + "B parsed as 0 clauses: " + Convert.ToHexString(ehData));
                 body.MaxStack = (ushort)maxStack;
@@ -760,7 +790,7 @@ public static class CmdS1
     }
 
     /// <summary>CORINFO EH dump (4B count + 28B/条) -> dnlib fat EH 段。</summary>
-    static byte[] CorInfoToCliEh(byte[] cor, uint codesize)
+    static List<EhClause> CorInfoToCliClauses(byte[] cor, uint codesize)
     {
         if (cor.Length < 4) return null;
         int cnt = BitConverter.ToInt32(cor, 0);
@@ -787,8 +817,7 @@ public static class CmdS1
             uint cliFlags = f == 3 ? 4u : (f <= 2 ? f : 0u);
             clauses.Add(new EhClause(cliFlags, tryOff, tryLen, hOff, hLen, cls));
         }
-        if (clauses.Count == 0) return null;
-        return BuildFatEh(clauses);
+        return clauses.Count == 0 ? null : clauses;
     }
 
     /// <summary>修复20 兜底: 从官方 exe 的明文方法体读 EH（官方磁盘非加密方法可直接对照）。</summary>
