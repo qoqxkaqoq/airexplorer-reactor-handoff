@@ -52,6 +52,12 @@ public static class CmdS3
             if (mod.ResolveToken(mTok) is MemberRef mrm) member = mrm;
             else if (mod.ResolveToken(mTok) is MethodDef mdm) member = mdm;
             if (member == null) { skipMember++; continue; }
+            // 修复37: 过滤 NRS 重启桩 —— Project 数据里有 4 对绑定到
+            // System.Diagnostics.Process::Start（NRS 通过它们 CreateProcess 重启自己）。
+            // 这些绑定 Invoke 时=重启 exe → 必须跳过（业务代码如需 Process.Start 走自己的引用）
+            if (member is MemberRef mst && mst.Class?.FullName == "System.Diagnostics.Process" &&
+                mst.Name.String == "Start")
+            { skipMember++; continue; }
             // 修复36: 可访问性过滤 —— 跨程序集 protected 方法（ContainerControl::Dispose 等）
             // 经 ldftn 会 MethodAccessException。外部 TypeRef 无法静态查可见性, 用名称启发:
             // Dispose/Dispose(Boolean)/Finalize/ComponentDispose 是常见 protected 族

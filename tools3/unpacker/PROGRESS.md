@@ -1005,3 +1005,33 @@ TrackCompiler KeyNotFound（资源 token 序）
    （MemberRef 的 Class=KERNEL32/代理类型 + Name 含 Create/Proc）
 2. **或 relay 时间线**：final3t 的 CreateProcess 前最后 100 行的 API 模式对比 0600419C 已知行为
 3. **代理字段溯源**：CreateProcessW 代理存某字段 → findwr 反查字段 → 找 Invoke 该字段的托管方法
+
+## 修复37 达成单进程模式（2026-10-28 01:xx）
+
+### 修复37：过滤 S3 里的 NRS 重启桩（决定性）
+- **Project.bin 数据里有 4 对绑定到 System.Diagnostics.Process::Start**
+  —— **NRS 的"重启自己"就是通过这些委托**（InitDelegates 执行后某处 Invoke → CreateProcessW(self)）
+- **此前的"双进程"全部源于这 4 个绑定**（非 0600419C/92）
+- **修复37**：S3 过滤 Class=System.Diagnostics.Process && Name=Start（4 对）→ skipMember 27
+- **final4.exe 实测**：**单进程、无 CreateProcess、无崩溃**——程序完整执行 Main 并退出
+
+### 退出行为分析（relay 220MB）
+- WPF Dispatcher 启动 ✓（Message 窗口 + GetMessage 循环）
+- **PostQuitMessage(0) 由托管代码调用**（ret=140004ed8 JIT 地址）→ 消息循环干净退出
+- **主窗口从未 CreateWindowExW** —— App 启动链的某条件触发 Shutdown
+- System.Data.dll 等程序集加载正常
+
+### 完整管线（当前最终形态）
+```
+S1(修复35: 22930 全注入) → S3(修复36/37: 3239 委托, 过滤 Dispose族+Process.Start)
+→ S4(6 资源嵌入) → stub 3 暗桩(0600419C/92/93)
+→ final4.exe: 单进程运行、Main 执行、Dispatcher 循环、干净退出（无窗口）
+```
+
+### 下一棒（最后一段：让 App.Run 保持运行）
+1. **PostQuitMessage 的调用者定位**：WPF Shutdown 的触发条件——App.OnStartup/Startup 事件里的
+   NRS 校验失败分支（stub 掉的 0600419C/92/93 的"通过标志"缺失？）
+2. **对比官方的 Startup 行为**：官方 exe 的 relay 里主窗口创建前的调用序列
+3. **App 类的方法排查**：Main(SearchAdapter 213条) 的 switch 分支、App.OnStartup、
+   Application_Startup 事件的处理器
+4. 每步都朝"窗口出现"收敛——托管层已全通，剩余是启动决策逻辑
