@@ -638,3 +638,17 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
   2. mono 运行时 hook：加载产物后 hook 疑似解密函数，dump 实际传入索引与返回字符串
   3. dec_Factory.bin 的相邻条目（#0-5 都是 string.Format 模板）暗示**索引即调用点顺序**——
      按方法首次调用的确定性映射可从官方 IL 重建
+
+## 对照实验结论（2026-10-27 19:xx）：官方 exe 在 Wine/Linux 完整运行 ✅
+
+- **官方原版 AirExplorer v5.11.0 在 Wine 下启动成功**（official-air-on-linux.png 截图）：
+  主窗口/菜单栏（Explore/Accounts/Search/Synchronize/Scheduler/Options/Tools/Pro Version）/工具栏全部渲染，
+  主区域黑色（WebView2 区，Wine 需装 WebView2 Runtime，可后补）
+- **重大推论**：NRS 双进程模式在 Wine 下官方也能走通（native bootstrap 建立 RPC 通道成功）——
+  **我们产物子进程 fail-fast 不是 Wine 的限制，是产物缺 NRS native 运行时**（mt 快照只有托管 IL，
+  官方 exe 里的 native bootstrap 区域不在快照内）
+- **脱壳机现状的准确表述**：
+  - 托管层（JIT/元数据/EH/cctor/WPF Dispatcher）100% 打通
+  - 完整独立运行需要替代 NRS native 运行时（native 代理托管重建+字符串池回接），工程量明确
+  - 运行需求本身已有解：官方 exe 在 Linux/Wine 可直接跑（本项目 scripts/air-on-linux.sh 一键启动）
+  - 脱壳产物的价值 = 分析/修改/重打包（去掉 NRS 后的干净托管镜像）
