@@ -382,3 +382,17 @@ cd tools3/unpacker && ./build.sh s1
   （S3 加 InitDelegates 后布局移动触发 VerifyProcessor 的布局敏感拒——同 06004181 模式）
 - **下一棒**：VerifyProcessor（tokinfo/disasm/prune 三板斧）+ 剩余布局敏感拒的系统性收尾
   （疑点：fix19 只修 11 段，MoreSects 扫描 skipped=10825 需复核）
+
+## ldstr 排除（2026-10-27 12:xx）：06004192 的 3 个 ldstr 全部在 #US 范围内
+
+- 06004192 IL 里有 3 个 ldstr（"is tampered."/"SHA1"/"ValidatorArgument.EmitterReporter"）
+- token 0x70000A26/0xA42/0xA4C 全部 < 产物 #US size 0x454C → ldstr 排除
+- 注意：tokmap 的 operand 过滤漏了 ldstr（string operand 不是 ITokenOperand）——后续工具需补
+- VerifyProcessor(060041A5) 18 条指令完美（keogyBbmx→StopClient→GetDelegateForFunctionPointer→castclass）
+- VerifyProcessor prune 实验工具故障（dangling branch 目标），需修 prune 工具后再二分
+
+### 当前完整状态
+- 修复 16-20 全部落地，InvalidProgram 主链清零
+- 死点：VerifyProcessor JIT 拒（布局敏感型，prune 实验证实 0600419A 同类）
+- S3 已全量回接（3266 委托）
+- 剩余：布局敏感拒的精确机制（06004181/06004194/0600419A/060041A5/06004192 同族）+ S2 字符串层
