@@ -433,3 +433,16 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
   校验链：tiny/fat 头 → IsFat/GetSize>=3 → CheckRva(rva, codeEnd) → More 段链 → 每段 Kind 解析 → CHECK(sectSize>0) → CheckRva(rva, sectEnd)
 - **当前死点（S3 版）**：VerifyProcessor JIT 拒 InvalidProgram（S3 布局移动触发，同布局敏感族）
 - 06004181 的 `01 10 00 00` 段合法，其 Bad IL range另有来源（S3 后已消失）
+
+## VerifyProcessor 定性（2026-10-27 13:xx）：体本身被 JIT 拒（非布局）
+
+- prune N=10/14 都 InvalidProgram → VerifyProcessor(060041A5) 的拒是"体本身"，与布局无关
+  （不同于 06004181/0600419A 的布局敏感族）——18 条指令 IL 完美（ldsfld/brtrue/keogyBbmx/StopClient/
+  GetDelegateForFunctionPointer/castclass TemplateBuilder/callvirt Invoke/ret）
+- S3 前它"过 JIT"（Bad binary signature 是运行时层），S3 后变 JIT 拒——
+  S3 的 InitDelegates（3266×4≈13K 条指令的大方法）加入后触发
+- **下一棒**：
+  1. VerifyProcessor 的 2 个 ldstr token #US 范围检查（同 06004194 方法）
+  2. tokmap 官方/产物 operand 对比（注意补 ldstr：string operand 不是 ITokenOperand）
+  3. InitDelegates 拆分/移位实验（布局敏感性隔离）
+  4. 或者先跑 mono probe out/s3.exe 看 mono 侧死点（mono 可能容忍）
