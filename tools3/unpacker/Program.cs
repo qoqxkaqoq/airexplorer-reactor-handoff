@@ -56,6 +56,15 @@ public static class Program
                 case "pinvoke": return CmdScanPinvoke.Run(args);
                 case "findmethod": return CmdFindMethod.Run(args);
                 case "typetoks": return CmdTypeToks.Run(args);
+				case "scanrva": return CmdScanRva.RunScanRva(args);
+				case "epinfo": return CmdScanRva.RunEpInfo(args);
+				case "scanres": return CmdScanRes.Run(args);
+				case "patchstub": return CmdPatchStub.Run(args);
+				case "sigdiff": return CmdSigDiff.Run(args);
+				case "diagsig": return CmdSigDiff.RunDiag(args);
+				case "tokmap": return CmdTokMap.Run(args);
+				case "tsmap": return CmdTsMap.Run(args);
+				case "attrcmp": return CmdAttrCmp.Run(args);
                 default:
                     Console.WriteLine("unknown command: " + args[0]);
                     return 2;

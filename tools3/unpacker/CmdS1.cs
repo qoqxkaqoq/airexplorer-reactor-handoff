@@ -102,16 +102,43 @@ public static class CmdS1
             {
                 if (modTypeNames.Contains(bt.FullName)) continue;
                 if (bt.FullName.Contains("dummy")) continue;
-                // 壳名必须唯一: 基线嵌套类型(如 X.<>c)的 Name 不含外层, 直接用会互相撞名
-                // (BadImageFormatException: Duplicate type '<>c')。用 FullName 展平 + 专用 ns。
-                // 壳一律继承 System.Object 的普通密封类: 原基类可能是 enum(须有实例字段)/
-                // Delegate(须 sealed)/抽象类(须实现抽象成员), 照抄会 TypeLoad
-                // (No Instance Field in an Enum / delegate classes must be sealed)。
-                // 签名引用只要求类型存在, 继承链不影响方法签名解析。
-                var shell = new TypeDefUser("__ReactorRemoved",
-                    bt.FullName.Replace('.', '_').Replace('/', '_'), mod.CorLibTypes.Object.TypeDefOrRef);
-                shell.Attributes = TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
-                    | TypeAttributes.BeforeFieldInit;
+                // 修复18: 非特殊类型(非 enum/delegate/abstract/interface)用真名+真基类重建 ——
+                // 这些类型的字段/方法被 Slayed 移入 __ReactorRemoved 扁平壳, 方法 rid 保持不变,
+                // 但注入体 IL 的 call token 解析到的类型必须是官方真名(否则 JIT 拒)。
+                // 特殊类型照旧用扁平 Object 壳: enum(须实例字段)/delegate(须 sealed)/
+                // abstract(须实现抽象成员) 照抄会 TypeLoad。
+                bool special = bt.IsEnum || bt.IsDelegate || bt.IsAbstract || bt.IsInterface || bt.DeclaringType != null;
+                TypeDef shell;
+                if (!special)
+                {
+                    ITypeDefOrRef baseSig = mod.CorLibTypes.Object.TypeDefOrRef;
+                    if (bt.BaseType != null)
+                    {
+                        try
+                        {
+                            if (mod.ResolveToken(bt.BaseType.MDToken.Raw) is ITypeDefOrRef r
+                                && (r is TypeRef || (r is TypeDef rd && !rd.IsAbstract && !rd.IsInterface)))
+                                baseSig = r;
+                        }
+                        catch { }
+                    }
+                    shell = new TypeDefUser(bt.Namespace, bt.Name, baseSig);
+                    shell.Attributes = TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit
+                        | (bt.Attributes & TypeAttributes.Sealed);
+                    if (bt.HasGenericParameters)
+                        foreach (var gp in bt.GenericParameters)
+                        {
+                            var ng = new GenericParamUser(gp.Number, gp.Flags, gp.Name);
+                            shell.GenericParameters.Add(ng);
+                        }
+                }
+                else
+                {
+                    shell = new TypeDefUser("__ReactorRemoved",
+                        bt.FullName.Replace('.', '_').Replace('/', '_'), mod.CorLibTypes.Object.TypeDefOrRef);
+                    shell.Attributes = TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
+                        | TypeAttributes.BeforeFieldInit;
+                }
                 mod.Types.Add(shell);
                 s_tdByFull[bt.FullName] = shell;
                 shellAdded++;
@@ -512,7 +539,7 @@ public static class CmdS1
         int movedM = 0, movedF = 0;
         if (baseSigs != null)
         {
-            foreach (var t in mod.GetTypes().Where(x => x.FullName.Contains("dummy")).ToList())
+            foreach (var t in mod.GetTypes().Where(x => x.FullName.Contains("dummy") || x.FullName.Contains("__ReactorRemoved")).ToList())
             {
                 foreach (var m in t.Methods.ToList())
                 {
@@ -556,7 +583,7 @@ public static class CmdS1
         int stubbed = 0;
         foreach (var t in mod.GetTypes())
         {
-            if (!t.FullName.Contains("dummy")) continue;
+            if (!t.FullName.Contains("dummy") && !t.FullName.Contains("__ReactorRemoved")) continue;
             foreach (var m in t.Methods)
             {
                 bool mAbs = (m.Attributes & MethodAttributes.Abstract) != 0;
@@ -593,6 +620,92 @@ public static class CmdS1
             }
         }
         Console.WriteLine("[s1] dummy stubbed: {0}", stubbed);
+
+        // 修复16: 共享RVA桩独立化 —— Slayed 骨架把数千个桩方法指向同一 RVA(旧布局共享桩)。
+        // dnlib 写出时无 CilBody 的方法保留旧 RVA 列, 在重建后的新文件里该位置与
+        // 其它新写的方法体 footprint 交叉 -> CLR JIT 报 Bad IL range / InvalidProgram
+        // (Wine 实验: 2772 个共享桩独立化后 JIT 层全通过, 死点从 InvalidProgram 前进到运行时层)。
+        int deDup = 0;
+        {
+            var byRva = new Dictionary<uint, List<MethodDef>>();
+            foreach (var t in mod.GetTypes())
+                foreach (var m in t.Methods)
+                {
+                    uint r = (uint)m.RVA;
+                    if (r == 0 || m.IsAbstract || (m.Attributes & MethodAttributes.PinvokeImpl) != 0) continue;
+                    if (!byRva.TryGetValue(r, out var l)) byRva[r] = l = new List<MethodDef>();
+                    l.Add(m);
+                }
+            foreach (var kv in byRva)
+            {
+                if (kv.Value.Count < 2) continue;
+                foreach (var m in kv.Value)
+                {
+                    // 共享组内全部 stub 化: 注入过的方法 RVA 独立不会进共享组,
+                    // 进共享组的都是未注入方法, 其旧 RVA 在新文件里与邻居 footprint 交叉
+                    var body = new CilBody();
+                    var ret = m.MethodSig?.RetType;
+                    if (ret != null && ret.FullName != "System.Void")
+                    {
+                        switch (ret.ElementType)
+                        {
+                            case ElementType.Boolean: case ElementType.Char:
+                            case ElementType.I1: case ElementType.U1: case ElementType.I2: case ElementType.U2:
+                            case ElementType.I4: case ElementType.U4: case ElementType.I8: case ElementType.U8:
+                            case ElementType.R4: case ElementType.R8: case ElementType.I: case ElementType.U:
+                                body.Instructions.Add(Instruction.CreateLdcI4(0)); break;
+                            default: body.Instructions.Add(Instruction.Create(OpCodes.Ldnull)); break;
+                        }
+                    }
+                    body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+                    m.Body = body;
+                    m.Body.MaxStack = 8;
+                    deDup++;
+                }
+            }
+        }
+        Console.WriteLine("[s1] shared-rva dedup stubbed: {0}", deDup);
+
+        // 修复17: 全局 abstract 清理 —— 未注入方法(如 --only 子集外)保持 Slayed 的 abstract+无体
+        // 状态, 在非抽象类里 TypeLoad。清除全部非接口类型里的 abstract 残留并补 stub。
+        int absFixed = 0;
+        foreach (var t in mod.GetTypes())
+        {
+            if (t.IsInterface) continue;
+            // <Module> 全局方法 CLR 强制要求 static
+            bool global = t == mod.GlobalType;
+            foreach (var m in t.Methods)
+            {
+                if (global)
+                {
+                    var na = (m.Attributes | MethodAttributes.Static) & ~(MethodAttributes.Virtual | MethodAttributes.Abstract | MethodAttributes.NewSlot);
+                    if (na != m.Attributes) { m.Attributes = na; absFixed++; }
+                }
+                if ((m.Attributes & MethodAttributes.Abstract) == 0) continue;
+                m.Attributes &= ~MethodAttributes.Abstract;
+                if (!m.HasBody)
+                {
+                    var body = new CilBody();
+                    var ret = m.MethodSig?.RetType;
+                    if (ret != null && ret.FullName != "System.Void")
+                    {
+                        switch (ret.ElementType)
+                        {
+                            case ElementType.Boolean: case ElementType.Char:
+                            case ElementType.I1: case ElementType.U1: case ElementType.I2: case ElementType.U2:
+                            case ElementType.I4: case ElementType.U4: case ElementType.I8: case ElementType.U8:
+                            case ElementType.R4: case ElementType.R8: case ElementType.I: case ElementType.U:
+                                body.Instructions.Add(Instruction.CreateLdcI4(0)); break;
+                            default: body.Instructions.Add(Instruction.Create(OpCodes.Ldnull)); break;
+                        }
+                    }
+                    body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+                    m.Body = body; m.Body.MaxStack = 8;
+                }
+                absFixed++;
+            }
+        }
+        Console.WriteLine("[s1] abstract residual cleared: {0}", absFixed);
 
         var opts = new ModuleWriterOptions(mod);
         opts.MetadataOptions.Flags |= MetadataFlags.PreserveAll | MetadataFlags.KeepOldMaxStack;

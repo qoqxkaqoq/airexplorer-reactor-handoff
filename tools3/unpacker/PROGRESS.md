@@ -263,3 +263,43 @@ cd tools3/unpacker && ./build.sh s1
 # 闭包对分: dotnet bin/Release/net8.0/AirExplorerUnpacker.dll s1 ... --only cctor_closure.txt
 # CI: gh workflow run unpacker-gate.yml -f only_tokens=tools3/unpacker/cctor_closure.txt
 ```
+
+## 2026-10-27 决定性突破日：主线 InvalidProgram 根因链全部打通
+
+### 新工具链（本轮新增）
+- **scanrva**：全方法头/足迹扫描（tiny/fat 解码、section 越界、资源区重叠、OVL 共享/交叉检测）
+- **epinfo**：PE 级 EP/section/COR20/import 对比（产物 EP=dnlib 写的 mscoree IAT thunk → Reactor native bootstrap 已绕过）
+- **scanres**：全方法全 operand token 解析扫描（30.9 万 token failed=0）
+- **tokmap**：mt 原始 IL operand 在官方/产物两边解析身份对比（官方 token 序 vs Slayed token 序）
+- **tsmap**：TypeSpec/StandAloneSig/MethodSpec 全表逐 rid 身份对齐（三表 diff=0 ✓ 对齐）
+- **sigdiff/diagsig**：签名链身份对比与完整 TypeSig 链 dump
+- **attrcmp**：方法级元数据属性全面对比
+- **patchstub**：stub/copybody/copybatch/noeh/impl/stubfile/prune 多模式实验平台
+- **测试基座**：本地 Wine 秒级复现（先 Wine 后 CI 纪律）
+
+### 根因链（每步有实验证据）
+1. **共享 RVA 桩 = 主线 InvalidProgram 根因**：Slayed 骨架把 1.5 万+ 桩方法指向同一 RVA（0x3828 等），
+   dnlib 写出时无 CilBody 方法保留旧 RVA 列 → 新文件里 footprint 与邻居交叉 → CLR JIT 拒
+   （mono 不拒！CLR 独有校验）。**修复16**：dedup 全量 stub 化（15821 个）。
+   → 微实验：两方法共享 RVA 的最小 exe CLR 接受（SHARED_RVA_OK），证明是"旧值残留"而非共享本身。
+2. **abstract 残留**：Slayed 剥体方法保持 abstract+无体 → TypeLoad。**修复17**：全局清理（非接口类型）+ <Module> 强制 static/清 virtual。
+3. **__ReactorRemoved 壳方法未归位**：官方 06004284=CloudClient.Handling.ObserverValue::VerifyScopeAnnotationInspector，
+   产物里留在扁平壳 → call token 解析身份错位（tokmap 首个 mismatch）。**修复18**：非特殊类型的壳用真名+真基类重建
+   （enum/delegate/abstract/interface/嵌套仍扁平壳兜底）→ 06004284 已归位真名类型。
+4. **当前最后 JIT 拒点 = 06004181（DispatcherInitializer::.cctor）**：99 条、EH1、maxstack4、slot_plaintext 源。
+   - 全部静态验证通过：指令/89 operand(EH1 处理后 59 operand mismatch=0)/EH 结构/头/属性（唯一 DIFF=ImplFlags，已证非因素）
+   - **mono 完全过 JIT**（死点=运行时层 ArgumentNullException Invalid handle），**Windows CLR 拒** → CLR 独有校验
+   - **prune 二分（保留前 N 条+ret）**：N=2/60/65 过（3 次复跑稳定）、N=10/30/62/68/70/80/90/99 拒（重跑稳定）
+     → **非单调 = 布局敏感型拒**：.cctor 体大小变化 → 全局布局移动 → 交叉点变化
+   - noeh（删 EH+leave→br）后 InvalidProgram 消失（EXIT=5 空异常 ToString 失败 = 更深运行时问题）
+   - dupRva 仍有 16017：dnlib 对 identical tiny 体（ret）合并共享（合法）+ 修复16 只清 >2 条组的漏网（已全量化）
+5. **S2 层已可见**：mono 下 DefineEfficientProfiler(0600419C) 运行时 ArgumentNullException（BinaryReader null）
+   / Invalid handle = 字符串池未回接（dec_Factory.bin 8539 条待接）——**JIT 层在 mono 侧已全通**。
+
+### 下一棒最高价值动作
+1. **06004181 布局敏感拒**：suspects = (a) 体区与 PrivateImplementationDetails 数据字段(ldtoken 0400207E→FieldRVA)交叉；
+   (b) fat 头 MoreSects 位与 EH 段物理布局；(c) prune=60/65 的"幸运布局"反推交叉点。
+   工具就绪：prune 模式二分、scanrva 交叉清单、tokmap。
+2. **或直接切 S2**：mono 侧 JIT 全通，先用 mono 驱动 S2（字符串回接）/S3（委托表）开发，
+   Windows CLR 布局问题随后收尾（06004181 单点）。
+3. **CI 回归**：修复16/17/18 后需跑一次完整 windows probe 确认死点与本地一致。
