@@ -782,3 +782,28 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
   ObserverValue cctor → 回环）下 mono 返回 default 字段值——**Windows CLR 处理正确**（host3 已证）
 - **最终版 final.exe（S1修复35+S4资源+stub 2方法）**：Windows 下进程存活 20s+ 但仍有
   Program Error（native 层，log 无托管异常）——最后一公里 = 定位残余 native crash
+
+## 本轮收官（2026-10-27 21:xx）：完整管线聚合
+
+### 修复35 效果确认
+- dedup 15821 → 1769（真体保护恢复）
+- ArgumentGateway 族真体回归（06002F51 instrs=8 rva=0x2B9D48 独立）
+
+### 最终产物 final_ue.exe（本轮聚合形态）
+- 构成：S1(修复35) + S4 全资源嵌入 + stub 0600419C/06004192 + UnhandledException 日志钩子
+- **Wine 实测：存活 30s+ 零异常、零崩溃对话框**（对比：保留版 2 秒死/np 版 15 秒崩）
+- 无窗口：Startup 挂点仍在（NRS 代理依赖——0600419C stub 后其 11 个初始化字段缺失）
+
+### 修正情报
+- **代理 token 修正**：FormatContainer(WriteProcessMemory)=060041A2、
+  GenerateAutomatableResponder(OpenProcess)=060041A4（此前 06004182/84 为计算错误）
+- **代理不能 stub** 的教训再次确认（null delegate 被调用即崩）——
+  **正确姿势仍是 0600419C 分支级 patch 或字段初始化补全**
+
+### 下一棒（单进程模式的最后冲刺）
+1. **0600419C 的 11 个初始化字段清单已明**（scopeUserTemplate/_NodeElementPtr/_RegFunction/
+   m_RandomTesterTemplateDist/isRecommenderObserver/m_IsDividedAnalyzerRequester/
+   _SegmentedStubTemplate/m_SharerRecordDist/_IsRunnerParameter/m_RemoteNodeVal/m_TemplateManagerValue）
+2. **两路**：(a) 找 Startup 读这些字段的代码 → 推断字段应有的托管值 → patchstub 新模式 initfield 补写
+   (b) 0600419C 控制流解剖（9992 条平坦化）分离"初始化段"与"native 自检段"
+3. **工具全就绪**：uehook(异常日志)/patchstub 全模式/scanrva/tokmap/dumpgap/resinfo/s4/findthread
