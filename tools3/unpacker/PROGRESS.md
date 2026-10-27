@@ -652,3 +652,27 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
   - 完整独立运行需要替代 NRS native 运行时（native 代理托管重建+字符串池回接），工程量明确
   - 运行需求本身已有解：官方 exe 在 Linux/Wine 可直接跑（本项目 scripts/air-on-linux.sh 一键启动）
   - 脱壳产物的价值 = 分析/修改/重打包（去掉 NRS 后的干净托管镜像）
+
+## "搞到能运行"路线终稿（2026-10-27 19:xx）
+
+### 关键新情报
+- **0600419C 内 ldstr 清单**：`clrjit.dll` / `m_ptr` / `m_pData` / `System.Reflection.RuntimeModule` /
+  `System.Reflection.ReflectionContext` —— **NRS native 层 = clrjit hook**（JIT 层解密）+
+  反射操作（RuntimeModule 字段访问），**CreateProcess 不在 0600419C 直接拼接**（在其调用树的代理方法里）
+- **官方 PE 结构**：.text 9.27MB = [加密托管体区] + [尾部 native bootstrap]，EP=0x929B9E 指向尾部；
+  产物 .text 5MB（mscoree thunk EP，bootstrap 缺失）
+- **官方 exe 在 Wine 完整运行**（截图）——NRS 全链在 Linux 可跑
+
+### 路线 A（推荐）：单进程托管重建
+- NRS 的 native 依赖实际只有三类：
+  (1) clrjit hook（单进程下不需要——体已明文）
+  (2) kernel32 代理（CloseHandle/CreateProcessW 等——VerifyProcessor 的 lazy-init 链可跑，
+      **只需跳过 CreateProcess 代理的调用**）
+  (3) Startup 阶段对 0600419C 初始化字段的依赖（scopeUserTemplate/_NodeElementPtr 等 11 个）
+- 步骤：① 0600419C 调用树里定位 CreateProcess 代理（找拼 "Process" 的 Concat 模式）
+       ② 该代理调用点 patch 为跳过（其后的初始化保留）
+       ③ 其余依赖 native 的代理照常走（kernel32 在 Wine 都有）
+- 预期：cctor 全通 + Startup 不挂 → 窗口出现
+
+### 路线 B：混合 PE（备用）
+- 保留官方 native bootstrap + 替换托管流——需要逆向 native 解密表（数天，深水区）
