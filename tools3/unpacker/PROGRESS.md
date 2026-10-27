@@ -623,3 +623,18 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
    关键是确认 Startup 挂点的具体调用并逐个补齐）
 2. **S2 字符串回接先行**：ldstr 化 dec_Factory.bin（8539 条），可能消除部分 NRS 运行时依赖
 3. **native 桥模拟**：分析 NRS 管道/共享内存协议，在 S1 生成托管模拟器（工程量大）
+
+## S2 模式识别进展（2026-10-27 19:xx）
+
+- **新工具 scans2**：扫描全产物 "ldc.i4 <n>; call <m>" 模式按目标统计
+- **结论：该模式不成立**——最高频 = 06004284(VerifyScopeAnnotationInspector, token 解码器) x14，
+  其余全是 1-3 次——**mt 快照 IL 里没有 "索引+解密调用" 的字符串取用模式**
+- **推论**：mt 快照（内存 dump 的解密后 IL）里官方字符串的引用形态与预期不同——
+  可能性：(a) NRS 在 JIT 层替换字符串引用（IL 里是池偏移 ldstr，运行时重定向）； 
+  (b) 取串调用有更复杂的栈模式（ldfld 委托字段 + Invoke）；(c) mt 快照 IL 已含池引用的中间形态
+- **下一棒识别方法**：
+  1. 对照官方 exe 的某字符串大户方法（如 string.Format 模板 '{{ alg = {0}'所在方法）的
+     官方磁盘 IL vs mt IL vs 产物 IL——看字符串引用在三种形态间的演变
+  2. mono 运行时 hook：加载产物后 hook 疑似解密函数，dump 实际传入索引与返回字符串
+  3. dec_Factory.bin 的相邻条目（#0-5 都是 string.Format 模板）暗示**索引即调用点顺序**——
+     按方法首次调用的确定性映射可从官方 IL 重建

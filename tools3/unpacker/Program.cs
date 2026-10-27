@@ -61,6 +61,7 @@ public static class Program
 				case "s3": return CmdS3.Run(args);
 					case "findwr": return CmdFindWriters.Run(args);
 					case "findpinv": return CmdFindPinv.Run(args);
+					case "scans2": return CmdScanS2.Run(args);
 				case "epinfo": return CmdScanRva.RunEpInfo(args);
 				case "scanres": return CmdScanRes.Run(args);
 				case "patchstub": return CmdPatchStub.Run(args);
