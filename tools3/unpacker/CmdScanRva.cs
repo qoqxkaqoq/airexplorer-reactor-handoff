@@ -122,6 +122,17 @@ public static class CmdScanRva
         return 0;
     }
 
+    public static int RunDumpAll(string[] args)
+    {
+        if (args.Length < 3) { Console.WriteLine("usage: dumpall <exe> <out.tsv>"); return 2; }
+        var mod = ModuleDefMD.Load(args[1]);
+        using var w = new StreamWriter(args[2]);
+        foreach (var t in mod.GetTypes())
+            foreach (var m in t.Methods)
+                w.WriteLine($"{m.MDToken.Raw:X8}\t{(uint)m.RVA:X8}");
+        return 0;
+    }
+
     public static int RunEpInfo(string[] args)
     {
         if (args.Length < 2) { Console.WriteLine("usage: epinfo <exe> [baseline]"); return 2; }

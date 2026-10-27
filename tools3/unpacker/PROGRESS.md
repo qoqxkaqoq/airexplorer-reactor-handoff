@@ -331,3 +331,13 @@ cd tools3/unpacker && ./build.sh s1
 2. 找 dnlib 4.4 写出 0x01 段头的触发条件（疑与"1 个子句/small 段"相关，0600419C 9 子句 fat 正常）。
 3. 批量统计：全产物有多少 MoreSects 方法的段头异常（06004181 决非唯一）。
 4. 修完后 wine probe → 预期 InvalidProgram 清零 → 死点进入 S2 运行时层（BinaryReader null / Invalid handle）→ 接 S2。
+
+## 修复19 落地（2026-10-27 12:xx）：EH 段畸形字节级重建
+
+- **fix_eh_sections.py**：扫描全部 MoreSects 方法体，修复 dnlib 畸形 EH 段
+  （flags=0x01 缺 EHTable 位 0x40 + DataSize=4+12n small 子句）→ 重建为合法 small 段
+- 全量运行（dumpall 30912 方法 → MoreSects 有效 17 → 修复 11 畸形段）
+- **结果：InvalidProgram 清零（0 次）**，死点前进到
+  `Bad IL range at GenerateAdaptableCollection ← DefineEfficientProfiler ← .cctor`
+  = 修复16 dedup 未覆盖的"非共享邻居交叉"残留（scanrva OVL 可定位）
+- 流程: dumpall → fix_eh_sections.py → wine 测试
