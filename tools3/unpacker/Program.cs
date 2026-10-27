@@ -65,6 +65,7 @@ public static class Program
 					case "resinfo": return CmdRes.Run(args);
 					case "s4": return CmdS4.Run(args);
 					case "findthread": return CmdFindThread.Run(args);
+					case "dumpgap": return CmdDumpGap.Run(args);
 				case "epinfo": return CmdScanRva.RunEpInfo(args);
 				case "scanres": return CmdScanRes.Run(args);
 				case "patchstub": return CmdPatchStub.Run(args);

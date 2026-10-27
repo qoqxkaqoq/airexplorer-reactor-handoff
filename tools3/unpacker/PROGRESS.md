@@ -770,3 +770,15 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
    （识别判据：官方 rva≠0 + manifest 无记录 → 用官方 rva 在 mt 定位体）
 2. ArgumentGateway cctor（0600413x 族）的真体补注后重测 s4addst
 3. 全链通后 = 功能与原版一致（S1 体 + S3 委托 + S4 资源 + ldstr 通路全部就位）
+
+## 修复35（2026-10-27 21:xx）：dedup 真体保护判据恢复
+
+- **发现**：ArgumentGateway 族 67+ 方法在 manifest（dump_full）且 mt 有真体（28-34B 解密调用），
+  但产物是 2 条桩——**修复16 全量化时按 Slayed 旧 RVA 分组，把已注入真体的方法误 stub**
+- **修复35**：dedup 恢复"真体不动"判据（HasBody && instrs>2 || 有 EH → 跳过）——
+  只有真正无体的成员才 stub（旧 RVA 悬空引用才需要）
+- **结果**：dedup 从 15821 → 1769；06002F51 真体 8 条恢复（rva=0x2B9D48 独立）
+- **mono Invalid handle 定性**：cctor 循环依赖（DispatcherInitializer cctor → VerifyScope →
+  ObserverValue cctor → 回环）下 mono 返回 default 字段值——**Windows CLR 处理正确**（host3 已证）
+- **最终版 final.exe（S1修复35+S4资源+stub 2方法）**：Windows 下进程存活 20s+ 但仍有
+  Program Error（native 层，log 无托管异常）——最后一公里 = 定位残余 native crash

@@ -800,8 +800,13 @@ public static class CmdS1
                 if (kv.Value.Count < 2) continue;
                 foreach (var m in kv.Value)
                 {
-                    // 共享组内全部 stub 化: 注入过的方法 RVA 独立不会进共享组,
-                    // 进共享组的都是未注入方法, 其旧 RVA 在新文件里与邻居 footprint 交叉
+                    // 修复35: 恢复真体保护判据 —— 注入过真体的方法(m.HasBody 且非平凡)
+                    // dnlib 写出时按 Body 分配新 RVA, 不会与邻居交叉, 不需要 stub。
+                    // 全量化时的"共享组都是未注入方法"假设错误: ArgumentGateway 族等 67+ 方法
+                    // 注入了真体但仍按 Slayed 旧 RVA 分组, 被误 stub → 业务逻辑错乱。
+                    // 只有"无真体"的成员才 stub (它们的旧 RVA 在新文件里是悬空引用)。
+                    if (m.HasBody && m.Body.Instructions.Count > 2) continue;
+                    if (m.HasBody && m.Body.ExceptionHandlers.Count > 0) continue;
                     var body = new CilBody();
                     var ret = m.MethodSig?.RetType;
                     if (ret != null && ret.FullName != "System.Void")
