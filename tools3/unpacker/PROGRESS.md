@@ -745,3 +745,28 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 | S2 池取串通路 | ⏳ 模式待定位 |
 | S4 资源 | ⏳ 解密数据全齐，待嵌入 |
 | 保护链短路 | ⏳ 0600419C 分支 patch（np 实验存活 15s+ 证明可行）|
+
+## S4 嵌入完成 + 新瓶颈定位（2026-10-27 21:xx）
+
+### 已完成
+- **CmdS4 资源重嵌落地**：replaced=5 added=1 mismatch=0（6 资源全部同大小替换/添加）
+  - 嵌入版（s4.exe/s4st.exe/s4addst.exe）Wine 实测
+- **Windows CLR 验证框架**（Wine csc + host3/4/5）：VerifyScope token 解析链完全正常
+  （authenticatorNotifier 非 default、0x02000630→TemplateBuilder 解析成功）——**mono Invalid handle 确认假阳性**
+- **依赖 DLL 确认齐备**：C:\airtest\ 有全部 24 个依赖（Newtonsoft/WebView2/SharpZipLib 等），
+  GetTypes 4910 类型全部加载成功
+
+### 新瓶颈：dump 清单漏覆盖方法
+- **ArgumentGateway (0x0200045A, 67 方法) 全部共享桩 rva=0x383B**（dedup 后）——
+  它们的真体**不在 bodies_manifest.tsv**（dump 工具没识别到这批加密方法）
+- **证据**：06004191 的 tokinfo=DispatcherInitializer::DefineRandomCompressor（49 条已注入 ✓），
+  但 dumpmt 显示它在 ArgumentGateway 方法表 → **清单/类型归属需要全量校对**
+- s4addst（only-add FactoryValidator）Wine 实测新死点：
+  **ArgumentGateway::cctor → ArgumentOutOfRangeException**（读嵌入资源索引越界）
+  ——该 cctor 依赖的方法体是共享桩（假体）→ 逻辑错乱
+
+### 下一棒（功能等价的最后一个数据工程）
+1. **dump 清单补全**：对比"Slayed 剥体方法全集" vs manifest——缺的方法从 mt 快照补 dump
+   （识别判据：官方 rva≠0 + manifest 无记录 → 用官方 rva 在 mt 定位体）
+2. ArgumentGateway cctor（0600413x 族）的真体补注后重测 s4addst
+3. 全链通后 = 功能与原版一致（S1 体 + S3 委托 + S4 资源 + ldstr 通路全部就位）

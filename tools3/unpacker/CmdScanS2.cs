@@ -73,9 +73,37 @@ public static class CmdScanS2
         return 0;
     }
 
+    /// <summary>scans2 <exe> resref — 找引用资源名的 ldstr（GetManifestResourceStream 等）。</summary>
+    public static int ScanResRef(string[] args)
+    {
+        if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe> resref"); return 2; }
+        var mod = ModuleDefMD.Load(args[1]);
+        string[] names = { "ValidatorViewer", "EmitterReporter", "ValidatorProc", "ValidatorProject", "DefinitionError", "FactoryValidator" };
+        foreach (var t in mod.GetTypes())
+            foreach (var m in t.Methods)
+            {
+                if (!m.HasBody) continue;
+                foreach (var ins in m.Body.Instructions)
+                {
+                    if (ins.OpCode.Code != Code.Ldstr) continue;
+                    var sv = ins.Operand as string;
+                    if (sv == null) continue;
+                    foreach (var nm in names)
+                        if (sv.Contains(nm))
+                        {
+                            Console.WriteLine("[{0}] {1}::{2} @IL_{3:X4}: ldstr \"{4}\"", (uint)m.MDToken.Raw,
+                                t.FullName, m.Name, ins.Offset, sv);
+                            break;
+                        }
+                }
+            }
+        return 0;
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length >= 3 && args[2] == "concat") return ScanConcat(args);
+        if (args.Length >= 3 && args[2] == "resref") return ScanResRef(args);
         if (args.Length >= 3 && args[2] == "idxinv") return ScanIdxInvoke(args);
         if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe>"); return 2; }
         var mod = ModuleDefMD.Load(args[1]);

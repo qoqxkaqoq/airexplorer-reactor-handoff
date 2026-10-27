@@ -63,6 +63,8 @@ public static class Program
 					case "findpinv": return CmdFindPinv.Run(args);
 					case "scans2": return CmdScanS2.Run(args);
 					case "resinfo": return CmdRes.Run(args);
+					case "s4": return CmdS4.Run(args);
+					case "findthread": return CmdFindThread.Run(args);
 				case "epinfo": return CmdScanRva.RunEpInfo(args);
 				case "scanres": return CmdScanRes.Run(args);
 				case "patchstub": return CmdPatchStub.Run(args);
