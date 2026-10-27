@@ -368,3 +368,17 @@ cd tools3/unpacker && ./build.sh s1
 1. S2：ldstr/取串调用回接（dec_Factory.bin，8539 条 [int32 byteLen][UTF-16]）
 2. S3：委托表回接（zdec/Project.bin，3266 条 [Field 0x04][MemberRef 0x0A|0x4A]）——VerifyProcessor 在此消解
 3. 每完成一段 → dumpall + fix_eh_sections.py + wine 验证死点前进
+
+## S3 委托表回接落地（2026-10-27 12:xx）：3266/3266 全量成功
+
+- **CmdS3**：读 Project.bin（3266 条 [Field 0x04][Member 0x0A|0x4A]），
+  0x4A=带 Reactor 标志 0x40 的 MemberRef（去 0x40 还原），
+  生成 `<Module>::InitDelegates`（ldnull → ldftn member → newobj 委托.ctor(object,IntPtr) → stsfld field ×3266），
+  `<Module>::.cctor` 尾部插 call
+- **结果：delegates=3266 skip=0（字段/成员/ctor 全部解析成功）**
+- 委托对样例：`ValidatorFormatter::ValidateResponsiveChecker ← String::Format`、
+  `ActiveValidator::SplitProc ← PropertyInfo::GetValue`（委托类型 .ctor(object,IntPtr) 全部在产物中存在）
+- **死点变化**：VerifyProcessor 从运行时层 `Bad binary signature` 变为 JIT 拒 `InvalidProgram`
+  （S3 加 InitDelegates 后布局移动触发 VerifyProcessor 的布局敏感拒——同 06004181 模式）
+- **下一棒**：VerifyProcessor（tokinfo/disasm/prune 三板斧）+ 剩余布局敏感拒的系统性收尾
+  （疑点：fix19 只修 11 段，MoreSects 扫描 skipped=10825 需复核）

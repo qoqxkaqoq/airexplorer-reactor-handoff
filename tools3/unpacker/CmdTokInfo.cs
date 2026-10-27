@@ -14,6 +14,23 @@ public static class CmdTokInfo
         {
             uint raw = Convert.ToUInt32(args[i], 16);
             var r = mod.ResolveToken(raw);
+            if (r is FieldDef fd)
+            {
+                Console.WriteLine("[{0}] FieldDef {1}::{2} sig={3} static={4} rva=0x{5:X}",
+                    args[i], fd.DeclaringType?.FullName, fd.Name, fd.FieldSig?.Type.FullName,
+                    fd.IsStatic, (uint)fd.RVA);
+                continue;
+            }
+            if (r is MemberRef mr)
+            {
+                if (mr.MethodSig != null)
+                    Console.WriteLine("[{0}] MemberRef(method) {1}::{2} sig={3}", args[i],
+                        mr.Class?.FullName, mr.Name, mr.MethodSig.ToString());
+                else
+                    Console.WriteLine("[{0}] MemberRef(field) {1}::{2} sig={3}", args[i],
+                        mr.Class?.FullName, mr.Name, mr.FieldSig?.Type.FullName);
+                continue;
+            }
             if (r is MethodDef m)
             {
                 Console.WriteLine("[{0}] {1}::{2} static={3} HasThis={4} sig={5} instrs={6} maxstack={7} locals={8} eh={9} impl={10} rva=0x{11:X}",
