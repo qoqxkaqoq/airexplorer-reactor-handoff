@@ -413,3 +413,23 @@ cd tools3/unpacker && ./build.sh s1
    与"非 identical 但 RVA 相同"的混合需要区分
 3. **备选**：06004192 体大小扫描（prune N=1766..2521 全跑一遍找"过"的 N）→ 反推交叉点位置
 4. **备选**：MSBL 布局对比 —— 用官方 exe 的方法布局（dupRva=0）作为布局模板强制 dnlib 按官方 RVA 排布
+
+## ⚠️ 重大认知修正（2026-10-27 13:xx）：EH 段格式权威解读（corhdr.h）
+
+**ECMA/corhdr.h 权威定义**（推翻此前全部段头解读）：
+```
+CorILMethod_Sect_EHTable   = 1     ← bit0-5 的类型码 1 = EHTable
+CorILMethod_Sect_FatFormat = 0x40  ← bit6 = FatFormat
+CorILMethod_Sect_MoreSects = 0x80  ← bit7 = MoreSects
+Kind & KindMask(0x3F) = 类型码（1=EHTable）
+SMALL 段: Kind byte(bit6=0) + DataSize byte(独立 8-bit 字段)
+FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
+```
+- **`01 10 00 00` = 合法 small EH 段**（Kind=0x01=EHTable、DataSize=0x10=16）——dnlib 写法正确
+- **`41 dc 00 00` = 合法 fat EH 段**（Kind=0x41=EHTable|FatFormat、DataSize=0xDC）——正确
+- **fix19 的 `44 00 00 00` 重建 = Kind 0x44 → 类型码 0x04 无效 → CheckILMethod 的 CHECK(sectSize>0) 失败 → 0600419A 的 Bad IL range 是 fix19 自己造成的！**
+- **fix19 作废**：fix_eh_sections.py 的段头重建逻辑撤销，当前最佳产物 = out/s3.exe（S1+修复16-18+S3，无 fix19）
+- **CLR "Bad IL range" 抛点 = PEAssembly::GetIL → CheckILMethod 失败（cordecoderhelpers.h）**
+  校验链：tiny/fat 头 → IsFat/GetSize>=3 → CheckRva(rva, codeEnd) → More 段链 → 每段 Kind 解析 → CHECK(sectSize>0) → CheckRva(rva, sectEnd)
+- **当前死点（S3 版）**：VerifyProcessor JIT 拒 InvalidProgram（S3 布局移动触发，同布局敏感族）
+- 06004181 的 `01 10 00 00` 段合法，其 Bad IL range另有来源（S3 后已消失）
