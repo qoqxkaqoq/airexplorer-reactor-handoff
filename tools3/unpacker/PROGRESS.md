@@ -949,3 +949,21 @@ lock (_VisibleStackObj) {
 - 委托 ✅（S3 3266）
 - 剩余：TrackCompiler 资源 token 变换链（唯一业务死点）
 - 网盘列表 = WebView2 依赖（官方版需 Runtime ≥1418，109 已装待升级）
+
+## 决定性发现：Field 签名混淆（2026-10-28 00:xx）
+
+### CheckScheduledDecryptor 深挖
+- **字段 0400241F → 绑定方法 0x0A0009A6 = `System.Threading.Monitor::Enter(Object, Boolean&)`**！
+- **fieldType（磁盘 sig）= ValidatorSharerRunner（自引用）**——**CreateDelegate(ValidatorSharerRunner, Monitor.Enter) 必抛**
+- **官方不崩 → 官方运行时该字段的 sig ≠ 磁盘 sig** —— **Field 签名同样被 NRS 混淆**！
+- **TrackCompiler 的字典 value（0A0009A6 Monitor.Enter）经 Module.ResolveMethod → CreateDelegate**——
+  **运行时的 field.FieldType = 适配 Monitor.Enter 签名的 delegate 类型**（如 void XX(object, ref bool)）
+- **S1 信任官方磁盘 sig（sig-restored=177）→ 委托型字段被写成类类型 → S3 CreateDelegate 失败 → NULL**
+
+### 修复方向（下一棒）
+1. **从 dec_Project/Project.bin 的对表反推每个委托型字段的真实 sig**：
+   Field 的绑定方法 mi → 构造适配 delegate 类型（Invoke 签名 = mi 的签名）→ 替换 Field sig
+2. **S3 的 CreateDelegate 前验证 field.FieldType.IsDelegate + Invoke 签名匹配 mi**——
+   不匹配的字段（如 0400241F）用**动态生成的 delegate 类型**或**直接跳过留给 TrackCompiler 族**
+3. **TrackCompiler 的字典型字段**（自引用单例）实际是"委托容器"——真实 sig 需运行时确认——
+   或从 IL 的 ldsfld 后用法推断（如 ExecuteExplorer(obj, Boolean&, this) 的调用形态）

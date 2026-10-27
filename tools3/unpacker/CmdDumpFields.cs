@@ -29,8 +29,7 @@ public static class CmdDumpFields
             {
                 bool has = toks != null && toks.Contains((uint)f.MDToken.Raw);
                 if (has) inSet++; else outSet++;
-                if (toks != null && !has)
-                    Console.WriteLine("  MISSING [0x{0:X8}] {1} (sig={2})", (uint)f.MDToken.Raw, f.Name, f.FieldSig?.Type.FullName);
+                Console.WriteLine("  [0x{0:X8}] {1} type={2} inSet={3}", (uint)f.MDToken.Raw, f.Name, f.FieldSig?.Type.FullName, has);
             }
             Console.WriteLine("  => inSet={0} missing={1}", inSet, outSet);
         }
