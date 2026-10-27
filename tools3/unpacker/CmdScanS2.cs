@@ -6,8 +6,39 @@ namespace AirExplorerUnpacker;
 /// <summary>scans2 — 扫描 "ldc.i4 <n>; call <m>" 模式，按 call 目标统计——识别字符串解密器。</summary>
 public static class CmdScanS2
 {
+    /// <summary>scans2 <exe> concat — 扫 ldstr+ldstr+Concat 模式，重建拼接出的 API 名。</summary>
+    public static int ScanConcat(string[] args)
+    {
+        if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe> concat"); return 2; }
+        var mod = ModuleDefMD.Load(args[1]);
+        foreach (var t in mod.GetTypes())
+            foreach (var m in t.Methods)
+            {
+                if (!m.HasBody) continue;
+                var ins = m.Body.Instructions;
+                for (int i = 0; i < ins.Count - 2; i++)
+                {
+                    if (ins[i].OpCode.Code != Code.Ldstr) continue;
+                    if (ins[i+1].OpCode.Code == Code.Call && ins[i+1].Operand is MethodDef cm1 &&
+                        cm1.Name == "Trim") { /* ldstr; call Trim; ldstr; ... */ }
+                    if (ins[i+2].OpCode.Code != Code.Ldstr) continue;
+                    var nxt = i + 3 < ins.Count ? ins[i + 3] : null;
+                    if (nxt == null) continue;
+                    // 找 Concat: 模式宽容——两个 ldstr 之间允许一个 call(Trim)
+                    var s1 = ins[i].Operand as string;
+                    var s2 = ins[i + 2].Operand as string;
+                    if (s1 == null || s2 == null) continue;
+                    if (s1.Length + s2.Length < 3) continue;
+                    if (false)                         Console.WriteLine("  [{0}] {1}::{2} IL_{3:X4}: \"{4}\" + \"{5}\"",
+                            (uint)m.MDToken.Raw, t.FullName, m.Name, ins[i].Offset, s1, s2);
+                }
+            }
+        return 0;
+    }
+
     public static int Run(string[] args)
     {
+        if (args.Length >= 3 && args[2] == "concat") return ScanConcat(args);
         if (args.Length < 2) { Console.WriteLine("usage: scans2 <exe>"); return 2; }
         var mod = ModuleDefMD.Load(args[1]);
         // 统计: ldc.i4(或ldc.i4.s/n) 后紧跟 call/callvirt 的目标方法频率

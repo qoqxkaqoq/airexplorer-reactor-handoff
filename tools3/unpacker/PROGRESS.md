@@ -676,3 +676,16 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 
 ### 路线 B：混合 PE（备用）
 - 保留官方 native bootstrap + 替换托管流——需要逆向 native 解密表（数天，深水区）
+
+## NRS 代理族定位（2026-10-27 19:xx 末）
+
+- **新工具 scans2 concat**：扫 "ldstr+ldstr+Concat" 模式重建动态 API 名
+- **抓到 NRS 危险代理**：
+  - **06004182 FormatContainer = WriteProcessMemory 代理**（"Write "+"Process "+"Memory" 三段拼接）
+  - **06004184 GenerateAutomatableResponder = OpenProcess 代理**（"Open "+"Process"）
+- **定性**：NRS 的"父进程重启"链路 = OpenProcess(自己) → WriteProcessMemory(patch native 运行时) →
+  CreateProcess(重启) —— 三个 kernel32 危险 API 全部经字符串混淆拼接 + GetDelegateForFunctionPointer 调用
+- **路线 A 精确化**：stub 06004182(WriteProcessMemory 代理)/06004184(OpenProcess 代理) 及其调用点
+  → NRS 无法 patch 自己/无法重启 → 父进程逻辑失效 → 程序以单进程模式继续跑
+  （0600419C 保留，其初始化字段照常写入——但重启分支自然失效）
+- **验证命令**：`patchstub out/m1_s1_full.exe out/nopm.exe stubfile <(echo 06004182; echo 06004184)` + wine
