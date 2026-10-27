@@ -857,3 +857,16 @@ lock (_VisibleStackObj) {
   变换步骤 (b) token 解析序问题 (c) dec_Project dump 状态非最终态
 - **下一棒**：TrackCompiler 的 633 条里搜 call 06004183（确认资源变换链）→ 按链修正嵌入内容；
   token 对的 Field 归属类型应包含 ValidatorSharerRunner（查询 key）——用 dumpmt 校对
+
+## TrackCompiler 解析细节（2026-10-27 22:xx 末）
+
+- **资源 token 读取 = 大端重组**：`bytes[i+3]<<24 | bytes[i+2]<<16 | bytes[i+1]<<8 | bytes[i]`
+  （dec_Project 的字节序需按大端解读——小端直读 0x4002102 会变成 0x02210004）
+- 附带 NRS 控制流平坦化常量运算（506503628/1959015338/854276594 等魔数 mul/conv）
+- **KeyNotFound 的机制假设**：TrackCompiler 大端读 token → ResolveToken（Slayed 表序）→
+  Field→DeclaringType 为 key——若大端读出的 token 在表序下指向不同 Field → 类型集合不含
+  查询的 ValidatorSharerRunner → KeyNotFound
+- **下一棒精确修复**：dump TrackCompiler 完整解析段（IL_00A0-0x400）重建 token 提取规则 →
+  对照 dec_Project 字节流验证每个 token 的解析身份 → 若 dec_Project 是"运行时重排后的序"
+  则需要把官方序 token 重排为运行时序（或 vice versa）后嵌入
+- **工具**：disasm /tmp/tc.txt 已存（633 条全量）
