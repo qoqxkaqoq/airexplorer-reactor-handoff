@@ -571,3 +571,31 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
    初始化（参照官方 VerifyProcessor 的初始化块语义：LoadLibrary→GetProcAddress→delegate）
 3. **S2 字符串回接**（dec_Factory.bin 8539 条）——Startup 链中 NRS 取串调用仍走运行时函数
 4. 全流程跑通后 → CI probe/soak 双门槛
+
+## NRS 运行时模式破译（2026-10-27 19:xx）：父进程重启模式
+
+### relay 决定性证据（ut1 = 保留 0600419C + untamper 06004192）
+```
+0024线程: CreateProcessW("C:\\airtest\\ut1.exe", "\"C:\\airtest\\ut1.exe\" ") ret=0040240f  ← JIT 代码
+          WaitForSingleObject(子进程句柄 0x60) ret=004026f4
+          GetExitCodeProcess(0x60) → 退出码 c0000602 ret=0040270e
+          ExitProcess(c0000602) ret=0040271f   ← 传播子进程退出码
+```
+- **0600419C 的真实语义 = NRS 父进程逻辑**：初始化 native 运行时环境 → CreateProcess 重启自己
+  （命令行 = "exe路径" 带尾空格）→ 等子进程 → 传播退出码
+- **子进程**（继承 NRS 环境后）= 应执行真实程序（跳过 bootstrap）——**实测 fail-fast c0000602**
+  （STATUS_FAIL_FAST_EXCEPTION）→ 父传播退出
+- st2b（stub 0600419C+06004192）存活 = 绕过了父进程逻辑，但 native 运行时环境缺失 → Startup 挂
+
+### NRS 双进程模型（对照官方行为）
+- 官方 exe 在 Windows 上跑也是双进程（父=bootstrap/子=程序）——Necrobit native JIT 环境的进程边界
+- 子进程判据 = 命令行（尾空格标记）+ NRS 环境继承（管道/共享内存/环境变量——relay 里待挖）
+- **我们的脱壳产物没有 NRS native 运行时** → 子进程初始化时 fail-fast
+
+### 下一棒（脱壳机的最终形态抉择）
+1. **子进程 fail-fast 原因**：relay 分离子进程（003c 线程之后）的调用序列，找第一个失败 syscall
+   （可能等 NRS 管道 `\\.\pipe\...` 或共享内存 section）
+2. **S1 加"子进程模式"跳过**：Main 的 args 检查分支（ldarg.0/ldelem.ref）官方语义解读——
+   让产物单进程直接跑（跳过 bootstrap），需要补齐 native 代理的所有真实实现
+   （StopClient=GetProcAddress 包装、keogyBbmx=LoadLibrary、代理字段 lazy init 全部托管化）
+3. **S2 字符串回接 + 代理字段托管重建** = 单进程模式的关键路径
