@@ -47,6 +47,11 @@ public static class CmdTokInfo
                             ins.Operand is ITokenOperand t ? "tok:" + t.MDToken.Raw.ToString("X8")
                             : ins.Operand?.ToString() ?? "");
             }
+            else if (r is TypeDef td)
+                Console.WriteLine("[{0}] TypeDef {1} (methods={2}, fields={3}, nested={4}, base={5})", args[i],
+                    td.FullName, td.Methods.Count, td.Fields.Count, td.NestedTypes.Count, td.BaseType?.FullName ?? "null");
+            else if (r is TypeRef tr)
+                Console.WriteLine("[{0}] TypeRef {1} (scope={2})", args[i], tr.FullName, (tr.ResolutionScope as AssemblyRef)?.Name ?? "?");
             else Console.WriteLine("[{0}] resolved: {1}", args[i], r?.GetType().Name ?? "NULL");
         }
         return 0;

@@ -224,6 +224,7 @@ public static class CmdS1
         var failReasons = new Dictionary<string, int>();
         var failed = new List<string>();
         var ehNoSource = new List<string>();
+        var ehDroppedToks = new HashSet<string>();
         int done = 0;
 
         foreach (var (rva, tok, name, src) in man)
@@ -313,7 +314,6 @@ public static class CmdS1
             Array.Copy(mt, off + hsz, il, 0, codeSize);
 
             // EH 数据: 优先 zip CORINFO -> 转 CLI fat clause; 兜底 mt 磁盘段(仅 0x41 类)
-            byte[] ehData = null;
             List<EhClause> corClauses = null;
             if (ehFlag != 0)
             {
@@ -363,7 +363,7 @@ public static class CmdS1
                                     cls2.Add(new EhClause(cf, tOff, tLen, hOff, hLen, clsTok));
                                 }
                             }
-                            if (okFat && cls2.Count > 0) ehData = BuildFatEh(cls2);
+                            if (okFat && cls2.Count > 0) corClauses = cls2;
                         }
                         else if (fl0 == 0x01 && dsize >= 4 && dsize <= 0x10000 && sect + dsize <= mt.Length && (dsize - 4) % 12 == 0 && dsize > 4)
                         {
@@ -373,6 +373,10 @@ public static class CmdS1
                             for (int ci = 0; ci < ncl && ok2; ci++)
                             {
                                 int b = sect + 4 + ci * 12;
+                                // 修复33: mt 的 12B/子句段 = NRS compact 格式(与官方磁盘逐字节对照 06004181 验证):
+                                // flags(2B)+tryOff(2B)+tryLen(1B)+hOff(2B)+hLen(1B)+clsToken(4B)。
+                                // 官方磁盘样本 00 00 4a 01 0b 55 01 06 18 00 00 01 -> try=(330,11) h=(341,6) cls=0x01000018(TypeSpec) 全部合法。
+                                // 注意: 不是 ECMA small(那会偏移错位读出越界垃圾); 修复32 的"ECMA small"解读作废。
                                 ushort f = BitConverter.ToUInt16(mt, b);
                                 ushort tryOff = BitConverter.ToUInt16(mt, b + 2);
                                 byte tryLen = mt[b + 4];
@@ -390,30 +394,31 @@ public static class CmdS1
                                     cls2.Add(new EhClause(cf, tryOff, tryLen, hOff, hLen, clsTok));
                                 }
                             }
-                            if (ok2 && cls2.Count > 0) ehData = BuildFatEh(cls2);
+                            if (ok2 && cls2.Count > 0) corClauses = cls2;
                         }
                     }
-                    if (ehData == null)
+                    if (corClauses == null)
                     {
                         // 修复20 兜底: dump EH 无效时用官方 exe 明文体的 EH
                         if (bmodKeep == null) Console.WriteLine("[dbg] bmodKeep null for " + tok);
                         else if (bmodKeep.ResolveToken(md.MDToken.Raw) is not MethodDef om) Console.WriteLine("[dbg] official method missing " + tok);
                         else
                         {
-                            ehData = OfficialEhToCli(om);
-                            if (ehData == null) Console.WriteLine("[dbg] official EH empty for " + tok);
-                            officialEhUsed += ehData != null ? 1 : 0;
+                            corClauses = OfficialEhToCli(om, (uint)codeSize);
+                            if (corClauses == null) Console.WriteLine("[dbg] official EH empty for " + tok);
+                            officialEhUsed += corClauses != null ? 1 : 0;
                         }
                     }
-                    if (ehData == null)
+                    if (corClauses == null)
                     {
                         ehDropped++;
                         ehNoSource.Add(tok);
+                        ehDroppedToks.Add(tok);   // 修复31: 该方法的 leave 需转 br (leave 仅合法于 EH 块内)
                     }
                 }
             }
 
-            var bodyFlags = (ushort)(3 | (ehData != null ? 8 : 0) | (initLocals ? 0x10 : 0));
+            var bodyFlags = (ushort)(3 | (initLocals ? 0x10 : 0));   // 修复27: MoreSects 由 dnlib 按 ExceptionHandlers 自动加
             // 回滚快照: 注入失败则完全还原 NRS 原状(坏签名会拖死整个 dummy_ptr 类型, 连累 cctor 链)
             MethodSig rollbackSig = md.MethodSig;
             MethodAttributes rollbackAttrs = md.Attributes;
@@ -473,29 +478,117 @@ public static class CmdS1
                 if (body == null) throw new Exception("CreateCilBody null");
                 if (corClauses != null && corClauses.Count > 0)
                 {
-                    // 建立 offset→指令 映射
+                    // 修复29: dnlib 的 EH 边界语义是 INCLUSIVE —— TryEnd/HandlerEnd = 区间内最后一条指令
+                    // (MethodBodyWriter 用 eh.TryEnd.Offset + eh.TryEnd.Size 计算结束)。
+                    // 修复23 用了 exclusive(TryOff+TryLen 的下一条) → 差一位 → 写出阶段 operand null 崩溃。
+                    var bodyIns = body.Instructions;
                     var offMap = new Dictionary<uint, Instruction>();
                     uint o2 = 0;
-                    foreach (var i2 in body.Instructions) { offMap[o2] = i2; o2 += (uint)i2.GetSize(); }
+                    foreach (var i2 in bodyIns) { offMap[o2] = i2; o2 += (uint)i2.GetSize(); }
+                    // 修复34: dnlib 的 EH 边界语义 = EXCLUSIVE(TryEnd/HandlerEnd = 区间外第一条指令,
+                    // 写出时 TryLen = TryEnd.Offset - TryStart.Offset)。修复29 的 inclusive(LastBefore)
+                    // 使所有子句 tryLen 短了最后一条指令的长度(-5) → JIT InvalidProgram。
+                    // 修复29 的"写出崩溃"真因是修复30 发现的 CatchType=null, 边界本无罪。
                     foreach (var c2 in corClauses)
                     {
-                        if (!offMap.TryGetValue(c2.TryOff, out var ts) || !offMap.TryGetValue(c2.TryOff + c2.TryLen, out var te) ||
-                            !offMap.TryGetValue(c2.HOff, out var hs)) continue;
-                        Instruction he2 = null;
-                        if (c2.HLen > 0 && !offMap.TryGetValue(c2.HOff + c2.HLen, out he2)) continue;
-                        var neh = new ExceptionHandler(ExceptionHandlerType.Catch)
-                        { TryStart = ts, TryEnd = te, HandlerStart = hs };
-                        if (c2.HLen > 0) neh.HandlerEnd = he2; else neh.HandlerEnd = te;
-                        neh.CatchType = c2.Cls == 0 ? null : (mod.ResolveToken(c2.Cls) as ITypeDefOrRef);
-                        if (c2.Cls != 0 && neh.CatchType == null) continue;
+                        // 修复30: 保留子句 flags —— catch(0)/filter(1)/finally(2)/fault(4)。
+                        // 修复23 把全部子句建成 Catch + CatchType=null → dnlib 写出崩溃。
+                        if (!offMap.TryGetValue(c2.TryOff, out var ts)) continue;
+                        if (!offMap.TryGetValue(c2.TryOff + c2.TryLen, out var te)) continue;
+                        ExceptionHandler neh;
+                        switch (c2.Flags)
+                        {
+                            case 2: // finally
+                                if (!offMap.TryGetValue(c2.HOff, out var hsf)) continue;
+                                if (!offMap.TryGetValue(c2.HOff + c2.HLen, out var hef)) continue;
+                                neh = new ExceptionHandler(ExceptionHandlerType.Finally)
+                                { TryStart = ts, TryEnd = te, HandlerStart = hsf, HandlerEnd = hef };
+                                break;
+                            case 4: // fault
+                                if (!offMap.TryGetValue(c2.HOff, out var hfa)) continue;
+                                if (!offMap.TryGetValue(c2.HOff + c2.HLen, out var hea)) continue;
+                                neh = new ExceptionHandler(ExceptionHandlerType.Fault)
+                                { TryStart = ts, TryEnd = te, HandlerStart = hfa, HandlerEnd = hea };
+                                break;
+                            case 1: // filter
+                                if (!offMap.TryGetValue(c2.HOff, out var hfl)) continue;
+                                if (!offMap.TryGetValue(c2.HOff + c2.HLen, out var hh)) continue;
+                                neh = new ExceptionHandler(ExceptionHandlerType.Filter)
+                                { TryStart = ts, TryEnd = te, FilterStart = hfl, HandlerStart = hh };
+                                if (!offMap.TryGetValue(c2.HOff + c2.HLen + 1, out var hefl)) continue;
+                                neh.HandlerEnd = hefl;
+                                break;
+                            default: // catch (flags=0)
+                                if (c2.Cls == 0) continue;   // catch 无类型 = 非法
+                                if (!offMap.TryGetValue(c2.HOff, out var hs)) continue;
+                                if (!offMap.TryGetValue(c2.HOff + c2.HLen, out var he2)) continue;
+                                neh = new ExceptionHandler(ExceptionHandlerType.Catch)
+                                { TryStart = ts, TryEnd = te, HandlerStart = hs, HandlerEnd = he2 };
+                                neh.CatchType = mod.ResolveToken(c2.Cls) as ITypeDefOrRef;
+                                if (neh.CatchType == null) continue;
+                                break;
+                        }
+                        if (neh.TryStart == null || neh.TryEnd == null) continue;
                         body.ExceptionHandlers.Add(neh);
                     }
                     if (body.ExceptionHandlers.Count == 0) throw new Exception("corClauses bound to 0 handlers");
                 }
-                if (ehData != null && body.ExceptionHandlers.Count == 0)
-                    throw new Exception("ehData " + ehData.Length + "B parsed as 0 clauses: " + Convert.ToHexString(ehData));
+                if (corClauses != null && corClauses.Count > 0 && body.ExceptionHandlers.Count == 0)
+                    throw new Exception("corClauses " + corClauses.Count + " bound to 0 handlers: " + tok);
+                // 修复31b: EH 全部被拦截的方法 —— leave 仅合法于 EH 块内, 转 br 保持栈语义
+                if (ehDroppedToks.Contains(tok))
+                {
+                    foreach (var i2 in body.Instructions)
+                    {
+                        if (i2.OpCode.Code == Code.Leave) i2.OpCode = OpCodes.Br;
+                        else if (i2.OpCode.Code == Code.Leave_S) i2.OpCode = OpCodes.Br_S;
+                    }
+                }
+                // 修复28: 注入后自检 —— operand 为 null 的实义指令会让 dnlib 写出阶段全盘崩溃,
+                // 在这里拦截并回滚该方法(调用方 catch 后 stub 化), 保证写出总能完成
+                foreach (var i2 in body.Instructions)
+                {
+                    if (i2.OpCode.OperandType != OperandType.InlineNone && i2.Operand == null)
+                        throw new Exception("null operand " + i2.OpCode + " @IL_" + i2.Offset.ToString("X4") + ": " + tok);
+                    if (i2.Operand is Instruction[] ta)
+                        foreach (var t2 in ta)
+                            if (t2 == null)
+                                throw new Exception("null switch target @IL_" + i2.Offset.ToString("X4") + ": " + tok);
+                    if ((i2.OpCode.Code == Code.Leave || i2.OpCode.Code == Code.Leave_S ||
+                         i2.OpCode.Code == Code.Br || i2.OpCode.Code == Code.Br_S ||
+                         i2.OpCode.Code == Code.Brtrue || i2.OpCode.Code == Code.Brtrue_S ||
+                         i2.OpCode.Code == Code.Brfalse || i2.OpCode.Code == Code.Brfalse_S) && i2.Operand == null)
+                        throw new Exception("null branch @IL_" + i2.Offset.ToString("X4") + ": " + tok);
+                }
+                foreach (var eh2 in body.ExceptionHandlers)
+                    if (eh2.TryStart == null || eh2.TryEnd == null || eh2.HandlerStart == null || eh2.HandlerEnd == null)
+                        throw new Exception("null EH boundary in " + tok);
                 body.MaxStack = (ushort)maxStack;
                 body.KeepOldMaxStack = true;
+                // [dbg] 060028CE 写出崩溃调查: 打印 operand 与 EH 边界的对象身份
+                if (uint.TryParse(tok.Replace("0x","").Trim(), System.Globalization.NumberStyles.HexNumber, null, out var tokU28) && tokU28 == 0x060028CE)
+                {
+                    Console.WriteLine("[dbg-28CE] instrs={0} eh={1}", body.Instructions.Count, body.ExceptionHandlers.Count);
+                    int nn = 0;
+                    foreach (var i2 in body.Instructions)
+                    {
+                        if (i2.Operand == null && i2.OpCode.OperandType != OperandType.InlineNone)
+                            Console.WriteLine("[dbg-28CE] NULL operand {0} @IL_{1:X4}", i2.OpCode, i2.Offset);
+                        if (i2.Operand is MethodDef om2 && om2.Module != mod)
+                            { Console.WriteLine("[dbg-28CE] CROSS-MODULE method operand {0} @IL_{1:X4}: {2} (mod={3})", i2.OpCode, i2.Offset, om2.FullName, om2.Module?.Name); nn++; }
+                        if (i2.Operand is FieldDef of2 && of2.Module != mod)
+                            { Console.WriteLine("[dbg-28CE] CROSS-MODULE field operand {0} @IL_{1:X4}: {2} (mod={3})", i2.OpCode, i2.Offset, of2.FullName, of2.Module?.Name); nn++; }
+                        if (i2.Operand is TypeDef ot2 && ot2.Module != mod)
+                            { Console.WriteLine("[dbg-28CE] CROSS-MODULE type operand {0} @IL_{1:X4}: {2}", i2.OpCode, i2.Offset, ot2.FullName); nn++; }
+                        if (i2.Operand is MemberRef omr && omr.Module != mod)
+                            { Console.WriteLine("[dbg-28CE] CROSS-MODULE memberref operand {0} @IL_{1:X4}: {2}", i2.OpCode, i2.Offset, omr.FullName); nn++; }
+                    }
+                    foreach (var e2 in body.ExceptionHandlers)
+                        Console.WriteLine("[dbg-28CE] EH {0}: try={1}..{2} h={3}..{4} cls={5}", e2.HandlerType,
+                            e2.TryStart?.Offset.ToString("X4") ?? "null", e2.TryEnd?.Offset.ToString("X4") ?? "null",
+                            e2.HandlerStart?.Offset.ToString("X4") ?? "null", e2.HandlerEnd?.Offset.ToString("X4") ?? "null",
+                            e2.CatchType?.FullName ?? "-");
+                }
                 // 兼容性校验: 参数/局部变量绑定必须完整, 否则写出阶段崩
                 bool bad = false;
                 foreach (var ins in body.Instructions)
@@ -787,8 +880,10 @@ public static class CmdS1
     /// <summary>构建 dnlib 可解析的 fat EH 段: 段头 byte0=0x41(0x40|kind1), dsize 不含头。</summary>
     static byte[] BuildFatEh(List<EhClause> clauses)
     {
-        int dsize = clauses.Count * 24;
-        var outp = new byte[4 + dsize];
+        // 修复26: ECMA 段头 DataSize = 整个 section 大小(含 4B 段头自身)。
+        // 旧代码写 clauses*24(少 4B) → dnlib 读不足 1 个 fat 子句 → 0 clauses → fail
+        int dsize = 4 + clauses.Count * 24;
+        var outp = new byte[dsize];
         BitConverter.GetBytes((uint)((dsize << 8) | 0x41)).CopyTo(outp, 0);
         for (int i = 0; i < clauses.Count; i++)
         {
@@ -809,14 +904,15 @@ public static class CmdS1
     {
         if (cor.Length < 4) return null;
         int cnt = BitConverter.ToInt32(cor, 0);
-        // 修复21: m_*.eh 每条 28B 子句的第一个 DWORD 是前导（恒 0），真实字段从子句内偏移 4 开始：
-        // [4B count][每条 28B = 4B 前导 + 6 DWORD(flags/tryOff/tryLen/hOff/hLen/cls)]
-        // 旧代码从子句头部读（把前导当 flags）→ 全部字段错位 1 DWORD → EH 全错
+        // 修复25: m_*.eh 布局 = [4B count][每条 28B = 6 个字段 DWORD + 4B padding]。
+        // 与官方 fat 段逐字段对照(0600419C/0600419A 双例): lead=flags(2=finally/0=catch),
+        // 后跟 tryOff/tryLen/hOff/hLen/cls, 尾部 4B padding。
+        // 修复21 的"前导 DWORD"解读有误(+4 错位), 现改回子句头直读 6 字段。
         if (cnt <= 0 || cor.Length < 4 + cnt * 28) return null;
         var clauses = new List<EhClause>(cnt);
         for (int i = 0; i < cnt; i++)
         {
-            int b = 8 + i * 28;
+            int b = 4 + i * 28;
             uint f = BitConverter.ToUInt32(cor, b);
             uint tryOff = BitConverter.ToUInt32(cor, b + 4);
             uint tryLen = BitConverter.ToUInt32(cor, b + 8);
@@ -836,8 +932,10 @@ public static class CmdS1
     }
 
     /// <summary>修复20 兜底: 从官方 exe 的明文方法体读 EH（官方磁盘非加密方法可直接对照）。</summary>
-    static byte[] OfficialEhToCli(MethodDef official)
+    static List<EhClause> OfficialEhToCli(MethodDef official, uint codesize)
     {
+        // 修复31: 官方加密方法(Necrobit)的磁盘 EH 是乱码 —— dnlib 读出的 ExceptionHandlers
+        // 不可信。必须逐子句校验(边界在 codesize 内/handler 不在 try 内/hLen>0)后才可用。
         if (official == null || !official.HasBody || official.Body.ExceptionHandlers.Count == 0) return null;
         var clauses = new List<EhClause>();
         foreach (var eh in official.Body.ExceptionHandlers)
@@ -847,14 +945,19 @@ public static class CmdS1
             uint hOff = GetOffset(official.Body.Instructions, eh.HandlerStart);
             uint hEnd = eh.HandlerEnd != null ? GetOffset(official.Body.Instructions, eh.HandlerEnd) : 0;
             if (tryOff == uint.MaxValue || tryEnd == uint.MaxValue || hOff == uint.MaxValue) return null;
+            if (tryEnd > codesize || hEnd > codesize) return null;
+            uint tryLen = tryEnd > tryOff ? tryEnd - tryOff : 0;
+            uint hLen = hEnd > hOff ? hEnd - hOff : 0;
+            if (tryLen == 0 || hLen == 0) return null;
+            if (hOff >= tryOff && hOff < tryOff + tryLen) return null;
+            if (eh.HandlerType == ExceptionHandlerType.Catch && eh.CatchType == null) return null;
             uint cliFlags = eh.HandlerType == ExceptionHandlerType.Finally ? 2u
                 : eh.HandlerType == ExceptionHandlerType.Fault ? 4u
                 : eh.HandlerType == ExceptionHandlerType.Filter ? 1u : 0u;
-            clauses.Add(new EhClause(cliFlags, tryOff, tryEnd - tryOff, hOff, hEnd - hOff,
+            clauses.Add(new EhClause(cliFlags, tryOff, tryLen, hOff, hLen,
                 eh.CatchType != null ? eh.CatchType.MDToken.Raw : 0));
         }
-        if (clauses.Count == 0) return null;
-        return BuildFatEh(clauses);
+        return clauses.Count == 0 ? null : clauses;
     }
 
     static uint GetOffset(IList<Instruction> ins, Instruction target)

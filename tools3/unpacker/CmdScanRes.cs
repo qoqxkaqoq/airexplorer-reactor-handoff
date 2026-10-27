@@ -66,3 +66,9 @@ public static class CmdScanRes
     static void Count(Dictionary<string, int> d, string k)
     { d.TryGetValue(k, out var v); d[k] = v + 1; }
 }
+
+
+/// <summary>findwr — 找全部写入指定字段的指令所在方法。</summary>
+public static partial class CmdScanRes2
+{
+}

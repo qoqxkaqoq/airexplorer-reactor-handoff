@@ -499,3 +499,35 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
 - 嵌套壳挂产物外层类型的 NestedTypes 下（FullName 自动=外层/Name，如 DispatcherInitializer/TemplateBuilder）
 - 死点稳定：VerifyProcessor `Index not found`（=GetDelegateForFunctionPointer 收到 NRS 未回接的无效指针 → S2/S3 层）
 - **JIT/元数据层修复完成度：修复16-24 全部落地**；剩余死点全部在 S2（字符串池）/S3（委托已回接 3266）运行时回接层
+
+## 决定性里程碑（2026-10-27 17:xx）：程序首次无异常存活
+
+### 本轮修复链（25-34，全部有逐字节对照证据）
+- **修复25**：m_*.eh 布局 = [4B count][28B = flags+tryOff+tryLen+hOff+hLen+cls+pad4B]
+  （与官方 fat 段逐字段对照 0600419C/0600419A 双例验证）——修复21 的"+4 前导"解读作废
+- **修复26**：BuildFatEh 的 DataSize = 4 + n*24（含段头自身），旧值少 4B → dnlib 读 0 子句
+- **修复27/28**：EH 统一子句列表路径；注入后自检（null operand/switch 元素/EH 边界）
+- **修复29→34 迭代**：dnlib EH 边界语义 = **EXCLUSIVE**（TryEnd=区间外第一条；
+  写出 TryLen=TryEnd.Offset-TryStart.Offset）。inclusive 使 tryLen 全部 -5 → InvalidProgram
+- **修复30**：EH flags 完整保留 catch(0)/filter(1)/finally(2)/fault(4)——修复23 全建成
+  Catch+null CatchType 是写出崩溃真凶
+- **修复31**：官方兜底校验（官方加密方法磁盘 EH 乱码不可信）+ EH 拦截时 leave→br
+- **修复33**：mt 12B/子句段 = **NRS compact 格式**（flags2B+tryOff2B+tryLen1B+hOff2B+hLen1B+cls4B）——
+  与官方磁盘 06004181 逐字节对照（00 00 4a 01 0b 55 01 06 18 00 00 01 → try=(330,11) h=(341,6) cls=0x01000018 全合法）；修复32 的"ECMA small"解读作废（官方磁盘 IL 与 mt IL 完全一致=slot_plaintext 明文）
+- **修复34**：EH 边界回滚 exclusive → **mono 下 InvalidProgram 清零**（0600419C 的 endfinally 错误消失）
+
+### 里程碑结果（Wine/Windows CLR 实测）
+- injected=22930 **fail=0**（首次零失败全量注入）
+- stub 0600419C(DefineEfficientProfiler) 后：failfast 消失 → 死点="AirExplorer is tampered"
+  （06004192 InstantiateGlobalCalculator 的 NRS 反篡改校验逻辑执行——**程序活着**）
+- 再 stub 06004192 后：**EXIT=124 无异常、CPU=0 空闲等待**（首次完整存活，挂点=NRS 初始化等待）
+- mono 侧：EH 全通，死点=ArgumentNullException Invalid handle（VerifyScopeAnnotationInspector
+  读到 default ModuleHandle——authenticatorNotifier 初始化链，mono 特有路径）
+
+### 下一棒（最后直道）
+1. **反调试桩族精细处理**：stub 0600419C 使 NRS 初始化依赖（chooserObject/visibleCheckerTemplatePtr）
+   缺失 → 后续 VerifyProcessor.Invoke 等待。方案：不全 stub，只 patch tamper 检查点
+   （06004192 的 ldstr "is tampered." 分支跳转）或让 0600419C 体保留但 patch 其 tamper 分支
+2. **验证产出窗口**：cctor 链全通后 WPF Main（06002D22 SearchAdapter 213 条已注入）应出现窗口
+3. **S2 字符串池回接**（dec_Factory.bin 8539 条）——官方字符串仍走运行时取串函数
+4. CI probe/soak 双门槛

@@ -59,6 +59,7 @@ public static class Program
 				case "scanrva": return CmdScanRva.RunScanRva(args);
 				case "dumpall": return CmdScanRva.RunDumpAll(args);
 				case "s3": return CmdS3.Run(args);
+					case "findwr": return CmdFindWriters.Run(args);
 				case "epinfo": return CmdScanRva.RunEpInfo(args);
 				case "scanres": return CmdScanRes.Run(args);
 				case "patchstub": return CmdPatchStub.Run(args);
