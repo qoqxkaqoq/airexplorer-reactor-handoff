@@ -870,3 +870,19 @@ lock (_VisibleStackObj) {
   对照 dec_Project 字节流验证每个 token 的解析身份 → 若 dec_Project 是"运行时重排后的序"
   则需要把官方序 token 重排为运行时序（或 vice versa）后嵌入
 - **工具**：disasm /tmp/tc.txt 已存（633 条全量）
+
+## dec_Project 字节序验证（2026-10-28 00:xx）
+
+- **官方密文 ValidatorProject 头 32B**：2C-55-13-94-3D-93...（随机）——**与 dec_Project XOR 非循环简单密钥**（滚动/分组密码）——dec_Project = 确认的解密明文
+- **dec_Project 字节序 = 小端 token 对**（02 21 00 04 → 0x04002102 Field ✓）
+- **ValidatorSharerRunner 的字段在集合内**（dumpfields: inSet=1 missing=0）——**字段覆盖无缺口**
+- **矛盾点**：TrackCompiler 反汇编 IL_0114-013D 段的大端重组读法与小端数据不符——
+  该段可能是控制流平坦化的干扰块/或读的是别的数据段——**需精确重读 TrackCompiler 的资源
+  解析段（IL_009A-0140 与 IL_0180-0x430）区分"真解析"与"平坦化干扰"**
+- **KeyNotFound 机制待一次精确 IL 复核**（字典 key 集合 vs 查询 token 的实际值）——
+  或运行时 dump：TrackCompiler 的字典建立后（m_LogicalProcessorMap != null 分支前）抓字典内容
+
+### 工具新增本轮
+- dumpfields（类型字段 token 对照）
+- host3-6（Windows CLR 验证框架：cctor/字段/资源读取）
+- scans2 concat/idxinv/resref/appdom（IL 模式识别四件套）

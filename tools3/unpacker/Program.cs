@@ -66,6 +66,7 @@ public static class Program
 					case "s4": return CmdS4.Run(args);
 					case "findthread": return CmdFindThread.Run(args);
 					case "dumpgap": return CmdDumpGap.Run(args);
+					case "dumpfields": return CmdDumpFields.Run(args);
 					case "uehook": return CmdUeHook.Run(args);
 				case "epinfo": return CmdScanRva.RunEpInfo(args);
 				case "scanres": return CmdScanRes.Run(args);
