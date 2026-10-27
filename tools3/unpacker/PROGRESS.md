@@ -902,3 +902,31 @@ lock (_VisibleStackObj) {
   ValidatorSharerRunner 字段的 MetadataToken——精确定位差异
 - **本轮聚合产物 final.exe**：S1(修复35)+S4 全资源+stub 2 方法——三次稳定死点
   = TrackCompiler KeyNotFound（唯一剩余业务死点，其余全通）
+
+## NRS 暗桩全量清单（2026-10-28 00:xx，scanstubs 工具产出）
+
+### 核心暗桩族（全部在 DispatcherInitializer + ObserverValue）
+| token | 方法 | 规模 | 功能 |
+|---|---|---|---|
+| 0600419C | DefineEfficientProfiler | 9992条9EH | **最大暗桩**：完整性校验+CreateProcess 重启 |
+| 06004192 | InstantiateGlobalCalculator | 2521条4EH | 反篡改主桩（SHA1+"is tampered."） |
+| 06004193 | TrackCompiler | 633条3EH | 资源校验（ValidatorProject 字典） |
+| 06004183 | InstantiateJoinedService | 821条 | 资源解密/变换函数 |
+| 060041A2 | FormatContainer | 24条 | WriteProcessMemory 代理 |
+| 060041A4 | GenerateAutomatableResponder | 20条 | OpenProcess 代理 |
+| 060041A5 | VerifyProcessor | 18条 | CloseHandle 代理 |
+| 060041A3 | UpdatePredictor | 21条 | "Virtual "+拼接 → VirtualAlloc 类代理 |
+| 060041A0 | GenerateGroupedSet | - | native 代理创建点 |
+| 060041A1 | HandleReceiver | - | native 代理创建点 |
+| 060041A6 | keogyBbmx | 12条 | LoadLibrary("kernel32.dll") 包装 |
+| 0600419E/9F | GenerateConfigurableSpec/StopClient | 0条(无体) | LoadLibrary/GetProcAddress 抽象代理 |
+| 06004284 | VerifyScopeAnnotationInspector | 4条 | token→Type 解码器 |
+| 060041CB/CE/CF/D0/F0/F1/F2 | 辅助件 | 3-5条 | tamper 消息组合件 |
+
+### native 代理创建点（GetDelegateForFunctionPointer 全调用者，共 6 个）
+060041A0 / 060041A1 / 060041A2(WriteProcessMemory) / 060041A3(VirtualAlloc?) / 060041A4(OpenProcess) / 060041A5(CloseHandle)
+
+### 特征
+- **无直呼反调试 API**（IsDebuggerPresent 等 0 次）——全部走字符串混淆+GetProcAddress 代理
+- 可疑字符串仅 2 处："Virtual "（060041A3）、" is tampered."（06004192）
+- 全部暗桩集中在 CloudClient.Templating.DispatcherInitializer + CloudClient.Handling.ObserverValue 两个类型
