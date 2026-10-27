@@ -930,3 +930,22 @@ lock (_VisibleStackObj) {
 - **无直呼反调试 API**（IsDebuggerPresent 等 0 次）——全部走字符串混淆+GetProcAddress 代理
 - 可疑字符串仅 2 处："Virtual "（060041A3）、" is tampered."（06004192）
 - 全部暗桩集中在 CloudClient.Templating.DispatcherInitializer + CloudClient.Handling.ObserverValue 两个类型
+
+## 暗桩处理策略定稿（基于全量清单）
+
+### 三类暗桩的处理
+1. **反篡改/重启类（必须短路）**：0600419C（重启）、06004192（tampered throw）——已 stub，
+   单进程模式已验证存活
+2. **资源校验类（需正确数据）**：06004193 TrackCompiler（dec_Project token 序修正后自然通过）、
+   06004183 InstantiateJoinedService（资源解密——dec_* 已是解密态则无需再调）
+3. **native 代理类（不能 stub，需保留 lazy-init）**：060041A0-A6 六个代理——
+   它们 lazy-init 的 native 函数（CloseHandle/GetProcAddress 等）在 Wine 都存在，
+   保留即可（首次调用时自建 delegate）
+
+### "功能与原版一样"的完整清单（基于暗桩扫描）
+- 窗口/UI ✅（WPF 已启动）
+- cctor 链 ✅（stub 2 暗桩后全通）
+- 资源 ✅（S4 嵌入）
+- 委托 ✅（S3 3266）
+- 剩余：TrackCompiler 资源 token 变换链（唯一业务死点）
+- 网盘列表 = WebView2 依赖（官方版需 Runtime ≥1418，109 已装待升级）
