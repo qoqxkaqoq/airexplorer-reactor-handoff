@@ -886,3 +886,19 @@ lock (_VisibleStackObj) {
 - dumpfields（类型字段 token 对照）
 - host3-6（Windows CLR 验证框架：cctor/字段/资源读取）
 - scans2 concat/idxinv/resref/appdom（IL 模式识别四件套）
+
+## 精确复核结论（2026-10-28 00:xx 收官）
+
+- **TrackCompiler 资源解析确认 = 大端重组**（bytes[o+3]<<24|bytes[o+2]<<16|bytes[o+1]<<8|bytes[o]）
+  + NRS 常量变换链（506503628 等魔数 mul/conv 的控制流平坦化运算）
+- **dec_Project = 小端明文 token 对**（02 21 00 04 → 0x04002102）——**两种读法相差字节序翻转**
+- **官方运行时同样大端读 dec_Project 的字节** → 得到"变换前 token" → 常量变换 → 字典 key
+  → 与 field.MetadataToken 匹配——**这条链在官方 exe 里是自洽的**
+- **产物环境差异**：field.MetadataToken 在产物里 = Slayed 序 token；dec_Project 的 token = dump 时的
+  运行时序——**两个"序"一致（tsmap 验证过）**——KeyNotFound 的剩余变量 = NRS 常量变换对
+  不同输入的敏感性（变换中间态依赖全局状态？）——**需要运行时 dump 字典内容对照**
+- **收敛建议**：下一棒用 host6 模式在 Windows CLR 下 hook TrackCompiler 的字典建立
+  （Injection 在 m_LogicalProcessorMap 赋值点后插 dump 代码），对照字典 key 集合与
+  ValidatorSharerRunner 字段的 MetadataToken——精确定位差异
+- **本轮聚合产物 final.exe**：S1(修复35)+S4 全资源+stub 2 方法——三次稳定死点
+  = TrackCompiler KeyNotFound（唯一剩余业务死点，其余全通）
