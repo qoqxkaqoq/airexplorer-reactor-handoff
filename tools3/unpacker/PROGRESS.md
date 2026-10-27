@@ -549,3 +549,25 @@ FAT 段: Kind byte(bit6=1) + DataSize 24-bit(bytes1-3)
      → 只 patch native 自检调用、保留托管初始化
   3. 或完整分析 0600419C 的 9992 条控制流平坦化结构，找"校验失败→杀进程"的分支
   4. S2 字符串回接（dec_Factory.bin 8539 条）与窗口出现的距离已非常近
+
+## relay 跟踪定位挂点（2026-10-27 17:xx 收官）
+
+- **WINEDEBUG=+relay 抓 st2b（stub 版）14 秒全量 syscall**（118MB）
+- **发现**：
+  - WPF Dispatcher 已启动（"Message" 隐藏消息窗口 + GetMessageW/DispatchMessageW 循环在跑）
+  - **无业务窗口创建**（仅 Wine 内部窗：OleMainThread/IME/WineAppBar/clipboard）
+  - **文件访问极少**：仅 st2b.exe 自身 + config——**未加载任何 WPF 资源/BAML/附属程序集**
+  - 末态线程 WaitForMultipleObjectsEx(alertable) 等待
+- **定性**：cctor 链全通 → WPF Application 已初始化进消息循环 → **Startup 阶段（主窗口创建前）
+  的 NRS 代理调用挂起**（stub 0600419C 使 chooserObject/visibleCheckerTemplatePtr 等
+  native 代理字段为 null → Startup 事件里 Invoke(null) 挂起）
+- **与官方对照缺口**：官方 Startup 链会读 AirExplorer.resources/UI 程序集——当前一步未走
+
+### 下一棒精确路径（窗口只差一步）
+1. **0600419C 精细重建**：分析其 9992 条控制流平坦化，区分"NRS native 自检（导致 TerminateProcess）"
+   与"托管代理初始化（chooserObject 等赋值）"——保留后者 patch 前者（untamper 思路同款：
+   throw→pop / 条件分支反转）
+2. **或补初始化**：stub 0600419C 后，在 S1 生成代码手工补写 chooserObject 等字段的真实
+   初始化（参照官方 VerifyProcessor 的初始化块语义：LoadLibrary→GetProcAddress→delegate）
+3. **S2 字符串回接**（dec_Factory.bin 8539 条）——Startup 链中 NRS 取串调用仍走运行时函数
+4. 全流程跑通后 → CI probe/soak 双门槛
