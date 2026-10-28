@@ -1043,3 +1043,53 @@ S1(修复35: 22930 全注入) → S3(修复36/37: 3239 委托, 过滤 Dispose族
 - Main（SearchAdapter 06002D22，213 条平坦化）是唯一启动路径——**下一棒从 Main 的 213 条逐分支分析**
 - 关键分支已知：IL_0040（ValidateAccessibleResponderManager→EvaluateVisibleAttribute→UpdateState 初始化链）、
   IL_0055（args[0]→InstantiateTransferableProgram→ExecuteExplorer 链）
+
+# surgical5 阶段（V6 系列）：异常驱动控制流机制全解（2026-10-28 12:xx）
+
+## 机制层重大修正：68 陷阱 = 官方正常控制流（信号异常），不是死亡陷阱
+
+### DefineSetSet(06004528) 状态机全解
+- 头部 v0f(local 0x0F)=0x195AD4DB, v17(local 0x17)=143 → 主派发 SW1@0x16（390 cases）
+- 共 7 个 switch：SW1@0x16(390)、SW2@0x45B1(176, 派发值=local 0)、0x2638(3)、0x26ed(2)、0x37fd(5)、0x5454(4)、0x553d(2)
+- SW2 雷区：0x45A8 ret; 0x45A9 陷阱; 0x45AF ldloc.s 00; 0x45B1 switch(176)。
+  0x45A9 陷阱唯一前驱 = 0x303F brfalse(V_15=WriteLocator 返回值)。
+  0x45AF 官方入口 = SW1 case143 的 0x63C br（V_00 = arg1.m_CalculatorPredicate）
+- 68 陷阱分类（step1G）：1 switch + **67 个 brfalse 守卫**（条件检查失败 → 跳陷阱），0 个 fallthru/不可达
+
+### WriteLocator(0600452E) 恒返回 null 的铁证（step2/3/4）
+- 状态机 switch 4 cases: case3→002B(isinst)→case1→case0→ret；case2(ControlBridge 路径) 不可达
+- 输入 V_02 = newobj ProgramFinder::.ctor(ldnull)
+- isinst 0x0200063d = .DistributorStrategy；继承链 ProgramFinder→ConnectedObserver，
+  DistributorStrategy→ConnectedObserver → **ProgramFinder 不是 DistributorStrategy → isinst 必 null**
+- 004B callvirt MonitorStaticSingleton(06004550)：**官方 dump 体 = memdump 内存体 = `16 2a`(ldc.i4.0;ret)** → brfalse → ret V_01(null)
+- 结论：官方运行中 0x303F 检查也失败 → 陷阱也触发 → TemplatePredicate 异常是官方正常控制流的载体，
+  GAE catch 专门设计来处理它
+
+### GAE(06004523) catch 状态机全解（dump 体 1919B, eh=2；try=[0x1B6..0x1DB) 仅包 call DefineSetSet）
+- 主状态机 switch@0016(10 cases, V_3=5 起, V_6=0x72e7ca0b)；catch 入口 [0x1DB..0x727)：V_0C=异常, V_3=4, V_6=0x76ca234f
+- catch 派发 switch@020A(15 cases) + 子派发 switch@02E1(7 cases)
+- case4@04FE：`ldloc.s 0c(异常); isinst 0x01000080`——**0x01000080 = System.Reflection.TargetInvocationException**
+  - 非空 → castclass → V_09 → case2 链（call ValidatorTracker::ExecuteExplorer 060046ac）
+  - 空 → case12@024B：V_07 = new 集合(0a000a62 .ctor) → case11@0292: V_0D=InstantiateConfigurableModule(06004527)(this,V_04,false)
+    → 0594: V_05=InstantiateLocalSpec(06004526)(this,V_04,异常) → case9 Add(V_05)/case1 AddRange(V_0D) → Sort(lambda 060044546)
+    → case0@06BD: V_08=null → GetEnumerator → foreach(MoveNext/get_Current) → 元素 V_0B 需满足
+    `V_0B.m_AdjustableDistributor.m_WrapperContextScore != null` 等条件 → **V_08=V_0B → leave 存活**
+  - **0x05B7: `ldloc.s 08; brtrue 0651 else 046D`——V_08 非空才存活，否则 046D `ldloc.s 0c; throw`（重抛）= 我们的全部死点**
+- TemplatePredicate ctor(0600448F) 官方运行时体 560B：`call 06004194; call 06004282; ldarg.0; call 0a00010e(基类ctor); ret`
+
+### V6a/V6b 鉴别实验（决定性）
+- **V6a** = V3 配方但 4528 的 68 陷阱全部恢复原样（step8_v6a.py）→ wine 死法与 V3 完全一致（双层 GAE, 0x46D, "AirExplorer "）
+- **V6b** = baseline + 仅 92 三补丁 + RSA 恒真（step9_v6b.py），零陷阱补丁 → wine 死法与 runmin 一致（单层 GAE, 0x46D, "AirExplorer "）
+- 三种补丁集（v3 全补 / v6a 折中 / v6b 最小）死点一致 → **死点与补丁量无关，是 wine/mono 环境差异**：
+  GAE catch 的 foreach 匹配链（InstantiateLocalSpec/InstantiateConfigurableModule → m_AdjustableDistributor 匹配）在 mono 下走不通
+- 佐证：官方 exe(runbase) 在 wine 下死于更早的 StaticObserverCommand TypeLoadException（wine 伪影）——无官方 wine 基准可对照
+- "AirExplorer " 异常消息 = TemplatePredicate 信号异常的标准消息（ctor 副作用构造），非 06004555 专属
+
+### 结论与下一棒
+- **wine/mono 侧已到收益边界**：AG_CCTOR 链上的 GAE catch 机制需要真实 .NET Framework 4.8 行为
+- 三件套已备好（/root/.wine64/drive_c/airtest/，拷至 tools3/unpacker/out/）：
+  1. **surgical5_v6b.exe**（92+RSA only）—— Windows 首选：官方机制健全下最小干预
+  2. surgical5_v6a.exe（92+RSA+非4528陷阱补丁）—— 折中
+  3. surgical5_v3.exe（92+RSA+全陷阱补丁）—— wine 下走得最远的激进版
+- Windows CI 用 probe_iso 拿 FirstChanceException 原始栈，即可分辨 v6b 在真 .NET 下是否直接全通
+- 脚本：work/s5/{step2_wl,step3_type,step3b,step4_gae,step5_gae,step5b,step6_resolve,step7_ctor,step8_v6a,step9_v6b}.py
