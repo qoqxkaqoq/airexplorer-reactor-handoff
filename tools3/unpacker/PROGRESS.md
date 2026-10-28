@@ -1406,3 +1406,20 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 语义：SHA1 校验照样执行，失败异常对象 newobj 后被 pop 丢弃，初始化链继续——最小侵入
 - 产物：`exes/AirExplorer_a2.exe`（9668976B，md5 17D44EF4C102552D80774147079F2474）
 - 风险预案：若哨兵失败路径另设标志位/其他哨兵方法（06004264 等），CI 死点会前移暴露 → 迭代
+
+## step77-79（2026-10-28 续IX）：a2 挂死判定 + 守卫结构破解 + A3 裸 ret
+
+### CI run 40720235808（a2）判定：WATCHDOG TIMEOUT
+- a2（throw→pop）不抛 tampered 但 **module cctor 挂死 300s** → pop 方案作废
+- 机制：06004192 是**状态机守卫**，一次调用顺序检查多项；每项 fail → switch 表分发进 0xa72 构造异常块 → pop → 状态推进 → 下一项 fail → …… **构造异常-丢弃死循环**
+
+### 守卫结构破解（step77/78）
+- 06004192 throw 块（0xa72-0xa9a）无静态跳入边（ldtoken/call/callvirt×3 = 反射取调用者信息）→ 由 switch 表动态分发进入
+- **step78 实锤：06004192 被几乎每个方法在 IL+5 处调用**（如 06000002.cctor 体 = `call 419C; call 4192; call 4194; call 06000001; ret`）= Reactor 每方法防篡改前导链
+- 调用点栈行为（call 后无 pop 直连下一条 + 4-call 链 ret 时栈平衡）→ **06004192 = 无参 void** → 裸 ret 合法且不破坏前导链
+
+### A3（step79_patch3.py）：06004192 体 → 裸 ret（文件直改）
+- **06004192 自身不桩化、不在 res0 DB**——文件 RVA 0x3fafd0（fileoff 0x3f91d0）处为完整明文体（fat 头+全码与运行时真体逐字节全等），守卫不保护自己
+- 补丁 9 字节：flags `1b30`→`1330`（去 moresects，防 JIT 读陈旧 EH 段）+ codesize 8970→1 + 码首 `20`→`2a`（ret）；布局/后续体位置不变
+- 产物：`exes/AirExplorer_a3.exe`（md5 FA3F7A2E6DC8D9A6D74E36F2D7E4E2C3）；a2 已删除
+- 预期：守卫短路后前导链继续 → 调 06004194（身份未知，可能是第二守卫）→ CI 死点推进判读
