@@ -201,8 +201,11 @@ class Probe2 {
         }
         int ok = 0, fail = 0;
         if (ts == null) { Log("[trap] no types"); return; }
+        int ti = 0;
         foreach (var t in ts) {
             if (t == null) continue;
+            Log("[trap] #" + ti + " " + t.FullName);
+            ti++;
             try {
                 RuntimeHelpers.RunClassConstructor(t.TypeHandle);
                 ok++;
