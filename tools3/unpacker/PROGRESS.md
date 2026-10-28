@@ -1868,3 +1868,12 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 期望：fields=6201（官方态模拟，任何文件改动获得哨兵豁免且健康路副作用全做）→ 激活直通最终形态 = a1patch 数据补丁 + 此 5B
 - 若仍 5979/2 → 回 a10（41ED 换体返回官方哈希 H）
 - 判定：s5probe mode=r5 fields
+
+### a14 判定（run 40776075931）——蜜罐模型修正 + 第二哨兵（4528 系统）锁定
+- **a14（@04e0 恒 loc12=1）= 死法 `module cctor FAIL: System.Exception: AirExplorer is tampered.`（fields 2 型）**——与 a13 的 5979 完全不同
+- **结论**：loc12=1 → 4192 走 @0a72-@0a9a " is tampered." throw 块 → **baseline 官方态 = verify 通过(true) → loc12=0**（step110 假说「官方=false」反向定案；与 step105 a7c「原版 VerifyHash 本就返回 true」一致）
+- **四元组归位**：baseline=6201（verify=true→loc12=0→4192 完成；文件未改→第二哨兵沉默）；a1 族=2（改数据→verify=false→loc12=1→4192 throw）；a13/a7g/a11/a12（恒 0）=5979（4192 完成，但文件已改→**独立第二哨兵触发 68 traps**）；a14（恒 1）=2（4192 自己 throw）
+- **5979 毒源定案：第二哨兵 = 独立的文件完整性检测（非 4192 分支语义）**。68 死类型 ↔ 4528 内 68 个 trap sites（newobj 0600448F Exception; throw）数字吻合（stepZ）
+- 4528 = `.TemplateThread::DefineSetSet`（27546B/6819 ins，主 switch 176+ case，trap 分布于各 case 检查出口）
+- 42AD 跳板 gspec 0x2B000170 → **060042AC InstantiateStatelessUser**（42AC = 42AD 真身；4528 不在此链直接可见，调用者待查）
+- **修复路线回归 a10**（41ED 换体返回官方哈希 H）：verify 输入=H→verify=true→loc12=0→4192 健康；第二哨兵若读同一哈希链→官方 H→沉默。**前提待验证：第二哨兵的哈希输入来自 41ED 链而非独立重算文件**（下一步：4528 输入源解剖 + 42AC 0x2c 功能分支）
