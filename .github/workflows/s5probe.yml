@@ -37,9 +37,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path app | Out-Null
           Copy-Item $cand app\AirExplorer.exe
           Set-Location app
-          $out = & ..\probe2.exe AirExplorer.exe "${{ inputs.mode }}" 120 2>&1 | Out-String
-          $out | Tee-Object -FilePath "..\s5probe.${{ matrix.exe }}.log"
-          Write-Host $out
+          $out = & ..\probe2.exe AirExplorer.exe "${{ inputs.mode }}" 300 2>&1
+          $out | Tee-Object -FilePath "..\s5probe.${{ matrix.exe }}.log" | Write-Host
 
       - name: Upload
         if: always()
@@ -49,3 +48,4 @@ jobs:
           path: |
             s5probe.${{ matrix.exe }}.log
             app\probe2.log
+            app\dump\**
