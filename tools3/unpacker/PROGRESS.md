@@ -1647,3 +1647,28 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 ### R5.I 新增（probe2.cs）
 - 4192 invoke 后**全程序静态快照**（所有非泛型类型 static 字段：NULL/STR/PRIM/BYTE-md5/ARR/TYP 落 istat_all.txt + istat_*.bin）→ baseline vs a7c 差分 = 4528 真实输入 hunt（R5.G 只 diff 了 DispatcherInitializer 是盲区）
 - dispatch：s5probe mode=r5 exes=[baseline_verified, a7c]
+
+## step111（2026-10-28 续XXI）：R5 差分实锤——blob 装载通道 + a7d 恒假实验
+
+### 运维坑
+- s5probe 的 exes 入参是**短名**（workflow 拼 `exes\AirExplorer_{name}.exe`）——传全名 → `MISSING exes\AirExplorer_AirExplorer_baseline_verified.exe.exe`（run 40738745236 白跑）
+- R5.I 首版在 `asm.GetTypes()` 抛 ReflectionTypeLoadException（24 个类型因缺三方 DLL 加载失败，两边一致，噪音）→ istat_all.txt 没写。修复：catch RTL 用 rtle.Types + per-type try/catch + istat_loadex.txt（run 40739534976 修复版成功）
+- 4528 是**实例方法**且 declaring type ≠ HandlerPublisher（p0 参数类型）——Activator 建实例后 Invoke 仍 TargetException，H 段对 4528 直接 invoke 无信息量（declaring type 待从 dump 查）
+
+### R5 差分实锤（run 40739534976，baseline=6201 fields vs a7c=5979）
+1. **DispatcherInitializer::_ExtractorVisitors：baseline=BYTE[398794] vs a7c=BYTE[0]** —— 398794 恰好 = `GlobalValidator.FactoryValidator` 资源长度。**健康路径把 FactoryValidator blob 装进 _ExtractorVisitors；a7c 没装**
+2. `_TemplateNotifierSize：75 vs 0`
+3. **~70 个类型的静态在 a7c 全部读不出**（GetValue 抛 TypeInitializationException 被吞 → 该类型 cctor 死且失败被缓存）：ModelError/RequestTask/AggregatorProcessor/FlexibleProxy/ControllerState/RequesterSender/ConcreteTree…全是解密字符串/常量池
+4. **ArgumentGateway 本尊在 a7c cctor 死**（baseline 5 个解密 URL 静态正常：checkversion/activate.php/checklic.php/bugReport）→ probe 复现 a7c 的 AG cctor 死亡
+5. D 段：baseline 与 a7c 直接 invoke 4192 都不 throw —— 死不在 4192 直接调用层，在状态机分岔后的静默破坏
+
+### 机制定案（统一解释四元组）
+- 4192 内 `VerifyHash(41EE) → ldc.i4.0; ceq → loc12`：baseline VerifyHash 返回 **false** → loc12=1 → 健康路径 → **装 blob + 初始化 ~70 类型静态**
+- a7c（41EE 恒真）→ loc12=0 → 反篡改路径：**不 throw、静默跳过装 blob** → 下游 ~70 个 cctor 读 blob 派生态全死 → AG cctor 在 4528 抛 `System.Exception("AirExplorer")`
+- 四元组归位：baseline 活（false）/ a1 死 4192 throw（真 VerifyHash 在重建环境行为异常）/ a6(4192 空体) 死 4528（没人装 blob）/ a7probe+a7c 死 4528（恒真→静默破坏）
+- a1 与 baseline **PE 布局逐字节同位**：a1 的 41EE 体同样在 file off 0x405AC8，OLD 字节断言通过（`5a fe09×4 6f0c0a000a2a` = ldarg×4 + callvirt 0A000A0C + ret，与 baseline 完全一致）——a1 的死因是**运行时构造的委托**在重建环境返回 true/抛异常，不是静态字节
+
+### a7d（step111_a7d.py）
+- **a1 + 41EE 恒假壳**（`0A 16 2A` = tiny hdr + ldc.i4.0 + ret，填充同 a7c）@ file off 0x405AC8，数据零改动
+- md5=490B8096D9467B22A54B9F16BB8A58D8
+- 预期：绕过坏委托 → 4192 健康路径 → blob 装载 → ~70 cctor 活 → AG 活。若 a1 其余部分正确 = **发布候选**
