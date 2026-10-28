@@ -1182,3 +1182,41 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - A3 便携 ✅（launcher 零修改，CI 已验收）
 - 暗桩清理：陷阱=哨兵体不可批改（v7 实证），结论=保留+文档化
 - **A1 激活直通：06000CEE rva=0x3D3404 原位真体可补 → 下一实验 = a1patch 五补丁重定向 baseline 宿主 + CI probe**（哨兵哈希集是否覆盖激活方法待测）
+
+# A1 实验前置审计：桩模型实锤 + 哨兵解剖 + 资源地图（2026-10-28 晨）
+
+## step31-32：a1patch 重定向 baseline = 结构性不可能（修正 1184 行旧判断）
+- a1patch 真实 spec（tools2/a1patch.cs）：P1 06002133@IL+0x290 0x16→0x17、P2 06002145@IL+0x120 0x16→0x17、P3/P4/P5 0600212A/06002157/06002127 体→{17 2A}；060059C4 已废弃（恒 true 破坏 06003A7F JSON 状态机）
+- **五目标 + 06000CEE 在 baseline 磁盘上全是 ≤10B 桩**（tiny，与 dump 真体 581B/946B/471B 完全不符）；全文件明文搜索真体字节（含前 16B probe）零命中 → 真体只在加密资源里，磁盘桩永不执行（payload-redirect 模型实锤）
+- 060059C4 ExecuteExplorer 是 class-3 原位真体（10B 与 dump 逐字节一致）；182 陷阱全在常规 .text（file 0x40E4D4-0x42ABE3，rva≈0x410xxx 区），非资源区
+- **方法论教训：只看 RVA≠0 判"原位真体可补"不够，必须比对体内容**（上窗口的 1184 行判断已证伪）
+- bodyswap 确认为 dnlib ModuleWriter 重写型 → 在 baseline 上出包必死（m1r 同因），a1patch+bodyswap 工具链对 baseline 不可用
+
+## step35/40：真资源地图（ManifestResource 表完好；reslist.py 是坏的——它把 CLI 头当资源目录解析，历史"6 伪名资源"数据作废）
+| # | 名 | 大小 | 熵4k | 判定 |
+|---|---|---|---|---|
+| 0 | ErrorReceiver.ValidatorViewer | 356328B | 7.95 | 加密方法体 payload A |
+| 1 | ValidatorArgument.EmitterReporter | **256B** | 6.08 | =8×32B，**SHA1 哨兵哈希表**（06004192 的 GetManifestResourceStream 目标） |
+| 2 | ValidatorAllocator.ValidatorProc | 47915B | 5.78 | 低熵结构体（索引/尺寸表？头 96B 呈 u16 尺寸串 0x012E/0x018B…，0x080 处见 2a2a2a ret 串） |
+| 3 | CollectorTransaction.ValidatorProject | 26128B | 7.95 | 3266×8B 字段 token 表——**decrypt_prng.py 已破（3266/3266）** |
+| 4 | ValidatorGenerator.DefinitionError | 2337031B | 7.95 | 2.33MB 主库（0600428A→interp.py 已破） |
+| 5 | GlobalValidator.FactoryValidator | 398794B | 7.95 | 加密方法体 payload B |
+- 资源区 file 0x6213C0-0x9264CC（rva 0x6231C0+0x30510C）；数据格式 = [size:4][data]，size 前缀在每资源头部
+- 方法体 payload 总需求估算：16598 dump 体总 IL ≈ 754KB ≈ res[0]+res[5] 之和
+
+## step36-39：哨兵（06004192 InstantiateGlobalCalculator, 8970B IL, 原位）解剖
+- 字符串：`' is tampered.'`、`'SHA1'`、`'ValidatorArgument.EmitterReporter'` → 哨兵 = SHA1 哈希校验 + 读 res[1]
+- 结构：调用 ~80 个 Verify*/Validate*/Check*（060041CB-06004264 家族）+ 读取资源（GetManifestResourceStream→set_Position→ReadBytes）+ 反射回路（GetFields/ResolveMethod/GetILGenerator/Emit/CreateDelegate——动态生成委托体！）
+- **Verify* 家族全是 10-23B 委托调用器**（如 060041EE VerifyDynamicStrategy = `ldarg.0-3; callvirt Invoke 0x0A000A0C; ret`），真校验逻辑在委托目标（运行时才赋值）
+- v6d 补丁三点定位（step10）：+0x4E1 `call VerifyDynamicStrategy; ldc.i4.0; ceq`（判定汇合点，ceq→clt=反转）；+0x995/+0x2289 catch 块 `ldc.i4.1; stloc.s 0c`（异常→置位）
+- **v6d 毒 GAE 源头大概率是 +0x995/+0x2289 两处 ldc 翻转**（吞掉合法异常回退路径），非 ceq→clt → **下一实验 v6e = 仅 ceq→clt**（预期：tamper 沉默 + GAE 完好）
+- 0600419C DefineEfficientProfiler (37KB) = 又一验证级联编排器；06004193 TrackCompiler (1664B) = PRNG 源（decrypt_prng 对应）
+
+## step41：payload 密码 naive 攻击全败（勿重试）
+- PRNG keystream（decrypt_prng 固定调度）XOR：res[0]/res[5]/res[2]/res[1] × 相位{资源头起, 文件绝对偏移}——零命中
+- raw deflate（wbits -15/15/31, offsets 0-15）解压探针——全败；压缩已知体回搜——零命中
+- 结论：payload 用别的密码（原生 bootstrap 或 TrackCompiler 变体调度）——**下一步找 res[0]/res[5] 的读取者**：在全 class-3 原位方法体里搜 ldstr token→US='ErrorReceiver.ValidatorViewer'/'GlobalValidator.FactoryValidator'，锁定解密器后走 interp.py 同款 Python 仿真路线
+
+## A1 现状判定
+- 五补丁直改：需先破 payload 密码（known-plaintext oracle = 16598 dump 体）；哨兵面：res[1] 8×SHA1 表 + 判定汇合点 +0x4E1 可反转
+- 脚本：work/s5/step31_a1inspect.py, step32_bodysearch.py, step33_license_write.py, step34_payload.py, step35_reslayout.py, step36_sentinel.py, step37_rsatarget.py, step38_family.py, step39_419c.py, step40_res2.py, step41_knownplain.py
