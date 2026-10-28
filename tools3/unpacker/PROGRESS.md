@@ -1423,3 +1423,22 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 补丁 9 字节：flags `1b30`→`1330`（去 moresects，防 JIT 读陈旧 EH 段）+ codesize 8970→1 + 码首 `20`→`2a`（ret）；布局/后续体位置不变
 - 产物：`exes/AirExplorer_a3.exe`（md5 FA3F7A2E6DC8D9A6D74E36F2D7E4E2C3）；a2 已删除
 - 预期：守卫短路后前导链继续 → 调 06004194（身份未知，可能是第二守卫）→ CI 死点推进判读
+
+## step80-81（2026-10-28 续X）：a3 判定守卫1死透 + 二层守卫解剖 + A4
+
+### CI run 40722172807（a3）：**module cctor OK!**
+- 守卫1（06004192）裸 ret 成功，SHA1 哨兵死透，module cctor 全链通过
+- 死点前移：`TemplateThread.GenerateAdaptableExtractor` 抛 `System.Exception: AirExplorer`（AG.cctor 链死于此，AG 静态字段全 READ-FAIL）
+- baseline 链路（AG.cctor OK / EVA OK）仍可作对照组
+
+### 二层守卫结构（step80/80b）
+- `06004524 GenerateAdaptableExtractor(Boolean&)` 体 626B **throws=0**——异常栈帧显示它是因为 06004523 被 JIT 内联
+- 调用图：06004524 → **06004523**（检查器 1919B，throws=1=catch-rethrow）→ **06004528**（27546B，**throws=74** 状态机主守卫）→ 0600455d（throw helper 族，15 throws）
+- 06004523 调 06004528 约定：`ldarg.0; ldloc.s; call; br` → **void(2参)** → 裸 ret 合法
+- 06004524@023d：`ldarg.0; ldloca.s; call 06004523` → 06004523 结果经 out byref 带回
+- 文件状态：06004523/4524/4528 全部**桩化+在 res0 DB**（守卫族体靠 DB 回填，与 06004192 文件明文不同）
+
+### A4（step81_patch4.py）
+- 06004528 体 → 裸 ret：DB 条目（n=5，原头 `1b3008009a6b0000580c0011`）dwords[0] → `06 2a`（tiny ret），cipher XOR delta 16 字节
+- 产物：`exes/AirExplorer_a4.exe`（md5 37C5FDCF3AA2D341DE2411C180FC06C0）+ mem5/res0_plain_a4.bin
+- 06004523 的 rethrow 依赖 try 内异常，主守卫死后自然短路（预判，待 CI 验证）
