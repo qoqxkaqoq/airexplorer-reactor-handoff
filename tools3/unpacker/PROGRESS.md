@@ -1900,3 +1900,14 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 链条闭环：4196 gate 池空 → 4195(0x2c) → 42AD → 42AC → 4521 → 4523 → **第二哨兵 throw** → 4196 重初始化死 → 67 业务 cctor 全灭 = 5979
 - **StaticTree.cctor 死因 = FileNotFoundException: BouncyCastle.Crypto 1.7.4114.6375**——独立依赖问题，与哨兵无关；交付形态数据便携需处理（主库可能内嵌 BouncyCastle）
 - 下一步：① 解剖 4523 篡改检查的输入（哈希源）；② 修复实验（41ED 链→a10 / 否则豁免补丁）；③ a15=a1patch+修复组合→6201
+
+### step163-171（续XXV）——第二哨兵真身定案：4192 唯一陷阱块，a13b 修复实验
+- **step163-164（4528 全量解剖）**：6819 ins 落盘 out163_4528.il。**68 个 newobj 0600448F + throw**（与 trap 死类型数吻合）；4528 零 ldstr/零池调用；ldsfld 全是 ValidatorEmitter 族委托字段
+- **448F 真身**：TemplatePredicate .ctor 体 = `call 4194（反调试：Debugger.IsAttached→throw 'Debugger Detected'）; call 4282(nop); ldarg.0; call **Exception::.ctor() 无参**` → **448F trap 点异常 Message 为空，' is tampered.' 不可能出自 4528**
+- **452e WriteLocator（180B）**：状态机 5 块，语义 = `arg0 as DistributorStrategy`（经 MonitorStaticSingleton/ControlBridge 中转），null→trap；453a/4650 纯委托转发
+- **step166-167（委托追踪 + 全库哈希扫描）**：InterruptError/MatchRunner 等委托字段**全库零 stsfld**（赋值全在 4196 重初始化数据驱动反射层）；**41ED 全库唯一调用者 = 4192@04d2** → **a10（41ED 换体）前提证伪**；全库明文哈希活动（get_Location×4/ComputeHash/RSA::VerifyHash/'SHA1'）全部收敛于 DispatcherInitializer 类型
+- **step168-169（消息源收网）**：全库 ldstr 'tampered|AirExplorer' 仅 2 处（ResponsiveProxy 是类型名误命中）→ **' is tampered.' 全库唯一 = 4192@0a8b**
+- **4192@0a72-0a9a = 无条件陷阱块（41B）**：`ldtoken TD000622→41cb(GetTypeFromHandle)→get_Assembly→41f0(GetName)→41f1(get_Name)→ldstr ' is tampered.'→41f2(Concat)→newobj Exception→throw`——41f0/f1/f2/cb/c9/ca 全是纯转发，**块内无任何条件分支，到达即 throw**，消息 = `<AssemblyName> is tampered.`；4192 全体 2521 ins **仅此一个 throw**
+- **栈帧假象修正**：68 死异常全部出自 4192 陷阱块（4523 catch `stloc.s c` + `ldloc.s c; throw` 重写 StackTrace → 4523/4528 帧为重抛假象；"4523 内独立 PE 自检"作废）；@09b5 合法对照块（同三件套但走 41cc get_EntryPoint 存 loc2）
+- **step171 a13b 修复实验**：a13（@3f96bc 恒 loc12=0）+ **陷阱块 41B nop**（文件偏移 0x3F9C4E = IL0 0x3F91DC + 0x0a72；原始字节 `d0220600 0228cb41 0006...` 验证通过）→ `exes/AirExplorer_a13b_trapnop.exe` md5=B945033159531C041924CE901958F925
+- 判定计划：s5probe mode=trap → 期望 fail 类型从 68/6 停大幅收敛；若 ok 回升 → a15 = a1patch + a13b 组合
