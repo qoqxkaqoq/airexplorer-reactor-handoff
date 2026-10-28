@@ -49,3 +49,4 @@ jobs:
           path: |
             s5probe.${{ matrix.exe }}.log
             app\probe2.log
+            app\dump\**

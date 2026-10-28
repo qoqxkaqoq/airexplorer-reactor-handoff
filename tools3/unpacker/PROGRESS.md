@@ -1251,3 +1251,19 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **AES key 静态提取未果**（step51-54）：0600419C = switch 状态机（0x0016 处 625 项表、初值 loc1B=0x686FB4B8、每块 loc48=loc1B+K48/loc1B+=K1B/br 0x0012 回分发）；loc4(0x04)=key 源数组、loc33(0x21)=IV 源数组被 625 块大量重写伪装，静态多路径无法唯一消解（脚本 step51_keys/step52_flatsim/step54_blockscan + out_419c_*.json 留存）
 - **下一步（决定性）**：probe2 扩展 mode=mem —— 在 baseline（AG.cctor OK）上反射 dump 静态字段：`_ExtractorVisitors`(0x04001FD0, res[5] 字符串池明文) + 全部静态 byte[] → 明文 XOR 密文 = keystream（XOR 流情形）或确认 AES-CBC 块对齐 → 定位五目标密文位置 → 明文补丁（0600212A/57→`17 2A` 等）→ 重加密回写 → res[1] 哈希表同步（若同为 AES 体系则一套参数通吃）→ AirExplorer_a1.exe
 - v6e/v6f 保留存档：哨兵判定汇合点反转原语（ceq→clt）与 catch 毒标志补丁字节已验证无害（module cctor 不死）
+
+## step56-58（2026-10-28 续II）：mode=mem 探针上线
+
+- **签名定案（step56_sigs.py，dnfile sig blob 解析）**：
+  - `0600419C DefineEfficientProfiler` = **static void ()** —— res[0] 解密+回填驱动器（体内 call 060041FA(IntPtr,i4,i4) 写 IL）
+  - `06004196 InstantiateTransferableProgram` = **static string (i4)** —— ITP 字符串解密器（mode=itp 已验证）
+  - `0600418C InstantiateAdjustableAuditor` = **static alg ()** —— AES 工厂（可反射 invoke 读 Key/IV 属性）
+  - `06004192/060041FA/06004218-31` 全部挂 0x0622 **CloudClient.Templating.DispatcherInitializer**（38 静态字段，Reactor 状态容器；`_ExtractorVisitors`=04001FD0 亦在其上）
+- **res[0]/res[5] 提取成功（step57，ManifestResource 表权威解析；cor20 目录格式非标准、step35 的 [off,size][name] 解析证伪）**：
+  - res0 ErrorReceiver.ValidatorViewer = 356328B（md5 1bb38abc）、res5 GlobalValidator.FactoryValidator = 398794B（md5 a46458325a4c9351f9557f65fffe8243）；合计 755122B 与判定一致
+  - 全 6 资源尺寸：res1=256B、res2=47915B、res3=26128B、res4=2337031B
+- **seedless PRNG 复现失败（step57_xor）**：用已验证的 decrypt_prng keystream（v9=0）全流 XOR res0/res5 → 0600212A/06002157 known-plaintext 零命中
+  - 判定：res0/res5 ≠ res3 的裸 PRNG-XOR 体系；结合 disasm 的 AES-CBC 铁证（CryptoStream+FlushFinalBlock）+ v4c 教训「负载流 ≠ 资源原文件（流变换）」→ **0600419C 走 流变换+AES 路径，静态复现不可行，运行时提取是唯一路**
+- **probe2 mode=mem 上线（ci/probe2.cs，mcs 编译通过）**，七阶段：A=DispatcherInitializer 38 静态全 dump（递归 IDictionary/IEnumerable/byte[]→文件）；B=全 30912 方法 ResolveMethod+GetILAsByteArray→il_all.bin+il_index.tsv（内存真体 ground truth）；C=四目标已知明文 sanity；D=自建 RijndaelManaged/AesCryptoServiceProvider CreateDecryptor 同型实例取 transform MT*；E=module cctor 后自进程 VirtualQuery 堆扫描 S1（算法 MT + byte[] MT ≥32KB 大数组→解密明文流捕获）；F=invoke 0600418C 工厂→反射读返回对象 Key/IV/Mode；G=invoke 0600419C 驱动器→立即 S2 扫描 + transform MT 命中 768B 上下文+指针追链（Key/IV byte[] 剥出）；H=静态重 dump（stat2，diff 新增对象）
+  - 工程细节：Marshal.UnsafeIntPtrAdd 换可移植 long 算术（mono 4.5 profile 无此 API）；mts[2] 访问加长度守卫；s5probe.yml artifact 增加 app\dump\**
+- **下一步**：push + dispatch `{"exes":["baseline_verified"],"mode":"mem"}` → 从 artifact 提取 AES Key/IV 或解密明文流 → 本地重加密路径定案

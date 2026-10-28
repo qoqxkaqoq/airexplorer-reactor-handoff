@@ -2,11 +2,15 @@
 // 用法: probe2 <exe> <mode> [timeoutSec]
 //   mode=ag   触发 AG.cctor → 读全部 AG 静态字段 → 调 EvaluateVisibleAttribute → 抓完整异常链
 //   mode=itp  触发引导 → 抽样调 ITP(id) 验证解密器语义
+//   mode=mem  静态字段全dump + 全方法IL dump + 反射invoke解密链 + 自进程堆扫描(transform/key/大byte[])
 // 所有调用都在独立 STA 线程 + 看门狗(默认 90s, 超时强杀进程, 防状态机死循环)
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -177,7 +181,254 @@ class Probe2 {
                     } catch (Exception ex) { Log("[probe2] MOD." + f.Name + " FAIL " + ex.GetType().Name); }
                 }
             }
+        } else if (mode == "mem") {
+            MemRun(asm);
         }
+    }
+
+    // ===================== mode=mem: 运行时提取 =====================
+    static string DumpDir = "dump";
+    static int DumpSeq = 0;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct MBI { public IntPtr BaseAddress; public IntPtr AllocationBase; public uint AllocationProtect; public IntPtr RegionSize; public uint State; public uint Protect; public uint Type; }
+    [DllImport("kernel32.dll")]
+    static extern IntPtr VirtualQuery(IntPtr lpAddress, ref MBI lpBuffer, IntPtr dwLength);
+
+    static void MemRun(Assembly asm) {
+        try { Directory.CreateDirectory(DumpDir); } catch {}
+        var mod = asm.GetModules()[0];
+        var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+        // ---- A. DispatcherInitializer 静态字段全 dump (Reactor 状态容器) ----
+        var diT = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+        Log("[mem] A. DispatcherInitializer = " + (diT == null ? "NULL!" : diT.FullName + " fields=" + diT.GetFields(flags).Length));
+        if (diT != null) {
+            foreach (var f in diT.GetFields(flags)) {
+                DumpFieldValue(f.Name, f.GetValue(null), "stat1", 0);
+            }
+        }
+
+        // ---- B. 全方法 IL dump (内存真体 ground truth) ----
+        try {
+            int n = 0, okB = 0;
+            using (var ix = new StreamWriter(Path.Combine(DumpDir, "il_index.tsv")))
+            using (var bl = new FileStream(Path.Combine(DumpDir, "il_all.bin"), FileMode.Create)) {
+                for (int rid = 1; rid <= 30912; rid++) {
+                    MethodBase mb = null;
+                    try { mb = mod.ResolveMethod(0x06000000 | rid); } catch {}
+                    if (mb == null) continue;
+                    n++;
+                    try {
+                        var il = mb.GetMethodBody().GetILAsByteArray();
+                        if (il == null) continue;
+                        long pos = bl.Position;
+                        bl.Write(il, 0, il.Length);
+                        ix.WriteLine("0x{0:X8}\t{1}\t{2}\t{3}\t{4}", 0x06000000 | rid, il.Length, mb.DeclaringType == null ? "" : mb.DeclaringType.FullName, mb.Name, pos);
+                        okB++;
+                    } catch {}
+                }
+            }
+            Log("[mem] B. il_all: resolved=" + n + " bodies=" + okB);
+        } catch (Exception ex) { Log("[mem] B il_all FAIL " + Chain(ex)); }
+
+        // ---- C. 已知明文 sanity (内存 IL vs dump_16598) ----
+        var SANITY = new[] { 0x0600212A, 0x06002157, 0x06002145, 0x06000CEE };
+        foreach (var tok in SANITY) {
+            try {
+                var mb = mod.ResolveMethod(tok);
+                var il = mb.GetMethodBody().GetILAsByteArray();
+                Log("[mem] C. 0x" + tok.ToString("X8") + " len=" + il.Length + " head=" + BitConverter.ToString(il, 0, Math.Min(12, il.Length)).Replace("-", ""));
+            } catch (Exception ex) { Log("[mem] C. 0x" + tok.ToString("X8") + " FAIL " + (ex.InnerException ?? ex).Message); }
+        }
+
+        // ---- D. transform MT 指针准备 (自建同型实例取 MethodTable*) ----
+        var mtMap = new List<ulong[]>(); var mtNames = new List<string>();
+        try {
+            var t1 = new RijndaelManaged().CreateDecryptor(new byte[32], new byte[16]).GetType();
+            mtMap.Add(new ulong[] { (ulong)t1.TypeHandle.Value.ToInt64() }); mtNames.Add("RMCrypt");
+            Log("[mem] D. transform1 MT=" + ((ulong)t1.TypeHandle.Value.ToInt64()).ToString("X") + " (" + t1.FullName + ")");
+        } catch (Exception ex) { Log("[mem] D RMCrypt MT FAIL " + ex.Message); }
+        try {
+            var t2 = new AesCryptoServiceProvider().CreateDecryptor(new byte[32], new byte[16]).GetType();
+            mtMap.Add(new ulong[] { (ulong)t2.TypeHandle.Value.ToInt64() }); mtNames.Add("AesCSPCrypt");
+            Log("[mem] D. transform2 MT=" + ((ulong)t2.TypeHandle.Value.ToInt64()).ToString("X") + " (" + t2.FullName + ")");
+        } catch (Exception ex) { Log("[mem] D AesCSPCrypt MT FAIL " + ex.Message); }
+        ulong mtRijndael = 0, mtAesCSP = 0, mtByteArr = (ulong)typeof(byte[]).TypeHandle.Value.ToInt64();
+        try { mtRijndael = (ulong)typeof(RijndaelManaged).TypeHandle.Value.ToInt64(); } catch {}
+        try { mtAesCSP = (ulong)typeof(AesCryptoServiceProvider).TypeHandle.Value.ToInt64(); } catch {}
+        Log("[mem] D. MT: RijndaelManaged=" + mtRijndael.ToString("X") + " AesCSP=" + mtAesCSP.ToString("X") + " byte[]=" + mtByteArr.ToString("X"));
+
+        // ---- E. S1 堆扫描 (module cctor 之后的残留) ----
+        ScanHeap("s1", Concat(new ulong[] { mtRijndael, mtAesCSP, mtByteArr }), new[] { "RijndaelManaged", "AesCSP", "ByteArray" }, 40, 40 << 20);
+
+        // ---- F. invoke 0600418C 工厂 → 检查返回对象 Key/IV ----
+        try {
+            var mF = (MethodInfo)mod.ResolveMethod(0x0600418C);
+            Log("[mem] F. invoke " + mF.DeclaringType.Name + "::" + mF.Name + " (AES factory)...");
+            var alg = mF.Invoke(null, null);
+            if (alg == null) Log("[mem] F. returned NULL");
+            else {
+                Log("[mem] F. returned " + alg.GetType().FullName);
+                foreach (var pn in new[] { "Key", "IV", "Mode", "BlockSize", "KeySize", "CipherMode", "Padding", "FeedbackSize" }) {
+                    try {
+                        var p = alg.GetType().GetProperty(pn, flags | BindingFlags.Instance);
+                        if (p == null) continue;
+                        var v = p.GetValue(alg, null);
+                        var bv = v as byte[];
+                        Log("[mem] F. alg." + pn + " = " + (bv != null ? BitConverter.ToString(bv).Replace("-", "") : "" + v));
+                    } catch (Exception e2) { Log("[mem] F. alg." + pn + " EX " + e2.Message); }
+                }
+            }
+        } catch (Exception ex) { Log("[mem] F FAIL " + Chain(ex)); }
+
+        // ---- G. invoke 0600419C 驱动器 → 立即 S2 扫描 ----
+        try {
+            var mD = (MethodInfo)mod.ResolveMethod(0x0600419C);
+            Log("[mem] G. invoke " + mD.DeclaringType.Name + "::" + mD.Name + " (res0 driver)...");
+            try { mD.Invoke(null, null); Log("[mem] G. driver OK"); }
+            catch (Exception ex) { Log("[mem] G. driver EX " + Chain(ex)); }
+        } catch (Exception ex) { Log("[mem] G resolve FAIL " + ex.Message); }
+        ScanHeap("s2", Concat(new ulong[] { mtRijndael, mtAesCSP, mtByteArr }), new[] { "RijndaelManaged", "AesCSP", "ByteArray" }, 40, 40 << 20);
+        try {
+            var t1mt = mtMap.Count > 0 ? mtMap[0][0] : 0; var t2mt = mtMap.Count > 1 ? mtMap[1][0] : 0;
+            ScanHeap("s2t", new[] { t1mt, t2mt }, new[] { "RMCrypt", "AesCSPCrypt" }, 300, 4 << 20);
+        } catch (Exception ex) { Log("[mem] G transform scan FAIL " + ex.Message); }
+
+        // ---- H. DispatcherInitializer 静态重 dump (驱动器运行后新增对象) ----
+        if (diT != null) {
+            foreach (var f in diT.GetFields(flags)) {
+                DumpFieldValue(f.Name, f.GetValue(null), "stat2", 0);
+            }
+        }
+        Log("[mem] H. stat2 done");
+    }
+
+    static ulong[] Concat(ulong[] a) { return a; }
+
+    // 堆扫描: 找 MT 指针命中 → dump 对象上下文 + 指针追链; byte[] MT → 检查长度 ≥0x8000 → dump 数据
+    static void ScanHeap(string tag, ulong[] mts, string[] names, int maxObj, long maxBytes) {
+        long dumped = 0; int objHits = 0;
+        var buf = new byte[4 << 20];
+        var mbi = new MBI();
+        var sizeOfMbi = (IntPtr)Marshal.SizeOf(typeof(MBI));
+        IntPtr addr = new IntPtr(0x10000);
+        long regions = 0, committed = 0;
+        while ((long)addr < 0x7FFFFFFEFFFF) {
+            if (VirtualQuery(addr, ref mbi, sizeOfMbi) == IntPtr.Zero) break;
+            long rsz = mbi.RegionSize.ToInt64();
+            if (rsz <= 0) break;
+            IntPtr next = (IntPtr)(mbi.BaseAddress.ToInt64() + mbi.RegionSize.ToInt64());
+            if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && (mbi.Protect & 0xFF) != 0) {
+                committed += rsz; regions++;
+                long done = 0;
+                while (done < rsz) {
+                    int take = (int)Math.Min((long)buf.Length, rsz - done);
+                    IntPtr src = (IntPtr)(mbi.BaseAddress.ToInt64() + done);
+                    try { Marshal.Copy(src, buf, 0, take); } catch { break; }
+                    for (int off = 0; off + 16 <= take; off += 8) {
+                        ulong v = BitConverter.ToUInt64(buf, off);
+                        bool isBarr = mts.Length > 2 && v == mts[2];
+                        bool hit = false; string nm = null;
+                        if (v == mts[0]) { hit = true; nm = names[0]; }
+                        else if (mts.Length > 1 && v == mts[1]) { hit = true; nm = names[1]; }
+                        else if (isBarr) {
+                            int alen = BitConverter.ToInt32(buf, off + 8);
+                            if (alen >= 0x8000 && alen <= 0x400000 && dumped < maxBytes && objHits < maxObj) {
+                                IntPtr dsrc = (IntPtr)(src.ToInt64() + off + 16);
+                                int dlen = (int)Math.Min((long)alen, buf.Length);
+                                var data = new byte[dlen];
+                                try { Marshal.Copy(dsrc, data, 0, dlen); } catch { continue; }
+                                string fn = Path.Combine(DumpDir, tag + "_bigarr_" + (objHits + 1) + "_len" + alen + ".bin");
+                                File.WriteAllBytes(fn, data);
+                                Log("[mem] " + tag + " bigarr @0x" + ((long)src + off).ToString("X") + " len=" + alen + " head=" + BitConverter.ToString(data, 0, 24).Replace("-", ""));
+                                dumped += alen; objHits++;
+                            }
+                            continue;
+                        }
+                        if (!hit || objHits >= maxObj) continue;
+                        objHits++;
+                        var ctx = new byte[768];
+                        try { Marshal.Copy((IntPtr)(src.ToInt64() + Math.Max(0, off - 32)), ctx, 0, ctx.Length); } catch {}
+                        File.WriteAllBytes(Path.Combine(DumpDir, tag + "_" + nm + "_" + objHits + ".bin"), ctx);
+                        Log("[mem] " + tag + " obj " + nm + " #" + objHits + " @0x" + ((long)src + off).ToString("X"));
+                        // 指针追链: 对象前 0x80B 的 qword 像堆指针 → dump 目标 256B
+                        for (int fo = off + 8; fo + 8 <= take && fo < off + 0x80; fo += 8) {
+                            ulong pv = BitConverter.ToUInt64(buf, fo);
+                            if (pv > 0x100000000UL && pv < 0x7FFFFFFEFFFFUL) {
+                                try {
+                                    var tob = new byte[256];
+                                    Marshal.Copy((IntPtr)(long)pv, tob, 0, 256);
+                                    File.WriteAllBytes(Path.Combine(DumpDir, tag + "_" + nm + "_" + objHits + "_f" + (fo - off - 8) + ".bin"), tob);
+                                } catch {}
+                            }
+                        }
+                    }
+                    done += take;
+                }
+            }
+            if (next.ToInt64() <= (long)addr) break;
+            addr = next;
+        }
+        Log("[mem] scan " + tag + ": regions=" + regions + " committed=" + (committed >> 20) + "MB objHits=" + objHits + " bigarrBytes=" + (dumped >> 10) + "KB");
+    }
+
+    // 反射值递归 dump: 原始类型→log, string→文件+预览, byte[]→文件, IDictionary/IEnumerable→迭代, 其它对象→字段 depth1
+    static void DumpFieldValue(string path, object v, string tag, int depth) {
+        try {
+            if (v == null) { Log("[mem] " + tag + "." + path + " = NULL"); return; }
+            var t = v.GetType();
+            if (t == typeof(string)) {
+                string s = (string)v;
+                File.WriteAllText(Path.Combine(DumpDir, tag + "_" + path + ".txt"), s);
+                Log("[mem] " + tag + "." + path + " = str len=" + s.Length + " \"" + (s.Length > 100 ? s.Substring(0, 100) : s) + "\"");
+            } else if (t == typeof(byte[])) {
+                byte[] b = (byte[])v;
+                File.WriteAllBytes(Path.Combine(DumpDir, tag + "_" + path + ".bin"), b);
+                Log("[mem] " + tag + "." + path + " = byte[" + b.Length + "] head=" + BitConverter.ToString(b, 0, Math.Min(24, b.Length)).Replace("-", ""));
+            } else if (t.IsPrimitive || t.IsEnum || t == typeof(decimal)) {
+                Log("[mem] " + tag + "." + path + " = " + v);
+            } else if (t == typeof(char[]) || t == typeof(int[]) || t == typeof(uint[]) || t == typeof(long[]) || t == typeof(ulong[]) || t == typeof(short[]) || t == typeof(ushort[])) {
+                var arr = (Array)v;
+                var sw = new StringWriter();
+                foreach (var e in arr) sw.Write(e + " ");
+                File.WriteAllText(Path.Combine(DumpDir, tag + "_" + path + ".txt"), sw.ToString());
+                Log("[mem] " + tag + "." + path + " = " + t.Name + "[" + arr.Length + "]");
+            } else if (v is IDictionary) {
+                var d = (IDictionary)v;
+                Log("[mem] " + tag + "." + path + " = " + t.Name + " Count=" + d.Count);
+                int i = 0;
+                foreach (DictionaryEntry e in d) {
+                    if (i++ >= 200) { Log("[mem] " + tag + "." + path + " ... (truncated)"); break; }
+                    DumpFieldValue(path + "[k" + i + "]", e.Key, tag, depth + 1);
+                    DumpFieldValue(path + "[v" + i + "]", e.Value, tag, depth + 1);
+                }
+            } else if (v is IEnumerable) {
+                int i = 0;
+                Log("[mem] " + tag + "." + path + " = " + t.Name + " (IEnumerable)");
+                foreach (var e in (IEnumerable)v) {
+                    if (i++ >= 200) { Log("[mem] " + tag + "." + path + " ... (truncated)"); break; }
+                    DumpFieldValue(path + "[" + i + "]", e, tag, depth + 1);
+                }
+            } else if (depth < 2) {
+                Log("[mem] " + tag + "." + path + " = obj " + t.FullName);
+                foreach (var ff in t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
+                    try { DumpFieldValue(path + "." + ff.Name, ff.GetValue(v), tag, depth + 1); }
+                    catch (Exception e2) { Log("[mem] " + tag + "." + path + "." + ff.Name + " EX " + e2.Message); }
+                }
+                // 常见属性: Key/IV/Mode
+                if (depth == 0) {
+                    foreach (var pn in new[] { "Key", "IV", "Mode", "BlockSize", "KeySize" }) {
+                        try {
+                            var pp = t.GetProperty(pn, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            if (pp != null) Log("[mem] " + tag + "." + path + "." + pn + " = " + pp.GetValue(v, null));
+                        } catch {}
+                    }
+                }
+            } else {
+                Log("[mem] " + tag + "." + path + " = obj " + t.FullName + " (depth cut)");
+            }
+        } catch (Exception ex) { Log("[mem] " + tag + "." + path + " DUMP-FAIL " + (ex.InnerException ?? ex).GetType().Name); }
     }
 
     static string Chain(Exception ex) {
