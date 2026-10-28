@@ -1746,3 +1746,42 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 3. **fields 是权威健康度量**：baseline=6201 / a7c=5979（lazy-load 链死，42AC 密钥静态未初始化）/ a1=2（boot 链全死）
 4. **a7f（@00d3 恒 0）fields=5979**：只挡 throw 不够，41EE 结果经 @09f4 状态选择仍把 4192 引向"42AC 密钥不初始化"路径
 5. **a7g = a1 + 4192@04e0 `16 FE01 130C` → `26 16 130C 00`**（pop 弹 41EE 返回值；ldc.i4.0；stloc.s 12；nop。5B 等长，净栈 0）：41EE 真跑（RSA verify 副作用保留）+ loc12 恒 0 → @09f4 走 baseline 健康分支 → 42AC 密钥初始化 → 池装 → 发布候选。md5=F671C0012DCBB35F640D6B9AD6147C0C，dispatch 已发（r5）
+
+### a7g 判定（run 40765922685）——throw 已除但 lazy 链仍死（fields=5979）
+- D 段 guard1 **OK（不 throw）** ✓（@04e0 patch 生效，对比 a1 的 THROW）；G 段 total statics=40（DispatcherInitializer cctor 活，B 段 RSA 实例在）
+- **I 段 fields=5979 = a7c/a7f 表型**——loc12 恒 0 没救回 lazy-load 链
+- 结论：**41EE 返回值 false 本身（或 a1 补丁的另一面）仍阻断某环节**；loc12 不是唯一通道
+
+### step128-135：verify 链解剖（修正 + 新模型）
+- **060041ED = `ldarg.0; callvirt HashAlgorithm::get_Hash; ret`** —— 不是 VerifyHash！是**取 hash**（41ED(loc13) = loc13.Hash）
+- **060041EE(RSA, hash13, sig23, alg24) = RSA.VerifyHash**；loc12 = !verify（@04e0-04e3）
+- **4192 头部（@0053/@007f/@00af）**：@0053 `ldsfld m_ExtendedSchemaTemplate; brtrue 2309`（RSA 已建→快速路径，probe D 段 invoke=第二遍走这里）；**@007f `ldnull; stloc.s 23`、@00af `ldnull; stloc.s 13`——第一遍 loc13/loc23 = null！verify(null,…) 必抛 → @2289 catch 块 `ldc.i4.1; stloc.s 12`（loc12=1 是 catch 的正常产物！）→ @22a9 newobj RSA + stsfld（@22ae）**
+- **修正模型**：4192 第一遍 = 试探 verify（必炸→catch→loc12=1）+ 建 RSA；**baseline 活说明 @00d3 throw 只在特定轮次/条件触发**（loc12 还有 @0996/@09ed/@0a6b 写点会重置它）——@00d3 的精确触发条件未完全解，但 a1 死法（真 throw）说明 a1 环境下某轮 @00d3 读到了非 0
+- **a1patch 5 补丁真身**（PROGRESS 1189/1378-1379 复核）：P1=06002133@IL+0x290、P2=06002145@IL+0x120（`ldc.i4.0`→`ldc.i4.1` 直改，文件明文尾）；P3/P4/P5=0600212A/06002157/06002127 体→`17 2A`（ldc.i4.1; ret）+ 0x6444C0-0x6448FA DB 条目同步修复。5 目标 = 激活方法族（0600212A SendFlexibleAttribute=7B getter、06002127 TestCollector=20B bool getter、06002157 PlanRandomTag=7B getter、06002133 OpenScheduledResponder=946B、06002145 ReceiveCentralInterpreter=471B，后两者大量调 4196）
+- **42AC 密钥静态的写者**：`_TemplateController/templateStateArray/_AdjustableTransformerElements/m_ProviderTemplateObj` ← **060042B0 GenerateModularInitializer（1040B，MemoryStream+BinaryReader 消费嵌入密钥流）** ← 060042AF GenerateJoinedOrder ← 42AC@002a（`isObserverTemplate` gate）；**060042B3 = DispatcherInitializer::.cctor**（开头 `call 0600419C DefineEfficientProfiler`(37072B AES 驱动器) + 写部分密钥）
+- **闭包交叉 = 0**：5 补丁方法不在 42AC/419C/42B3/42B0/42AF/4195/42ad 的静态调用闭包里——影响 lazy 链的机制是间接的（运行时数据流）
+- **下一步 = a8 对分（dispatch 已发）**：a8_p1on = a1+P1 还原、a8_p2on = a1+P2 还原（step136_a8.py，md5=4CB4FBF7.../4D282E5D...）。fields=6201 → 该 P 是凶手；仍 5979 → 凶手在 P3/P4/P5（体替换）→ 换 A2 公钥替换方案或恢复 3 方法另行激活
+
+### a8 对分判定（run 40766844997）——P1/P2 单独还原都不救（fields=2 = a1 表型）
+- a8_p1on（a1−P1，仍含 P2-P5）I 段 **fields=2**、D 段仍 THROW "is tampered." @4192；a8_p2on（a1−P2）**fields=2** 同表型
+- 原预期表（6201/5979）两路都不命中——**正确解读：4192 SHA1 哨兵哈希域同时覆盖 P1 区（0x194524）与 P2 区（0x197AF0）**。只还原 1/5 处补丁数据，其余 4 处仍改着 → SHA1 仍不匹配 → 仍 throw（表型 2）。5979 表型需要 a7g 的 4192 补丁配合才能到达
+- 结合 step105 模型自洽：**a1 族表型 2 = 哨兵数据完整性 throw；a7 族表型 5979 = throw 绕过后，SHA1 哈希值本身仍错 → 下游产物（42AC 密钥流）坏 → lazy 链死**。两层死因同根：**被改数据算出的哈希 ≠ baseline 哈希**
+- **战略收敛**：文件级数据补丁（A1 五补丁/A2 公钥替换）必然改哈希域 → 任何"直接改数据"路线都撞哨兵。唯一正解锁定 **哈希同步**：改数据后重算 SHA1 → 同步哨兵的校验/派生链（res5 重加密或哈希表回写，step84 路径乙）
+- **下一棒 = step137：解剖 4192 的 SHA1 链**——哈希输入域（哪些字段/数组/资源）、输出消费（→AES key 解 res5？→比较存储？）、与 'ValidatorArgument.EmitterReporter'（256B）的关系 → 决定同步器实现形态
+
+### step137：4192 全体破译（SHA1 哨兵机制实锤，2026-10-29）
+- **4192 的 3 个 ldstr 实锤**：@0a8b `' is tampered.'`（前缀由程序集名拼接）、@0b01 `'SHA1'`、@0be5 `'ValidatorArgument.EmitterReporter'`（res5 资源名）
+- **stub 族 41C9-41F2 全真身**（7-23B 转发壳，4192 全部密码学调用都经它们）：
+  41cb=Type.GetTypeFromHandle、41f0=Assembly.GetName、41f1=AssemblyName.get_Name、41f2=String.Concat、
+  **41ce=SHA1.Create、41cf=CryptoConfig.MapNameToOID（吃 'SHA1'）**、41cc=Assembly.get_Location、41d0=File.Exists、
+  41d1=Assembly.GetManifestResourceStream、41d3=Stream.set_Position、41d4=Stream.get_Length、
+  **41d7/41d8=SymmetricAlgorithm.set_Mode/CreateDecryptor、41db=CryptoStream.FlushFinalBlock、41df=AsymmetricAlgorithm.FromXmlString**、
+  41de=Encoding.UTF8.GetString、**41ea=HashAlgorithm.TransformFinalBlock、41e2=TransformBlock 族（4 调用点）**、
+  **41ec=Array.Reverse**、41e3=BinaryReader.ReadUInt16、41e7=ReadUInt32、41eb=ReadBytes、41e4=Stream.Read、41e6=get_Position、41ef=BinaryReader.Close
+- **tamper throw 块（@0a72-0a9a）**：`ldtoken 02000622（DispatcherInitializer 自身）` → GetTypeFromHandle → .Assembly → GetName().Name → `String.Concat(程序集名, " is tampered.")` → newobj Exception → throw
+- **verify 主判点（@04cb-04e5）**：`ldsfld m_ExtendedSchemaTemplate(RSA); ldloc.s 13; call 41ed(=loc13.Hash); ldloc.s 23(MapNameToOID OID); ldloc.s 24(签名); call 41ee VerifyHash; ldc.i4.0; ceq; stloc.s 12`——loc13=SHA1 实例（@0ac8 stloc.s 13 = SHA1.Create 返回值）、loc23=OID 字符串、**loc24=签名**（两个写点：@058e Array.Reverse 前 + @0687 `reader.ReadBytes`）
+- **PE 自解析实锤**：@0719 `ReadUInt16 == 523（0x20B = PE32 optional header magic）`比较 + set_Position 多处常量偏移 + get_Length——**4192 打开 exe 自身文件流（Assembly.Location → File.Exists → FileStream），解析 PE 结构逐段喂 SHA1.TransformBlock，最后 TransformFinalBlock** → 哈希 → VerifyHash
+- **res5 解密链（@0be0-0c55）**：`ldsfld automatedError(04001FBE, Assembly 型) + ldstr res5 名 → GetManifestResourceStream → newobj 06004264 RandomDecryptor(BinaryReader 壳) → DecryptSimpleTransmitter(06004266)` → **loc21 = IL 内硬编码 stelem.i1 常量数组（AES key/IV）** → AES 解密 → UTF8.GetString → FromXmlString = RSA 公钥 XML（@2250 区域，写 m_ExtendedSchemaTemplate @22ae）
+- **终版模型**：**4192 = exe 文件自哈希哨兵**——对 exe 文件（PE 解析选段）算 SHA1 → res5 内嵌 RSA 公钥验签（签名 loc24 从流 ReadBytes 读出）→ 失败 throw "＜程序集名＞ is tampered."。完美解释：a1（改字节→SHA1 脏→throw→fields=2）；a7 族（绕过 verify 但哈希值仍脏→若哈希=下游密钥源则 lazy 链死→fields=5979）；baseline（全对→6201）
+- **待解**：① SHA1 哈希域精确边界（PE 解析选哪些段——决定"避开哈希域"可行性）；② 哈希值是否流向 419C/42B0/42AC（下游密钥源实锤）
+- **a9 设计（下一步）**：a8 只测了 P1/P2 还原，**P3/P4/P5（DB 条目）还原未测**——a9_p3off/a9_p4off/a9_p5off = a1 + 单独还原 P3/P4/P5。若某变体 fields=6201 → **DB 区不在哈希域**（P3/P4/P5 修改安全，毒源仅 P1/P2 明文区 → 激活补丁全走 DB 实现，问题大减）；若全 2 → DB 区也在哈希域 → 走 41ED 换体/哈希替换路线
