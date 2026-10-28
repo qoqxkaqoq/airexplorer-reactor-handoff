@@ -1220,3 +1220,20 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 ## A1 现状判定
 - 五补丁直改：需先破 payload 密码（known-plaintext oracle = 16598 dump 体）；哨兵面：res[1] 8×SHA1 表 + 判定汇合点 +0x4E1 可反转
 - 脚本：work/s5/step31_a1inspect.py, step32_bodysearch.py, step33_license_write.py, step34_payload.py, step35_reslayout.py, step36_sentinel.py, step37_rsatarget.py, step38_family.py, step39_419c.py, step40_res2.py, step41_knownplain.py
+
+## step42-50（2026-10-28）：资源读取者全景 + v6e 判定 = module cctor OK 首达成
+- **四资源读取者锁定**（ldstr US 全库扫描，step42）：
+  - res[0] 'ErrorReceiver.ValidatorViewer'(US:70000C5A) → **0600419C** @IL+0x42D4
+  - res[5] 'GlobalValidator.FactoryValidator'(US:70000B00) → **06004196** @IL+0x24
+  - res[1] 'ValidatorArgument.EmitterReporter' → 06004192 哨兵 @+0xBE5
+  - res[2] 'ValidatorAllocator.ValidatorProc' → 060042AF @+0x6C
+- **解密链路解码**（step43-49）：
+  - 06004217 MatchTransaction = `(asm,name)→GetManifestResourceStream` 纯包装
+  - **06004264 .ctor(Stream) = RandomDecryptor**（TypeDef 0x062A，06004264-69 = BinaryReader 纯包装：BaseStream/ReadBytes/Read/ReadInt32/Close）——res[0] 经 BinaryReader 读入，解密内联在 0600419C 自身
+  - 06004196 = 字符串池访问器：首次调用走 `06004195 SearchStrategy → 060042AD InstantiateAccessibleProcessor(serviceId=0x2C, args, null) → 060042AC InstantiateStatelessUser（泛型 MethodSpec 0x2B000170）`，解密结果存 **静态字段 _ExtractorVisitors(0x04001FD0)** byte[]；cache 命中路径 = `BitConverter.ToInt32(buf,off)` 长度前缀 + `Array.Copy` + `Encoding.Unicode.GetString`（UTF-16LE）
+  - **0600419C 内 AES-CBC 实锤**（0x7E9D）：`new MemoryStream(cipher) → new CryptoStream(ms, transform, Write) → Write → FlushFinalBlock → ToArray`；transform = `0600418C 工厂`（**AesCryptoServiceProvider → RijndaelManaged 回退**）+ `set_Mode(1=CBC)` + `CreateDecryptor(key=loc35, IV=loc57)`；key/IV 由扁平化常量逐元素构造（`fe.ldloc 0400; ldc.i4 idx; <add/sub 常量>; stelem.i1`）；f:04002083 FieldRVA 30B 是 **x86 机器码**（55 8B EC...）非 key
+- **v6e 判定（CI run 40667254759, md5 AF17CE43）**：
+  - `module cctor OK` —— **首次**！ceq→clt 判定汇合点反转原语成立（06004192 篡改检测单点中性化成功）
+  - 但 AG.cctor FAIL：`System.Exception: AirExplorer @ TemplateThread.GenerateAdaptableExtractor(06004523)` = **哨兵多点级联**，毒源=06004192 +0x995/+0x2289 catch 块毒标志（17 13 = ldc.i4.1; stloc.s，两处字节一致）
+- **v6f = v6e + 两处 catch 毒标志 17→16**（file 0x3F9B71/0x3FB465）→ 已派发 CI
+- 若 v6f module+AG cctor 全 OK ⇒ 哨兵面全部收敛到 06004192 三补丁，A1 路线 = AES key/IV 提取（扁平化常量仿真）→ res[0] 明文补丁重加密
