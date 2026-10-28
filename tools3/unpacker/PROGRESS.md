@@ -1237,3 +1237,17 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
   - 但 AG.cctor FAIL：`System.Exception: AirExplorer @ TemplateThread.GenerateAdaptableExtractor(06004523)` = **哨兵多点级联**，毒源=06004192 +0x995/+0x2289 catch 块毒标志（17 13 = ldc.i4.1; stloc.s，两处字节一致）
 - **v6f = v6e + 两处 catch 毒标志 17→16**（file 0x3F9B71/0x3FB465）→ 已派发 CI
 - 若 v6f module+AG cctor 全 OK ⇒ 哨兵面全部收敛到 06004192 三补丁，A1 路线 = AES key/IV 提取（扁平化常量仿真）→ res[0] 明文补丁重加密
+
+## step50-55（2026-10-28 续）：v6f/baseline 对照 = 架构反转 + known-plaintext 完备
+- **v6f 判定（run 40668214896, md5 CABC3BEF）**：module cctor OK，AG.cctor 仍 FAIL（同款 `System.Exception: AirExplorer @ GenerateAdaptableExtractor`）→ 06004192 +0x995/+0x2289 catch 毒标志 17→16 不是 GAE 异常源头
+- **baseline 对照（run 40669659621, 原版 baseline_verified, md5 A12B5C57）**：
+  `module cctor OK` + **`AG.cctor OK`** + `EVA OK` + 全字段读取成功（许可 URL 明文：checkversion/store/activate.php/checklic.php/bugReport）
+  → **架构反转：原版哨兵本来全过；v6e/v6f 的 AG FAIL = 我们的补丁触发了 GAE(06004523) 二层哨兵**（哈希覆盖被补丁的 06004192 体）；v6e/v6f 的 module OK 无判定意义
+- **哨兵体系结论**：多点级联自指保护——补丁任何被监控区域必须**同步更新哨兵哈希表 res[1]**（8×32B，高熵=加密存储，明文哈希匹配不可行 step55）；GAE(06004523) 也是扁平化状态机（fe.stloc 0600 模式），其 throw @0x46F 抛 loc0C
+- **known-plaintext 完备（step54-55 后验证）**：五目标真体全在 dump_official_16598：
+  - 0600212A=7B `027B3D0C00042A`（ldarg.0;ldfld 04000C3D;ret）、06002157=7B `027B4B0C00042A`
+  - 06002127=20B、06002133=946B、06002145=471B、06000CEE=581B
+- **payload 结构判定**：res[0]+res[5]=755122B ≈ 16598 体 IL 总量 754KB → **未压缩纯加密**，各方法 IL 在密文中有确定位置
+- **AES key 静态提取未果**（step51-54）：0600419C = switch 状态机（0x0016 处 625 项表、初值 loc1B=0x686FB4B8、每块 loc48=loc1B+K48/loc1B+=K1B/br 0x0012 回分发）；loc4(0x04)=key 源数组、loc33(0x21)=IV 源数组被 625 块大量重写伪装，静态多路径无法唯一消解（脚本 step51_keys/step52_flatsim/step54_blockscan + out_419c_*.json 留存）
+- **下一步（决定性）**：probe2 扩展 mode=mem —— 在 baseline（AG.cctor OK）上反射 dump 静态字段：`_ExtractorVisitors`(0x04001FD0, res[5] 字符串池明文) + 全部静态 byte[] → 明文 XOR 密文 = keystream（XOR 流情形）或确认 AES-CBC 块对齐 → 定位五目标密文位置 → 明文补丁（0600212A/57→`17 2A` 等）→ 重加密回写 → res[1] 哈希表同步（若同为 AES 体系则一套参数通吃）→ AirExplorer_a1.exe
+- v6e/v6f 保留存档：哨兵判定汇合点反转原语（ceq→clt）与 catch 毒标志补丁字节已验证无害（module cctor 不死）
