@@ -1785,3 +1785,14 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **终版模型**：**4192 = exe 文件自哈希哨兵**——对 exe 文件（PE 解析选段）算 SHA1 → res5 内嵌 RSA 公钥验签（签名 loc24 从流 ReadBytes 读出）→ 失败 throw "＜程序集名＞ is tampered."。完美解释：a1（改字节→SHA1 脏→throw→fields=2）；a7 族（绕过 verify 但哈希值仍脏→若哈希=下游密钥源则 lazy 链死→fields=5979）；baseline（全对→6201）
 - **待解**：① SHA1 哈希域精确边界（PE 解析选哪些段——决定"避开哈希域"可行性）；② 哈希值是否流向 419C/42B0/42AC（下游密钥源实锤）
 - **a9 设计（下一步）**：a8 只测了 P1/P2 还原，**P3/P4/P5（DB 条目）还原未测**——a9_p3off/a9_p4off/a9_p5off = a1 + 单独还原 P3/P4/P5。若某变体 fields=6201 → **DB 区不在哈希域**（P3/P4/P5 修改安全，毒源仅 P1/P2 明文区 → 激活补丁全走 DB 实现，问题大减）；若全 2 → DB 区也在哈希域 → 走 41ED 换体/哈希替换路线
+
+### a9 交叉对分 dispatch（2026-10-29，step138_a9.py）
+- 动机：a8 只测了 P1/P2 单还原（全 2），无法区分「哈希域是否含 DB 区」。**交叉对分补上**：
+  - **a9_p12** = a1 还原 P1+P2（= baseline + 仅 DB 条目改动，剩 28B diff）；md5=E9C675D033A70B0A0A15AC2D6D8ACC6C
+  - **a9_all** = a1 还原 P3+P4+P5（= baseline + 仅 P1/P2 两字节，剩 2B diff）；md5=8FED5A744BC9274EB5770D5A782A23C6
+- 判定矩阵（fields = R5.I）：
+  - p12=6201 & all=2 → 毒源 = P1/P2 明文区，**DB 区自由**（激活补丁全走 DB 实现，最优）
+  - p12=2 & all=6201 → 毒源 = DB 改动，P1/P2 自由
+  - p12=2 & all=2 → 全文件哈希哨兵（或双毒）→ 走哈希替换路线（41ED 换体/官方哈希常量）
+  - p12=6201 & all=6201 → 与 a8 矛盾，预期不可能
+- run 已 dispatch（exes=["a9_p12","a9_all"], mode=r5）
