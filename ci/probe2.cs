@@ -204,7 +204,14 @@ class Probe2 {
         try { return ReadProcessMemory(GetCurrentProcess(), addr, buf, (IntPtr)buf.Length, out got) && got.ToInt64() == buf.Length; }
         catch { return false; }
     }
+    // bounded read: request count bytes into (possibly larger) buf; partial reads OK
+    static bool SafeReadN(IntPtr addr, byte[] buf, int count) {
+        IntPtr got;
+        try { return ReadProcessMemory(GetCurrentProcess(), addr, buf, (IntPtr)count, out got); }
+        catch { return false; }
+    }
     static bool LooksLikeHeap(ulong pv) { return pv > 0x10000UL && pv < 0x7FFFFFFEFFFFUL; }
+    static int censHits = 0, censDumps = 0;
 
     static void MemRun(Assembly asm) {
         try { Directory.CreateDirectory(DumpDir); } catch {}
@@ -251,19 +258,30 @@ class Probe2 {
         }
 
         // ---- D. MT 指针准备 (自建同型实例取 MethodTable*) ----
-        ulong mtRMCrypt = 0, mtAesCSPCrypt = 0, mtRijndael = 0, mtAesCSP = 0, mtByteArr = (ulong)typeof(byte[]).TypeHandle.Value.ToInt64();
+        ulong mtRMCrypt = 0, mtAesCSPCrypt = 0, mtRijndael = 0, mtAesCSP = 0;
         try { mtRMCrypt = (ulong)new RijndaelManaged().CreateDecryptor(new byte[32], new byte[16]).GetType().TypeHandle.Value.ToInt64(); } catch (Exception ex) { Log("[mem] D RMCrypt FAIL " + ex.Message); }
         try { mtAesCSPCrypt = (ulong)new AesCryptoServiceProvider().CreateDecryptor(new byte[32], new byte[16]).GetType().TypeHandle.Value.ToInt64(); } catch (Exception ex) { Log("[mem] D AesCSPCrypt FAIL " + ex.Message); }
         try { mtRijndael = (ulong)typeof(RijndaelManaged).TypeHandle.Value.ToInt64(); } catch {}
         try { mtAesCSP = (ulong)typeof(AesCryptoServiceProvider).TypeHandle.Value.ToInt64(); } catch {}
-        Log("[mem] D. MT: RMCrypt=" + mtRMCrypt.ToString("X") + " AesCSPCrypt=" + mtAesCSPCrypt.ToString("X") + " RijndaelManaged=" + mtRijndael.ToString("X") + " AesCSP=" + mtAesCSP.ToString("X") + " byte[]=" + mtByteArr.ToString("X"));
+        // byte[] 真 MT: TypeHandle 对 SZ 数组返回 TypeDesc (非 8 对齐) → 用 pinned 对象头取真 MethodTable*
+        ulong mtByteArr = 0;
+        try {
+            var arrProbe = new byte[101];
+            var gh = GCHandle.Alloc(arrProbe, GCHandleType.Pinned);
+            long dp = gh.AddrOfPinnedObject().ToInt64();
+            mtByteArr = (ulong)Marshal.ReadIntPtr(new IntPtr(dp - 16)).ToInt64();
+            gh.Free();
+        } catch (Exception ex) { Log("[mem] D arrProbe FAIL " + ex.Message); }
+        ulong mtByteArrTH = (ulong)typeof(byte[]).TypeHandle.Value.ToInt64();
+        Log("[mem] D. MT: RMCrypt=" + mtRMCrypt.ToString("X") + " AesCSPCrypt=" + mtAesCSPCrypt.ToString("X") + " RijndaelManaged=" + mtRijndael.ToString("X") + " AesCSP=" + mtAesCSP.ToString("X") + " byte[]pinned=" + mtByteArr.ToString("X") + " byte[]TH=" + mtByteArrTH.ToString("X"));
 
         var algMTs = new[] { mtRijndael, mtAesCSP, mtRMCrypt, mtAesCSPCrypt };
         var algNames = new[] { "RijndaelManaged", "AesCSP", "RMCrypt", "AesCSPCrypt" };
+        var scanBuf = new byte[8 << 20]; // 预分配复用: 扫描期零分配, 防止 GC 回收 ITP 残留 transform
 
         // ---- E. 清堆后 S1 扫描 (module cctor 残留) ----
         try { GC.Collect(); GC.WaitForPendingFinalizers(); } catch {}
-        ScanHeap("s1", algMTs, algNames, mtByteArr, 60, 32 << 20);
+        ScanHeap("s1", algMTs, algNames, mtByteArr, 60, 32 << 20, scanBuf, true);
 
         // ---- F. invoke 0600418C 工厂 → 读返回对象 Key/IV ----
         try {
@@ -284,26 +302,30 @@ class Probe2 {
             try { mD.Invoke(null, null); Log("[mem] G. driver OK"); }
             catch (Exception ex) { Log("[mem] G. driver EX " + Chain(ex)); }
         } catch (Exception ex) { Log("[mem] G resolve FAIL " + ex.Message); }
-        ScanHeap("s2", algMTs, algNames, mtByteArr, 60, 32 << 20);
+        ScanHeap("s2", algMTs, algNames, mtByteArr, 60, 32 << 20, scanBuf, true);
 
-        // ---- I. ITP 预热 (res5 字符串池填充) → stat2 ----
+        // ---- I. ITP 预热 (res5 字符串池填充; 新鲜 token 收尾强制全解密路径) → stat2 ----
         try {
             var itp = (MethodInfo)mod.ResolveMethod(0x06004196);
-            foreach (var id in new[] { 0, 1, 2, 100, 1000, 12345, 0x40000000 }) {
+            foreach (var id in new[] { 0, 1, 2, 100, 1000, 12345, 0x40000000, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }) {
                 try { var s = (string)itp.Invoke(null, new object[] { id }); Log("[mem] I. ITP(" + id + ") len=" + (s == null ? -1 : s.Length) + " \"" + (s == null ? "" : s.Substring(0, Math.Min(60, s.Length))) + "\""); }
                 catch (Exception ex) { Log("[mem] I. ITP(" + id + ") EX " + (ex.InnerException ?? ex).Message); }
             }
         } catch (Exception ex) { Log("[mem] I resolve FAIL " + ex.Message); }
+
+        // ---- K. ITP 后立即普查 (transform/Key/IV 残留捕获; ITP→扫描间零 GC) ----
+        ScanHeap("cens", algMTs, algNames, mtByteArr, 80, 32 << 20, scanBuf, true);
+
         if (diT != null) {
             foreach (var f in diT.GetFields(flags)) DumpFieldValue(f.Name, f.GetValue(null), "stat2", 0);
         }
         Log("[mem] stat2 done");
     }
 
-    // 堆扫描 v2: ReadProcessMemory 全读; MT 命中 → dump 512B + 全字段指针追链(byte[] MT → len∈{16,24,32,64} 直接打印 hex); byte[] MT → len≥32KB dump 数据
-    static void ScanHeap(string tag, ulong[] mts, string[] names, ulong mtByteArr, int maxObj, long maxBytes) {
+    // 堆扫描 v3: ReadProcessMemory 全读; 预分配 buf 复用(扫描期零分配); MT 命中 → dump 512B + 追链;
+    // byte[] MT → len≥32KB dump 数据; censSmall=true 时 len∈{16,24,32,64} 全部 hex 打印(AES Key/IV 普查)
+    static void ScanHeap(string tag, ulong[] mts, string[] names, ulong mtByteArr, int maxObj, long maxBytes, byte[] buf, bool censSmall) {
         long dumped = 0; int objHits = 0;
-        var buf = new byte[4 << 20];
         var mbi = new MBI();
         var sizeOfMbi = (IntPtr)Marshal.SizeOf(typeof(MBI));
         IntPtr addr = new IntPtr(0x10000);
@@ -319,13 +341,11 @@ class Probe2 {
                 while (done < rsz) {
                     int take = (int)Math.Min((long)buf.Length, rsz - done);
                     IntPtr src = (IntPtr)(mbi.BaseAddress.ToInt64() + done);
-                    byte[] chunk = new byte[take];
-                    if (!SafeRead(src, chunk)) { done += take; continue; }
-                    Buffer.BlockCopy(chunk, 0, buf, 0, take);
+                    if (!SafeReadN(src, buf, take)) { done += take; continue; }
                     for (int off = 0; off + 16 <= take; off += 8) {
                         ulong v = BitConverter.ToUInt64(buf, off);
                         if (v == mtByteArr && mtByteArr != 0) {
-                            // byte[] 大数组: [MT][len][pad][data]
+                            // byte[] 对象: [MT][len][pad][data]
                             int alen = BitConverter.ToInt32(buf, off + 8);
                             if (alen >= 0x8000 && alen <= 0x400000 && dumped < maxBytes && objHits < maxObj) {
                                 IntPtr dsrc = (IntPtr)(src.ToInt64() + off + 16);
@@ -334,6 +354,15 @@ class Probe2 {
                                     File.WriteAllBytes(Path.Combine(DumpDir, tag + "_bigarr_" + (objHits + 1) + "_len" + alen + ".bin"), data);
                                     Log("[mem] " + tag + " bigarr @0x" + (src.ToInt64() + off).ToString("X") + " len=" + alen + " head=" + BitConverter.ToString(data, 0, 24).Replace("-", ""));
                                     dumped += alen; objHits++;
+                                }
+                            } else if (censSmall && (alen == 16 || alen == 24 || alen == 32 || alen == 64) && censHits < 4000) {
+                                IntPtr osrc = (IntPtr)(src.ToInt64() + off);
+                                var head = new byte[16 + alen];
+                                if (SafeRead(osrc, head)) {
+                                    string hex = BitConverter.ToString(head, 16, alen).Replace("-", "");
+                                    Log("[mem] " + tag + " cens byte[" + alen + "] @0x" + osrc.ToInt64().ToString("X") + " = " + hex);
+                                    if (censDumps < 1200) { File.WriteAllBytes(Path.Combine(DumpDir, tag + "_cens" + alen + "_" + censDumps + "_0x" + osrc.ToInt64().ToString("X") + ".bin"), head); censDumps++; }
+                                    censHits++;
                                 }
                             }
                             continue;
