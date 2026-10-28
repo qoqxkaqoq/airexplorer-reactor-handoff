@@ -1891,3 +1891,12 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **_AdjustableTransformerElements(001feb) 写者**：42B0@0305（填充者，经 42AC@002a→42AF→42B0 初始化链）+ 42B3 cctor@003c（ldnull）
 - 42AC 计算路径（缓存 miss）：`_TemplateController(BinaryReader) 大量消费` + ExecuteExplorer 调度器家族（060077b8/0053a4/00463c/0077bc/0077b0/0077c0/0077c4/0077c8）+ newobj 44f7/44e7 —— 0x2c 功能 = 从 'ValidatorAllocator.ValidatorProc'(47915B DB) 解析结构化配置
 - **probe2 新增 mode=trap**（commit 14368066）：全类型 RunClassConstructor 扫描，死类型打印完整内层异常链 + StackTrace（8 层 inner、600 字符栈）——直接曝光第二哨兵 trap 的消息与 4528 内偏移
+
+### trap 模式判定（run 40786820310）——第二哨兵精确定位到 4523
+- probe2 mode=trap（全类型 cctor 扫描+内层链）在 a13 上首跑成功：`ok=325 fail=6`（6 个即停）
+- **死点统一 = GenerateAdaptableExtractor(4523) 内 throw `System.Exception: "AirExplorer is tampered."`（拼接模式与 4192 @0a72 同款）**
+- 调用链（StackTrace 实锤）：`DispatcherInitializer.SearchStrategy(Stream,Int32) → 42AD → InstantiateAccessibleProcessor(42AC) → PlanRunner(4521) → GenerateAdaptableExtractor(4523) → THROW`
+- **4528(DefineSetSet) 不在栈上**——"68 traps↔68 死类型"对应作废；第二哨兵 = 4523 内的独立 PE 自检（4192 哈希逻辑变体）
+- 链条闭环：4196 gate 池空 → 4195(0x2c) → 42AD → 42AC → 4521 → 4523 → **第二哨兵 throw** → 4196 重初始化死 → 67 业务 cctor 全灭 = 5979
+- **StaticTree.cctor 死因 = FileNotFoundException: BouncyCastle.Crypto 1.7.4114.6375**——独立依赖问题，与哨兵无关；交付形态数据便携需处理（主库可能内嵌 BouncyCastle）
+- 下一步：① 解剖 4523 篡改检查的输入（哈希源）；② 修复实验（41ED 链→a10 / 否则豁免补丁）；③ a15=a1patch+修复组合→6201
