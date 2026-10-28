@@ -1310,3 +1310,35 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 解释器新增：资源区全提取（cor20 ResourcesRva）+ ResStream/MemoryStream/BinaryReader 建模（get_BaseStream/get_Length/ReadBytes 流位置语义）+ RandomDecryptor ctor 特判；bug 修：`ldc.i4.s` 被 `ldc.i4.` 前缀分支截胡、brfalse/brtrue/beq/ceq 的**引用判空**（`if (bytes == null)` 编译形态：数组/Obj 直接判 non-null、intp==0 判 null）
 - **RESSEL=FactoryValidator 跑通**：0x53B8 越过；**数组1 = res5 密文原样**（398794B，head `808116EF...` 与 res5_FactoryValidator.bin 逐字节一致 → ReadBytes 副本实证，建模正确）；**数组2 = 解密输出缓冲**（写入进行中，161276 非零 ≈ writes=162124）
 - **判定：0600419C 体内自带 res5 解密循环**（密文读入 → 体内变换 → 输出缓冲），解释器正 300M 步全量执行中；跑完即得明文+算法（keystream/key 从 trace 提取）→ res5 重加密可行
+
+## step68-69（2026-10-28 续V）：0x1BF3 之谜全解 + 解释器 native 墙 + 方向反转（条目表定路径）
+
+### 0x1BF3 stloc 收 int 之谜（step68，三轮日志联合定位）
+- 静态扫描"jumpers to 0x1BF3: []"误导——实为 switch case313→0x1BEA 直达、fallthrough 0x1BF3（swscan.py 扫描实证，switch@0016 ncases=625 min=09DF max=8EDA）
+- step313 单步钩子实证：ldelema 执行时栈型=['list','int'] 正确、0x1BF2 conv.u 时栈顶已 int → 污染源在更早
+- **根因：step66 383 行 `if name.startswith('ldelem'):` 把 'ldelema' 也拦了**（`'ldelema'.startswith('ldelem')==True`）→ ldelema 被当"读元素值"处理（pop2 push int），loc68 收到 arr77[0] 当前值（166=0xA6）
+- 修复：`startswith('ldelem.')`；实证 loc68=166=0xA6=arr77[0] 正确
+
+### 解释器修复链（step66 v2 一路推进到 native 墙）
+- castclass/isinst/ldobj 弹出不推回（0x1AF4 吃掉反射跳板返回值 → call arg underflow）→ 修复为原样推回；call arg underflow 加保护性 Abort（带 tok/name/stack/need）
+- stelem.ref 收任意引用；ldftn/ldvirtftn 建模 Obj('ftn@tok')；tokmap 名字带签名后缀（`Meth(System...)`）致所有 `meth=='X'` 判断失效 → `meth.split('(')[0]` 统一剥离（连带救活 IntPtr/.ctor/Hashtable/Version 等旧分支）
+- GetModules builtin；值类型 struct 局部：stfld/ldfld on ('addr',slot,tok) 物化 Obj('struct@slot') 存回 tfr.locs[slot]
+- xor/and/or 64 位感知（mask 2^64）；conv.i8 符号扩展；NATIVE_MISSING 族（0600419E/F/425C/D/4261/426B/F/4273/7/7B/F 共 11 个，BFS 全集）缺体不透明建模：按 SIG 弹参、RETB 返回类型推 ('intp',0)/0
+- /tmp 沙箱重置教训：所有调试日志迁 `/workspace/repo_git/work/s5/dbg/`；tokmap 改 repo 内 tokmap_v59.tsv.gz 兜底（official 版是 45B 空壳）
+
+### native 墙（解释器终点判定）
+- 0600419C 的 XOR 段 = `ldind.i8; ldc.i4 0x45EEACDE; conv.i8; xor; stind.i8`（固定常数）——结构上完整走过
+- keystream 主体来自字节循环，字节源 = native 060041A3 填充的 v98 状态（"mscorlib.dll"+"getJit" JIT hook 链字符串实证）→ **纯托管侧不可复现**
+- 状态机走岔实锤：loc23 从未赋值、loc77 被写成 int 0 → native-opaque 污染 v72 转移值 → 解释器进不该进的 state；**判定：继续修 abort 无意义，转向**
+
+### 资源流证据固化
+- res4 keystream 恢复：ks4 = res4_cipher ^ mainlib_deflate-input.bin（2337031B，存 s5/res4_keystream.bin）——**res4 = 裸流变换实证（通道无 AES）**
+- res5 keystream 固化（f2e8a1dd...，398794B，head 808116EF）；ks4/ks5 无共享/偏移关系（各资源独立流）
+- decrypt_prng 固定 keystream 对 payload 三连证伪（s5/prng_fixed_200k.bin：res5 ks 8B 模式不在固定流中；agent.md 既有结论复核）→ **payload 流 = 逐条目 key（token→(offset,len,key) 表，由驱动器运行时构建）**
+
+### 方向反转（本轮最重要判定）
+- **五目标真体在 .text 3.2MB payload 回填区（dump 即从回填后 MethodBody 读出）；res0/res5 = Reactor 哨兵/模板资源，不在 A1 关键路径** → 解释器 res0 keystream 方向放弃
+- 决定性资产 = 驱动器真体 06003909（RequestVerifierTransformer::.ctor）/06002BD1（forcedump failed 名单 = payload 条目表构建者）
+- step68_ksloc.py 证伪 payload 双重搜索（RVA 0x620000-0x920000 → file 0x61E200-0x91E200 共 3145728B：keystream 900k 字 + 16B 窗口 dict 784756 项 + 五目标 plain^ks 滑窗）→ 06002133/06002145 NONE（小目标 <4I 越界不修，假设已证伪）
+- probe2 mode=mem 基础设施摸清：B 节全方法 IL dump（v2 已证 16598/16598 与 dump 全等）内层 catch{} 静默失败是扩展点；C 节五目标 sanity 带错误日志；G/K2/I 已 invoke 驱动器 + ITP 预热
+- **下一步：probe2 mem 追加 J 节 = 缺体族重试（PrepareMethod 强制 JIT 触发 hook 回填 → GetMethodBody）+ 全量 diff（il_index 外新真体全 dump）+ 驱动器类静态字段全 dump（条目表候选）→ dispatch → 06003909 真体到手后静态模拟条目表**

@@ -16,6 +16,15 @@ import json, os
 TOKNAME = {}
 if os.path.exists('/tmp/tokmap.json'):
     TOKNAME = {int(k): v for k, v in json.load(open('/tmp/tokmap.json')).items()}
+else:
+    import gzip as _gz
+    for _l in _gz.open('/workspace/repo_git/work/tokmap_v59.tsv.gz', 'rt'):
+        _p = _l.rstrip('\n').split('\t')
+        if len(_p) >= 3:
+            try:
+                TOKNAME[int(_p[1], 16)] = _p[2]
+            except ValueError:
+                pass
 
 def tname(tok):
     return TOKNAME.get(tok, '')
@@ -96,6 +105,11 @@ def builtin_call(tok, st, name):
         cls, meth = nm.rsplit('::', 1)
     else:
         cls, meth = nm, ''
+    meth = meth.split('(')[0]  # strip signature suffix from tokmap names
+    if meth == 'GetModules':
+        st.pop()
+        st.append([Obj('Module')])
+        return True
     if cls.endswith('.IntPtr'):
         if meth == '.ctor':
             v = st.pop() if st else 0
@@ -195,6 +209,34 @@ def build_sig():
     for i, r in enumerate(md.MethodDef.rows):
         try:
             SIG[0x06000000 + i + 1] = parse_sig(bytes(r.Signature.value))
+        except Exception:
+            pass
+
+RETB = {}  # tok -> ret ELEMENT_TYPE byte (for opaque returns)
+
+NATIVE_MISSING = {0x0600419E, 0x0600419F, 0x0600425C, 0x0600425D, 0x06004261, 0x0600426B,
+                  0x0600426F, 0x06004273, 0x06004277, 0x0600427B, 0x0600427F}
+
+def build_retb():
+    import dnfile
+    pe = dnfile.dnPE('/workspace/repo_git/exes/AirExplorer_baseline_verified.exe')
+    md = pe.net.mdtables
+
+    def retb(b):
+        conv = b[0]
+        i = 1
+        if conv & 0x10:
+            _, i = _cint(b, i)
+        _, i = _cint(b, i)
+        return b[i]
+    for i, r in enumerate(md.MemberRef.rows):
+        try:
+            RETB[0x0A000000 + i + 1] = retb(bytes(r.Signature.value))
+        except Exception:
+            pass
+    for i, r in enumerate(md.MethodDef.rows):
+        try:
+            RETB[0x06000000 + i + 1] = retb(bytes(r.Signature.value))
         except Exception:
             pass
 
@@ -303,6 +345,11 @@ class Interp:
         self.trace.append((fr.tok, off, name))
         if len(self.trace) > 500:
             self.trace.pop(0)
+        if fr.tok == 0x0600419C and 0x1BE0 <= off <= 0x1C00:
+            with open('/workspace/repo_git/work/s5/dbg/step313.log', 'a') as fh:
+                fh.write('0x%04X %s st=%s loc68=%r loc77=%s\n' % (off, name,
+                        [type(v).__name__ for v in st], locs.get(68),
+                        'arr%d' % len(locs[77]) if isinstance(locs.get(77), list) else repr(locs.get(77))))
 
         if name in ('nop', 'break'):
             fr.ip = ip + L; return
@@ -338,13 +385,21 @@ class Interp:
                 if isinstance(val, list):
                     self.arrays[id(val)] = val
                 locs[v] = val
+                if v == 68:
+                    with open('/workspace/repo_git/work/s5/dbg/w68.log', 'a') as fh:
+                        fh.write('%08X 0x%04X stloc %r stacktypes=%s\n' % (fr.tok, ip, val, [type(x).__name__ for x in st]))
             fr.ip = ip + L; return
         if name in ('ldarg.0', 'ldarg.1', 'ldarg.2', 'ldarg.3'):
             st.append(fr.locs.get(int(name[-1]), 0)); fr.ip = ip + L; return
         if name in ('ldarg', 'ldarg.s'):
             st.append(fr.locs.get(op, 0)); fr.ip = ip + L; return
         if name in ('starg', 'starg.s'):
-            fr.locs[op] = st.pop(); fr.ip = ip + L; return
+            v68 = st.pop()
+            fr.locs[op] = v68
+            if op == 68:
+                with open('/workspace/repo_git/work/s5/dbg/w68.log', 'a') as fh:
+                    fh.write('%08X 0x%04X starg %r\n' % (fr.tok, ip, v68))
+            fr.ip = ip + L; return
         if name in ('ldarga', 'ldarga.s'):
             st.append(('argaddr', op, fr.tok)); fr.ip = ip + L; return
         if name.startswith('ldarg') or name.startswith('starg') or name.startswith('ldarga'):
@@ -367,10 +422,10 @@ class Interp:
             if not isinstance(a, list):
                 raise Abort('ldlen %r in %08X at 0x%04X' % (a, fr.tok, ip))
             st.append(len(a)); fr.ip = ip + L; return
-        if name.startswith('ldelem'):
+        if name.startswith('ldelem.'):
             idx = st.pop(); a = st.pop()
             if not isinstance(a, list) or not isinstance(idx, int):
-                raise Abort('ldelem %r/%r in %08X at 0x%04X' % (type(a).__name__, idx, fr.tok, ip))
+                raise Abort('ldelem %r/%r in %08X at 0x%04X alllocs=%r' % (type(a).__name__, idx, fr.tok, ip, {k: (type(val).__name__, val if not isinstance(val, (list, Obj)) else ('arr%d' % len(val) if isinstance(val, list) else repr(val))) for k, val in fr.locs.items()}))
             v = a[idx] if 0 <= idx < len(a) else 0
             if name == 'ldelem.i1' and isinstance(v, int):
                 v = ((v & 0xFF) - 256 if v & 0x80 else v & 0xFF) & M32
@@ -379,21 +434,35 @@ class Interp:
             val = st.pop(); idx = st.pop(); a = st.pop()
             if not isinstance(a, list):
                 raise Abort('stelem %r in %08X at 0x%04X' % (type(a).__name__, fr.tok, ip))
-            if not isinstance(idx, int) or not isinstance(val, int):
-                raise Abort('stelem non-concrete idx=%r val=%r in %08X at 0x%04X' % (idx, val, fr.tok, ip))
-            if name == 'stelem.i1':
-                val &= 0xFF
+            if not isinstance(idx, int):
+                raise Abort('stelem non-concrete idx=%r in %08X at 0x%04X' % (idx, fr.tok, ip))
+            if name not in ('stelem', 'stelem.ref', 'stelem.i', 'stelem.i8'):
+                if not isinstance(val, int):
+                    raise Abort('stelem non-concrete val=%r in %08X at 0x%04X' % (val, fr.tok, ip))
+                if name == 'stelem.i1':
+                    val &= 0xFF
             a[idx] = val
             self.writes.append((a, idx, val))
             fr.ip = ip + L; return
 
         if name in ('add', 'sub', 'mul', 'and', 'or', 'xor'):
             b = st.pop(); a = st.pop()
-            if not isinstance(a, int) or not isinstance(b, int):
-                raise Abort('%s %r/%r in %08X at 0x%04X' % (name, a, b, fr.tok, ip))
-            st.append({'add': (a + b), 'sub': (a - b), 'mul': (a * b),
-                       'and': a & b, 'or': a | b, 'xor': a ^ b}[name] & M32)
-            fr.ip = ip + L; return
+            # pointer arithmetic: (arraddr|intp) +- int
+            for ptr, other in ((a, b), (b, a)):
+                if isinstance(ptr, tuple) and ptr[0] in ('arraddr', 'intp') and isinstance(other, int) and name in ('add', 'sub'):
+                    delta = other if name == 'add' else -other
+                    st.append((ptr[0], ptr[1], ptr[2] + delta) if ptr[0] == 'arraddr' else ('intp', (ptr[1] + delta) & 0xFFFFFFFFFFFFFFFF))
+                    fr.ip = ip + L; break
+            else:
+                if not isinstance(a, int) or not isinstance(b, int):
+                    raise Abort('%s %r/%r in %08X at 0x%04X' % (name, a, b, fr.tok, ip))
+                if name in ('and', 'or', 'xor') and (a > M32 or b > M32):
+                    st.append({'and': a & b, 'or': a | b, 'xor': a ^ b}[name] & 0xFFFFFFFFFFFFFFFF)
+                else:
+                    st.append({'add': (a + b), 'sub': (a - b), 'mul': (a * b),
+                               'and': a & b, 'or': a | b, 'xor': a ^ b}[name] & M32)
+                fr.ip = ip + L; return
+            return
         if name in ('div', 'rem', 'div.un', 'rem.un'):
             b = st.pop(); a = st.pop()
             if not isinstance(a, int) or not isinstance(b, int) or (b & M32) == 0:
@@ -425,6 +494,7 @@ class Interp:
                 elif name == 'conv.i2': a = s32(a & 0xFFFF) & M32
                 elif name == 'conv.u1': a &= 0xFF
                 elif name == 'conv.u2': a &= 0xFFFF
+                elif name == 'conv.i8': a = a | 0xFFFFFFFF00000000 if a & 0x80000000 else a & M32
                 else: a &= M32
             st.append(a); fr.ip = ip + L; return
 
@@ -448,8 +518,10 @@ class Interp:
         base = name.split('.')[0] if name.endswith('.s') else name
         if base in ('brfalse', 'brtrue'):
             v = st.pop()
-            if isinstance(v, tuple) and v[0] in ('fld', 'str', 'tok'):
-                r = (GUESS == 'TRUE') if base == 'brtrue' else (GUESS == 'FALSE')
+            if isinstance(v, tuple) and v[0] in ('fld', 'str', 'tok', 'addr', 'argaddr'):
+                # non-null reference gates (ldstr token / ldtoken / addresses):
+                # Reactor never branches on real null here -> brtrue taken
+                r = base == 'brtrue'
                 self.trace.append((fr.tok, ip, 'GATE%s' % ('T' if r else 'F')))
                 fr.ip = op if r else ip + L; return
             if isinstance(v, Obj) or isinstance(v, list):
@@ -485,6 +557,10 @@ class Interp:
             v = st.pop()
             if not isinstance(v, int):
                 raise Abort('switch %r in %08X at 0x%04X' % (v, fr.tok, ip))
+            if fr.tok == 0x0600419C:
+                tgt = op[v] if 0 <= v < len(op) else -1
+                with open('/workspace/repo_git/work/s5/dbg/swdisp.log', 'a') as fh:
+                    fh.write('0x%04X v=%d -> %04X depth=%d\n' % (ip, v, tgt, len(st)))
             fr.ip = op[v] if 0 <= v < len(op) else ip + L; return
 
         if name == 'ret':
@@ -515,6 +591,14 @@ class Interp:
             o = st.pop()
             if isinstance(o, Obj):
                 st.append(o.f.get(op))
+            elif isinstance(o, tuple) and o[0] == 'addr':
+                _, slot, atok = o
+                cur = None
+                for tfr in self.frames:
+                    if tfr.tok == atok:
+                        cur = tfr.locs.get(slot)
+                        break
+                st.append(cur.f.get(op) if isinstance(cur, Obj) else None)
             else:
                 raise Abort('ldfld on %r (%08X) in %08X at 0x%04X' % (o, op, fr.tok, ip))
             fr.ip = ip + L; return
@@ -522,27 +606,74 @@ class Interp:
             v = st.pop(); o = st.pop()
             if isinstance(o, Obj):
                 o.f[op] = v
+            elif isinstance(o, tuple) and o[0] == 'addr':
+                _, slot, atok = o
+                for tfr in self.frames:
+                    if tfr.tok == atok:
+                        cur = tfr.locs.get(slot)
+                        if not isinstance(cur, Obj):
+                            cur = Obj('struct@%d' % slot)
+                            tfr.locs[slot] = cur
+                        cur.f[op] = v
+                        break
             else:
                 raise Abort('stfld on %r in %08X at 0x%04X' % (o, fr.tok, ip))
             fr.ip = ip + L; return
         if name in ('box', 'castclass', 'isinst', 'ldobj'):
             if name in ('castclass', 'isinst', 'ldobj'):
-                st.pop()
+                v = st.pop()
+                st.append(v)
             fr.ip = ip + L; return
         if name in ('unbox.any', 'unbox'):
             v = st.pop()
             st.append(v[1] if isinstance(v, tuple) and v[0] == 'box' else v)
             fr.ip = ip + L; return
+        if name == 'ldelema':
+            idx = st.pop(); arr = st.pop()
+            if not isinstance(arr, list) or not isinstance(idx, int):
+                raise Abort('ldelema %r/%r in %08X at 0x%04X' % (type(arr).__name__, idx, fr.tok, ip))
+            self.arrays[id(arr)] = arr
+            with open('/workspace/repo_git/work/s5/dbg/ldelema.log', 'a') as fh:
+                fh.write('%08X 0x%04X arr=%s len=%d idx=%d depth=%d\n' % (fr.tok, ip, type(arr).__name__, len(arr), idx, len(st)))
+            st.append(('arraddr', arr, idx)); fr.ip = ip + L; return
         if name in ('ldind.i1', 'ldind.u1', 'ldind.i2', 'ldind.u2', 'ldind.i4', 'ldind.u4', 'ldind.i8', 'ldind.ref', 'ldind.i'):
             a = st.pop()
-            if isinstance(a, tuple) and a[0] == 'addr':
+            sz = {'ldind.i1': 1, 'ldind.u1': 1, 'ldind.i2': 2, 'ldind.u2': 2,
+                  'ldind.i4': 4, 'ldind.u4': 4, 'ldind.i8': 8, 'ldind.ref': 8, 'ldind.i': 8}[name]
+            if isinstance(a, tuple) and a[0] == 'arraddr':
+                _, arr, off = a
+                v = 0
+                for i in range(sz):
+                    x = arr[off + i] if 0 <= off + i < len(arr) else 0
+                    v |= (x & 0xFF) << (8 * i)
+                st.append(v)
+            elif isinstance(a, tuple) and a[0] == 'intp':
+                v = 0
+                for i in range(sz):
+                    v |= HEAP.get(((a[1] + i) & 0xFFFFFFFFFFFFFFFF), 0) << (8 * i)
+                st.append(v)
+            elif isinstance(a, tuple) and a[0] == 'addr':
                 st.append(self._addr_load(a))
             else:
-                raise Abort('ldind %r in %08X at 0x%04X' % (a, fr.tok, ip))
+                raise Abort('ldind %r in %08X at 0x%04X stack=%r loc68=%r loc44=%r alllocs=%r' % (a, fr.tok, ip, [type(v).__name__ for v in st], fr.locs.get(68), fr.locs.get(44), {k: (type(val).__name__, val if not isinstance(val, list) else 'arr%d' % len(val)) for k, val in fr.locs.items()}))
             fr.ip = ip + L; return
         if name in ('stind.i1', 'stind.i2', 'stind.i4', 'stind.i8', 'stind.ref', 'stind.i'):
             v = st.pop(); a = st.pop()
-            if isinstance(a, tuple) and a[0] == 'addr':
+            sz = {'stind.i1': 1, 'stind.i2': 2, 'stind.i4': 4, 'stind.i8': 8, 'stind.ref': 8, 'stind.i': 8}[name]
+            if isinstance(a, tuple) and a[0] == 'arraddr':
+                _, arr, off = a
+                self.arrays[id(arr)] = arr
+                for i in range(sz):
+                    b = (v >> (8 * i)) & 0xFF
+                    if 0 <= off + i < len(arr):
+                        old = arr[off + i]
+                        arr[off + i] = b
+                        if b != old:
+                            self.writes.append((arr, off + i, b))
+            elif isinstance(a, tuple) and a[0] == 'intp':
+                for i in range(sz):
+                    HEAP[(a[1] + i) & 0xFFFFFFFFFFFFFFFF] = (v >> (8 * i)) & 0xFF
+            elif isinstance(a, tuple) and a[0] == 'addr':
                 self._addr_store(a, v)
             else:
                 raise Abort('stind %r in %08X at 0x%04X' % (a, fr.tok, ip))
@@ -552,6 +683,8 @@ class Interp:
             if isinstance(a, tuple) and a[0] == 'addr':
                 self._addr_store(a, 0)
             fr.ip = ip + L; return
+        if name in ('ldftn', 'ldvirtftn'):
+            st.append(Obj('ftn@%08X' % op)); fr.ip = ip + L; return
         if name in ('ldtoken', 'sizeof', 'refanyval', 'ckfinite', 'arglist', 'localloc', 'mkrefany', 'refanytype', 'cpobj', 'stobj', 'ldelema', 'constrained.', 'unaligned.', 'volatile.', 'tail.', 'readonly.'):
             if name in ('ldtoken', 'sizeof', 'refanyval'):
                 st.pop() if name == 'refanyval' else None
@@ -591,6 +724,21 @@ class Interp:
                         st.append(Obj('%08X*' % tok))
                         self.trace.append((fr.tok, ip, 'OPAQUE-CTOR %08X' % tok))
                         fr.ip = ip + L; return
+                    if tok in NATIVE_MISSING:
+                        # missing-body native family: opaque model
+                        sig = SIG.get(tok)
+                        n = sig[0] if sig else 0
+                        for _ in range(max(0, n)):
+                            st.pop()
+                        rb = RETB.get(tok, 0)
+                        if rb == 0x01:
+                            pass  # void
+                        elif rb in (0x18, 0x19, 0x0A, 0x0B):  # I, U, I8, U8
+                            st.append(('intp', 0))
+                        else:
+                            st.append(0)
+                        self.trace.append((fr.tok, ip, 'NATIVE-OPAQUE %08X' % tok))
+                        fr.ip = ip + L; return
                     raise Abort('call %s %08X %s at %08X/0x%04X: no dump body' % (name, tok, tname(tok), fr.tok, ip))
                 sig = SIG.get(tok)
                 if sig:
@@ -601,7 +749,12 @@ class Interp:
                     nf_isvoid = False
                 if name == 'newobj':
                     n = n - 1 if sig else n  # exclude this
-                args = [st.pop() for _ in range(n)][::-1] if n else []
+                if n:
+                    if len(st) < n:
+                        raise Abort('call arg underflow %s %08X %s at %08X/0x%04X stack=%d need=%d' % (name, tok, tname(tok), fr.tok, ip, len(st), n))
+                    args = [st.pop() for _ in range(n)][::-1]
+                else:
+                    args = []
                 nf = Frame(tok)
                 nf.isvoid = nf_isvoid
                 if name == 'newobj':
@@ -663,13 +816,18 @@ class Interp:
             for fr in self.frames:
                 if fr.tok == tok:
                     fr.locs[slot] = v
+                    if slot == 68:
+                        with open('/workspace/repo_git/work/s5/dbg/w68.log', 'a') as fh:
+                            fh.write('%08X addr-store(argaddr) %r\n' % (fr.tok, v))
                     return
             return
         _, slot, tok = a
         for fr in self.frames:
             if fr.tok == tok:
                 fr.locs[slot] = v
-                return
+                if slot == 68:
+                    with open('/workspace/repo_git/work/s5/dbg/w68.log', 'a') as fh:
+                        fh.write('%08X addr-store %r\n' % (fr.tok, v))
 
     def run(self, entry=0x0600419C):
         self.push(entry)
@@ -680,6 +838,7 @@ class Interp:
 
 it = Interp()
 build_sig()
+build_retb()
 load_res()
 print('resources loaded:', {k: len(v) for k, v in RES.items()})
 try:
@@ -695,17 +854,17 @@ for t in it.trace[-16:]:
     print('   %08X 0x%04X %s' % t)
 print('=== arrays ===')
 import glob as _g
-os.makedirs('/tmp/step66_arrays', exist_ok=True)
-for f in _g.glob('/tmp/step66_arrays/*.bin'):
+os.makedirs('/workspace/repo_git/work/s5/dbg/arrays', exist_ok=True)
+for f in _g.glob('/workspace/repo_git/work/s5/dbg/arrays/*.bin'):
     os.remove(f)
 _n = 0
 for aid, arr in it.arrays.items():
     nz = sum(1 for v in arr if isinstance(v, int) and v)
     if len(arr) > 64:
         _n += 1
-        with open('/tmp/step66_arrays/arr%02d_len%d.bin' % (_n, len(arr)), 'wb') as fh:
+        with open('/workspace/repo_git/work/s5/dbg/arrays/arr%02d_len%d.bin' % (_n, len(arr)), 'wb') as fh:
             fh.write(bytes(v & 0xFF if isinstance(v, int) else 0 for v in arr))
-        print('  arr%d len=%d nonzero=%d -> /tmp/step66_arrays/arr%02d_len%d.bin' % (_n, len(arr), nz, _n, len(arr)))
+        print('  arr%d len=%d nonzero=%d -> /workspace/repo_git/work/s5/dbg/arrays/arr%02d_len%d.bin' % (_n, len(arr), nz, _n, len(arr)))
         print('    head: %s' % ' '.join('%02X' % v if isinstance(v, int) else '??' for v in arr[:48]))
     else:
         print('  arr len=%d nonzero=%d: %s' % (len(arr), nz,

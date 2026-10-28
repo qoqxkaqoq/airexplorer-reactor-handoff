@@ -343,10 +343,84 @@ class Probe2 {
         // ---- K. ITP 后立即普查 (transform/Key/IV 残留捕获; ITP→扫描间零 GC) ----
         ScanHeap("cens", algMTs, algNames, mtByteArr, 80, 32 << 20, scanBuf, true);
 
+        // ---- J. 缺体族重试 + 驱动器静态字段 dump (payload 条目表 token→(offset,len,key) 候选) ----
+        // 驱动器/ITP 已执行 (G/K2/I): Reactor JIT-hook 路径已走过; forcedump failed 名单
+        // (06003909/06002BD1/0600419E-0600427F 族) 的真体可能在首次 JIT 时由运行时回填 IL 头 →
+        // PrepareMethod 强制 JIT + GetMethodBody 重试 + 全量 diff + 驱动器类静态字段
+        var missToks = new[] { 0x06003909, 0x06002BD1, 0x0600419C, 0x0600419E, 0x0600419F, 0x060041A3,
+                               0x060041FA, 0x0600425C, 0x0600425D, 0x06004261, 0x06004264, 0x0600426B,
+                               0x0600426F, 0x06004273, 0x06004277, 0x0600427B, 0x0600427F };
+        var missTypes = new List<Type>();
+        foreach (var tok in missToks) {
+            try {
+                var mb = mod.ResolveMethod(tok);
+                if (mb == null) { Log("[mem] J. 0x" + tok.ToString("X8") + " resolve NULL"); continue; }
+                if (mb.DeclaringType != null && !missTypes.Contains(mb.DeclaringType)) missTypes.Add(mb.DeclaringType);
+                Log("[mem] J. 0x" + tok.ToString("X8") + " = " + (mb.DeclaringType == null ? "?" : mb.DeclaringType.FullName) + "::" + mb.Name);
+                try { RuntimeHelpers.PrepareMethod(mb.MethodHandle); Log("[mem] J. 0x" + tok.ToString("X8") + " PrepareMethod OK"); }
+                catch (Exception ex) { Log("[mem] J. 0x" + tok.ToString("X8") + " PrepareMethod FAIL " + (ex.InnerException ?? ex).Message); }
+            } catch (Exception ex) { Log("[mem] J. 0x" + tok.ToString("X8") + " FAIL " + (ex.InnerException ?? ex).Message); }
+        }
+        // J2: 全量 diff — B 节(驱动器执行前)缺体/失败的方法此刻重试, 新真体全落盘
+        int jNew = 0, jFail = 0;
+        try {
+            var have = new HashSet<int>();
+            foreach (var ln in File.ReadAllLines(Path.Combine(DumpDir, "il_index.tsv"))) {
+                if (ln.StartsWith("0x") && ln.Length > 10) {
+                    int v;
+                    if (int.TryParse(ln.Substring(2, 8), System.Globalization.NumberStyles.HexNumber, null, out v)) have.Add(v);
+                }
+            }
+            var want = new HashSet<int>(missToks);
+            var ix = new StreamWriter(Path.Combine(DumpDir, "il_new_index.tsv"));
+            var bl = new FileStream(Path.Combine(DumpDir, "il_new.bin"), FileMode.Create);
+            try {
+                for (int rid = 1; rid <= 30912; rid++) {
+                    int tok = 0x06000000 | rid;
+                    if (have.Contains(tok)) continue;
+                    MethodBase mb = null;
+                    try { mb = mod.ResolveMethod(tok); } catch {}
+                    if (mb == null) continue;
+                    try {
+                        var bd = mb.GetMethodBody();
+                        var il = bd == null ? null : bd.GetILAsByteArray();
+                        if (il == null || il.Length == 0) continue;
+                        byte[] mf = NewMFile(tok, il, bd.MaxStackSize, bd.ExceptionHandlingClauses.Count);
+                        long pos = bl.Position;
+                        bl.Write(mf, 0, mf.Length);
+                        ix.WriteLine("0x{0:X8}\t{1}\t{2}\t{3}\t{4}", tok, il.Length, mb.DeclaringType == null ? "" : mb.DeclaringType.FullName, mb.Name, pos);
+                        if (want.Contains(tok) || jNew < 400)
+                            File.WriteAllBytes(Path.Combine(DumpDir, "m_" + tok.ToString("X8") + ".bin"), mf);
+                        Log("[mem] J2. NEW 0x" + tok.ToString("X8") + " len=" + il.Length + " " + (mb.DeclaringType == null ? "" : mb.DeclaringType.Name) + "::" + mb.Name + " head=" + BitConverter.ToString(il, 0, Math.Min(16, il.Length)).Replace("-", ""));
+                        jNew++;
+                    } catch { jFail++; }
+                }
+            } finally { ix.Dispose(); bl.Dispose(); }
+            Log("[mem] J2. diff done: new=" + jNew + " fail=" + jFail);
+        } catch (Exception ex) { Log("[mem] J2 FAIL " + Chain(ex)); }
+        // J3: 驱动器类静态字段全 dump (条目表候选: Dictionary/Array/int 表)
+        try {
+            foreach (var t in missTypes) {
+                Log("[mem] J3. statics of " + t.FullName);
+                foreach (var f in t.GetFields(flags)) DumpFieldValue(f.Name, f.GetValue(null), "statJ", 0);
+            }
+        } catch (Exception ex) { Log("[mem] J3 FAIL " + Chain(ex)); }
+
         if (diT != null) {
             foreach (var f in diT.GetFields(flags)) DumpFieldValue(f.Name, f.GetValue(null), "stat2", 0);
         }
         Log("[mem] stat2 done");
+    }
+
+    // dump_official_16598 兼容 24B 头: tok/ilSize/maxStack/ehCount/preExtra/localsTok
+    static byte[] NewMFile(int tok, byte[] il, int maxStack, int eh) {
+        var b = new byte[24 + il.Length];
+        BitConverter.GetBytes(tok).CopyTo(b, 0);
+        BitConverter.GetBytes(il.Length).CopyTo(b, 4);
+        BitConverter.GetBytes(maxStack).CopyTo(b, 8);
+        BitConverter.GetBytes(eh).CopyTo(b, 12);
+        il.CopyTo(b, 24);
+        return b;
     }
 
     // 堆扫描 v3: ReadProcessMemory 全读; 预分配 buf 复用(扫描期零分配); MT 命中 → dump 512B + 追链;
