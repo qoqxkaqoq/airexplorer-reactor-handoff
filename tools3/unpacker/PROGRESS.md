@@ -1093,3 +1093,30 @@ S1(修复35: 22930 全注入) → S3(修复36/37: 3239 委托, 过滤 Dispose族
   3. surgical5_v3.exe（92+RSA+全陷阱补丁）—— wine 下走得最远的激进版
 - Windows CI 用 probe_iso 拿 FirstChanceException 原始栈，即可分辨 v6b 在真 .NET 下是否直接全通
 - 脚本：work/s5/{step2_wl,step3_type,step3b,step4_gae,step5_gae,step5b,step6_resolve,step7_ctor,step8_v6a,step9_v6b}.py
+
+# surgical5 阶段（2026-10-28 下午）：RSA 验签链全解 + 92/WRAP 毒性定性 + M1 S1 死因确诊 + m1b 实验
+
+## RSA 验签链全解（step18-21，决定性）
+- **0a0009a5 = RSACryptoServiceProvider 无参 ctor**（sig 200001）→ `new RSACryptoServiceProvider()`
+- 06004192 内零直接 crypto MemberRef，全走包装：060041ce=**SHA1.Create**、060041cf=**CryptoConfig.MapNameToOID(解密串)**（VerifyHash 的 halg 参数）、060041eb=**BinaryReader.ReadBytes(int)**（签名从流读）、060041d0=**File.Exists**、0600418e=**ComputeHash 包装**、060041df=**FromXmlString**（全程序集唯一公钥导入点）、0600419a/060041ca=**set_UseMachineKeyStore**
+- 06004192 数据流：+0x1AC newobj FileStream（打开文件）→ BinaryReader(+0x636) → 读区域→ComputeHash → 读签名(060041eb) → `V_0C = (VerifyHash(hash, oid, sig) == 0)`（+0x4DB-0x4E3）
+- 两个 catch 块（+0x995/+0x2289）异常路径显式 `ldc.i4.1; stloc.s 0c` → **V_0C=true = "校验未通过/数据缺失" = 官方 CI 裸环境常态**（FileStream 数据源在裸 exe 环境不完整）
+- **毒性定性（CI 实证闭环）**：v6c 强制 VerifyHash 壳(060041ee@0x405AC8)恒 true → 把应用推进从不进入的"验签成功"分支 → "AirExplorer is tampered."；v6d 92 补丁（ceq→clt + 0x995/0x2289 ldc.i4.1→0）翻转 V_0C 极性 → 同样失序 → GAE 0x46D 死
+- **结论：92/WRAP 补丁全是毒药，且完全多余**——CI 裸环境验签天然走失败/异常路径，篡改检查对补丁不敏感。**A2 自签方案取消**（无需让验签真实通过）
+
+## M1 S1（unpacker-gate run 107）死因确诊
+- probe_iso VERDICT=FAIL-EXITED(-532462766)：`<Module>` cctor → DispatcherInitializer.DefineEfficientProfiler(0600419C) → **VerifyProcessor(060041A5) InvalidProgramException**
+- 060041A5 本体 82B 无 EH，注入字节与 dump 逐字节一致 → 死于 **JIT 内联 callee** 或元数据
+- PEVerify（CI artifact）1722 错误，三类根因全部指向 **Slayed 元数据签名 ≠ dump 体运行时真签名**：
+  1. EH catch 类型解析错（found 'ValidatorDefinitionEmitter' expected COMException）
+  2. 类型 0x0200008F Type load failed → 毒害全部引用方法（IterableValue/PredictorSynchronizer 族）
+  3. "found ref System.Object expected Byte[]/IEnumerator/Stream" = **NRS 混淆字段/方法签名（Object 化）未恢复**，dump 体是运行时修复签名后的形态
+- S1 的 sig-restored=175 只覆盖 NRS-dummy 类型，App 类型的混淆签名没恢复 → Slayed 路线需要全量签名恢复（member sig remap），工程量大
+
+## m1b 实验：baseline 直注（绕开重映射）
+- 输入 = AirExplorer_baseline_verified.exe（A12B5C57）本体：token 与 dump 完全同空间、磁盘元数据签名本来就是真值 → sig-restored=0 / rid-reuse=0 / dummy=0
+- 结果：injected=22930 fail=0 eh-dropped=2，输出 9590784B（净 -78KB），.text/.rsrc/.reloc 三节保留、大小合理
+- 本地复现与 CI run 107 的 m1_s1_full.exe md5 一致（58fecaf3…），管线确定性验证
+- 原理：回填机制（Marshal.WriteInt32）会把 payload 解密内容再写一遍 = 与注入体相同 → 功能等同官方；磁盘上 22930 方法全明文
+- **CI s5probe A/B（m1b vs baseline_verified）dispatch 进行中**
+- 脚本：work/s5/{step18,19,20,21,22,23,23b,24,25}.py
