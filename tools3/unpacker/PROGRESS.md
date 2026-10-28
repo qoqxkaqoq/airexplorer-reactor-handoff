@@ -1672,3 +1672,24 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **a1 + 41EE 恒假壳**（`0A 16 2A` = tiny hdr + ldc.i4.0 + ret，填充同 a7c）@ file off 0x405AC8，数据零改动
 - md5=490B8096D9467B22A54B9F16BB8A58D8
 - 预期：绕过坏委托 → 4192 健康路径 → blob 装载 → ~70 cctor 活 → AG 活。若 a1 其余部分正确 = **发布候选**
+
+### a7d 判定（run 40740983107）——恒假假设被推翻，模型修正
+- a7d **死**：boot 即 `<Module>` cctor FAIL `System.Exception: AirExplorer is tampered.` @ InstantiateGlobalCalculator（= a1 本来的 4192 throw 死法；G total statics=0、全程序 80 READ-FAIL）
+- **4192 @00d3 守卫实锤**（IL 重 dump）：
+  ```
+  00d3 ldloc.s 12        ; loc12 = !VerifyHash_result（@04db call 41EE → ldc.i4.0; ceq; stloc.s 12 @04e3）
+  00f1 brfalse 0x12      ; loc12==0 → 回调度器继续（健康）
+  00f6 br 0xa72          ; loc12!=0 → throw
+  0a72 ldtoken 0x02000562 → GetTypeFromHandle → Type.Assembly → 06000750/51（GetName().Name="AirExplorer"）
+  0a8b ldstr " is tampered." → concat → newobj Exception → throw @0a9a
+  ```
+  throw 块 0xa72 的**唯一入口 = @00f6**；守卫只有 @00f1
+- loc12 写点：@04e3(ceq)、@0996、@09ed(=0)、@0a6b(=0)、@228a；读点：@00d3（throw 守卫）、@09f4（状态选择，两路都回调度器，无 throw）
+- **修正模型**：baseline 的 41EE 委托返回 **TRUE**（loc12=0 → 不 throw ✓ 且 blob 装）；a7c 恒真 → loc12=0 同样不 throw ✓，但**委托体被跳过 → 副作用丢失 → blob 没装**（r5 差分）；a1 真委托在重建环境返回 **false** → loc12=1 → throw（= a1 死法）；a7d 恒假 → loc12=1 → 同一 throw ✓（全自洽）
+- 结论：**41EE 不是 a1 的门；@00d3 守卫才是**。a1 需要的是"委托照跑 + 返回值被无视"
+
+### a7e（step112_a7e.py）
+- **a1 + @00f1 `brfalse`→`br`**（0x39→0x38 单字节等长，operand `1cffffff` 不变，目标 0x12）@ file off 0x3F92CD（4192 body RVA 0x3FAFD0 + fat 12B 头 + 0xF1）
+- md5=6D49F1DF68F0DE7B64FC60CDBE43CA81
+- 预期：throw 块死代码化，**41EE 委托照常执行**（blob 装载副作用保留），返回值被无视
+- 判读：若 D 段不 throw 且 _ExtractorVisitors=BYTE[398794] → 活，发布候选；若死法移到 4528/AG（blob 没装）→ 委托副作用依赖判定结果 → 需定位委托真体验证逻辑（060041ED/0A000A0C 链）
