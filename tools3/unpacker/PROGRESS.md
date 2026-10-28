@@ -1492,3 +1492,35 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 2. **res5 哈希表同步**：重算被改数据域 SHA1 回写哈希表 → 4192 的 SHA1 校验自然通过 → 不抛 'is tampered.' → 副作用完整 → 4528 放行
 - 即正确形态 = **a1 + 哈希表同步**（A7），而非任何 4192 改动
 - 下一步：解剖 4192 的 SHA1 校验域（8970B 状态机：SHA1 创建@0x0b01、资源名@0x0be5、throw@0x0a9a——要找 ComputeHash 输入与哈希表读取/对比逻辑）→ 恢复 res5 明文（ks_res5）→ 解析哈希表 → 重算回写
+
+## step91-97（2026-10-28 续XIV）：4192 全解剖 + r5 运行时抓取——RSA 解密哈希表
+
+### 4192 静态解剖（step91-94）
+- 49 个 call = 43 自族薄壳（全部 3-5 指令转发 MemberRef）+ 关键 MemberRef 实名：
+  - 060041D3 = **Stream::set_Position**（x12 高频——持有流反复 seek）
+  - throw 链：`ldtoken 0x2000622(DispatcherInitializer) → Type::get_Assembly → Assembly.GetName → AssemblyName.get_Name → String.Concat(asmName, ' is tampered.')`——消息 = **程序集名 + ' is tampered.'**
+  - `ldsfld automatedError(0x4001FBE) → ldstr 'ValidatorArgument.EmitterReporter' → 060041D1(GetManifestResourceStream 薄壳) → newobj 06004264(BinaryReader 包装) → set_Position(0)`
+  - `ldstr 'SHA1' → 060041CF`（SHA1.Create('SHA1') 薄壳）
+  - newobj FileStream(Open/Read/Read) + BinaryReader + CryptoStream + **RSACryptoServiceProvider → stsfld m_ExtendedSchemaTemplate(0x4001FCD)**（RSA 实例存静态字段）
+- **4192 架构**：读 exe 自身（FileStream）+ 读 manifest 资源（经 automatedError/Assembly）+ CryptoStream/RSA 解密哈希表 + SHA1 校验 → 失败抛 asmName+' is tampered.'
+- 0x2100 区大量 stelem.i1 = IL 内硬编码字节数组（RSA 参数/密钥）；全块栈模拟提取 44 对（idx 0..67）：26B 段 `fc7ae2e6...`、10B 段 `810e0000...`（0xE81=3713 后随零）——线性/逐块模拟均不能覆盖全路径（条件依赖运行时数据），静态密钥提取不完整
+
+### 状态机展开器（step95，flat.parse operand 复用）
+- 4192 = **双状态变量**：var0 主累加器（`ldloc 0; ldc.i4 K; add; stloc 31` 式 move-add，stloc 目标≠ldloc 源）、var31 分发器
+- 走通主链 17 块（RSA 创建/ldtoken/检查全经过）；条件分支需运行时值（SHA1 结果/文件字节），静态单路径不可全展开
+- flat.parse 陷阱：ldloc/stloc 等是 0xFE 前缀双字节操作码，**operand 已由 parse 解析好（e[3]）**，勿再手工 unpack(e[0]+1)
+
+### r5 运行时抓取（probe2 新 mode，run 40729627846 = baseline）
+- **manifest 资源全清单实锤（6 个）**：
+  - ErrorReceiver.ValidatorViewer = 356328B（= res0 DB cipher）
+  - **ValidatorArgument.EmitterReporter = 256B（= RSA-2048 块！）**
+  - ValidatorAllocator.ValidatorProc = 47915B；CollectorTransaction.ValidatorProject = 26128B
+  - ValidatorGenerator.DefinitionError = 2337031B（= 2.33MB 主库）；GlobalValidator.FactoryValidator = 398794B
+- **m_ExtendedSchemaTemplate = RSACryptoServiceProvider**；ExportParameters(true) 被拒（Key not valid——私钥在 CSP 但不可导出）
+- 06004264 = **DispatcherInitializer+RandomDecryptor**（嵌套类型），字段 `_AdvancedDecryptor : BinaryReader`
+- **R5.D：invoke 06004192 → OK no throw**——守卫1 可独立调用且 baseline 上自检通过（SHA1 域全匹配）
+- automatedError = RuntimeAssembly（location = exe 路径）
+- res5_cipher.bin 256B 已落盘（head C2D1DB0AC1E4A943...）
+
+### r5.F（第二轮，进行中）
+- 全 6 资源落盘 dump/res_*.bin + **进程内 rsa.Decrypt(res5, OAEP=true/false)**（私钥不可导出但 Decrypt 可用）→ res5 明文（哈希表本体 ≤245B）
