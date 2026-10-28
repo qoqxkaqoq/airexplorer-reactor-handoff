@@ -1458,3 +1458,16 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 06004528 检查失败异常 → try 内抛 → catch handler → pop 吞掉 → 06004523 继续 → 初始化完整保留
 - 产物：`exes/AirExplorer_a5.exe`（md5 2EDF7B993E68E188E1BB030DD29662FB）= A1 + [4192 ret] + [4523 rethrow pop]
 - 风险：06004528 检查失败可能在抛出前已置坏部分状态（后续功能验证看 probe2 ag 输出字段）
+
+## step83（2026-10-28 续XII）：a5 判定吞异常穷尽 + 转入哈希表同步（路径乙）
+
+### CI run 40724883179（a5）：tampered 消失但 NRE
+- `AirExplorer` 哨兵异常**消失**（06004523 rethrow pop 吞掉生效，无死循环——a2 失败模式未复现，pop 语义预判正确）
+- 新死法：`GenerateAdaptableExtractor` 抛 **NullReferenceException**——06004528 检查失败后在抛出前已置坏状态/初始化不完整 → 下游对象为 null
+- 判定：吞异常路径**穷尽**。06004528 是业务+检查混合体，异常只是检查失败的「结果」而非「全部」——坏状态已在抛出前写入静态字段，吞掉异常救不回初始化
+
+### 结论与转向
+- 套娃杀检查（ret 守卫 / 吞 rethrow）两条路都死：前者缺初始化，后者带坏状态
+- 唯一正解 = **哈希表同步（路径乙）**：让 SHA1 检查**真正通过**——重算被改数据域（res0 cipher 区 + 文件代码区）的哈希并回写 res5 哈希表，则 06004528 全部检查点自然放行，初始化完整保留
+- 侦察（本轮双空）：mem5/probe2.log grep `s1_bigarr` 无结果（res5 明文从未 dump 过）；06004528 反汇编**无任何 ldstr**（哈希表资源名不经字符串常量，或在 06004523 / 经 060077xx/060078xx 辅助族传参）
+- 下一步：追 06004528/06004523 的资源读取路径（GetManifestResourceStream MemberRef 调用点）→ 扩展 probe2 mem 模式 dump res5 明文 → ks_res5 → 解析哈希表格式 → 重算回写 → A6 出包 CI
