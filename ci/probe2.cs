@@ -351,6 +351,15 @@ class Probe2 {
                 Log("[r5] H. 4528 OK (no throw)");
                 if (ps.Length > 0 && ps[0].ParameterType.IsByRef) Log("[r5] H. byref p0 after=" + args2[0]);
             } catch (Exception ex) { Log("[r5] H. 4528 THROW " + Chain(ex)); }
+            // 实例重试: 4528 是实例方法, Activator 建目标再调
+            if (ps.Length > 0 && !ps[0].ParameterType.IsByRef) {
+                try {
+                    var tgt2 = Activator.CreateInstance(ps[0].ParameterType);
+                    Log("[r5] H. target created " + tgt2.GetType().FullName);
+                    try { m2.Invoke(tgt2, args2); Log("[r5] H. 4528(inst) OK (no throw)"); }
+                    catch (Exception ex5) { Log("[r5] H. 4528(inst) THROW " + Chain(ex5)); }
+                } catch (Exception ex6) { Log("[r5] H. target ctor FAIL " + Chain(ex6)); }
+            }
             try {
                 var diT5 = asm.GetType("CloudClient.Templating.DispatcherInitializer");
                 foreach (var f in diT5.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)) {
@@ -370,7 +379,20 @@ class Probe2 {
         try {
             int ti = 0, fi = 0;
             var sb3 = new StringBuilder();
-            foreach (var t in asm.GetTypes()) {
+            Type[] allT;
+            try { allT = asm.GetTypes(); }
+            catch (ReflectionTypeLoadException rtle) {
+                int nl = 0; foreach (var t2 in rtle.Types) if (t2 == null) nl++;
+                Log("[r5] I. GetTypes RTL: loaded=" + (rtle.Types.Length - nl) + " null=" + nl);
+                var sb5 = new StringBuilder();
+                if (rtle.LoaderExceptions != null) foreach (var le in rtle.LoaderExceptions) sb5.AppendLine(le == null ? "null" : le.GetType().Name + ": " + le.Message);
+                try { File.WriteAllText(Path.Combine(DumpDir, "istat_loadex.txt"), sb5.ToString()); } catch {}
+                allT = rtle.Types;
+            }
+            if (allT == null) allT = new Type[0];
+            foreach (var t in allT) {
+                if (t == null) continue;
+                try {
                 if (t.IsGenericType || t.IsArray) continue;
                 ti++;
                 System.Reflection.FieldInfo[] fs = null;
@@ -395,6 +417,7 @@ class Probe2 {
                     } else vs = "TYP " + v.GetType().FullName;
                     sb3.Append("I. ").Append(t.FullName).Append("::").Append(f.Name).Append(" = ").Append(vs).AppendLine();
                 }
+                } catch (Exception) { }
             }
             File.WriteAllText(Path.Combine(DumpDir, "istat_all.txt"), sb3.ToString());
             Log("[r5] I. static snapshot: types=" + ti + " fields=" + fi + " -> istat_all.txt");
