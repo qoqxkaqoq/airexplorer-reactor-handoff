@@ -1584,3 +1584,31 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
   - → 4528 检测的不是"4192 是否完成"，也不是 VerifyHash 判定，而是 **4192 计算出的 SHA1 哈希值本身**（哈希值 = 下游密钥/校验输入；数据补丁 → 哈希变 → 下游产物变 → 4528 抛）
   - 三元组自洽：baseline（正确哈希）活；a1（补丁数据+真校验）死在 4192 自己 throw；a3/a6/a7probe 死在 4528
 - 下一步：解剖 06004528 GenerateAdaptableExtractor 的数据源（读哪个静态字段/哈希值怎么被消费）→ 决定是否可"哈希值回写"（如哈希是 res0 解密密钥则死局，如是存储比对则可同步）
+
+## step106-107（2026-10-28 续XVIII）：4528 解剖 + res0 DB 架构实锤 + a7c 判别实验
+
+### 4528 静态解剖（step106）
+- 06004528 GenerateAdaptableExtractor = 27546B / 6819 ins / 178 uniq calls（另一台控制流平坦化状态机）
+- **零 crypto MemberRef**（无 SHA1/RSA/Hash/Compare）——纯状态机 + 字典操作（GetEnumerator/TryGetValue/set_Item）+ ConstructorInfo::Invoke + 诱饵异常构造（Overflow/NullRef/Arithmetic）
+- 读大量守卫网静态（ValidateCustomizableConfig/DetachSchema/MatchRunner/StartDriver/InterruptError 等）+ 实例字段 identifiableGatewayProxy 高频
+- probe2 R5.H 裸调失败：**4528 = 实例方法**（p0=TemplateArgument+HandlerPublisher），需目标实例
+
+### 运行时差分（probe2 R5.G，run 40734950208 baseline vs a7probe）
+- 4192 在 a7probe 上进程内 invoke **OK no throw**（恒真壳在探针环境同样有效）
+- **DispatcherInitializer 40 个静态字段逐项 diff = 零语义差异**（仅 m_RemoteNodeVal/visibleCheckerTemplatePtr 指针类随进程漂移）
+- → 4528 的检测输入不在 DispatcherInitializer 静态里
+
+### res0 DB 架构（复扫 res0_plain_a1 vs res0_plain_s1_47）
+- DB = 14407 个方法体条目（[rva][n][4n 字节]），条目 = 方法体头部片段（tiny/fat hdr + 首段代码）：20B×10173、8B×3992、24B×229 —— 与 4528 文件内 4B 桩（0x12+0000002a）+ DB 20B 条目（fat hdr codesize 0x6b9a=27546 + 首 8 code 字节）互相印证：**真身运行时还原，DB 存还原描述/头部**
+- **a1 vs baseline 仅 3 条目不同**（= 五目标中位于 res0 的 3 个）：
+  - 0x195cd4 AccessibleClient.TestCollector：真体 fat(20B code) → 补丁 tiny `17 2a`（恒真）
+  - 0x195d18 SendFlexibleAttribute / 0x19a510 PlanRandomTag：真体 `ldarg.0; ldfld 0x4000c3d/0x4000c4b; ret` → 补丁 `17 2a`
+  - 其余 2 目标在其它资源 DB（res1/res2/res4 之一）
+- 4192 的 RVA 不在 DB（其体在文件内明文，与 step79 认知一致）
+
+### 判别实验 a7c（step107）
+- **a7c = baseline + 仅 041EE VerifyHash 壳恒真**（res0 DB 零改动），md5 7F59A039D1B53BC9812CFBDDDD410800
+- 判读矩阵：
+  - a7c 活 → 4528 死因 = 3 目标行为变化（守卫网元一致性校验）→ 正解 = **外科式补丁**（保留真体，仅翻转特定分支），而非整体 `17 2a`
+  - a7c 死 → 4528 连 4192 体区域也做完整性校验（整文件哈希网）→ 需定位 4528 的校验机制并废除
+- ui-probe 已派发
