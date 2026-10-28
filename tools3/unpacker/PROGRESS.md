@@ -1145,3 +1145,40 @@ S1(修复35: 22930 全注入) → S3(修复36/37: 3239 委托, 过滤 Dispose族
 - "位移毒源"假说无法单独成立（m1r 同时叠加了原生内容丢失），m1c 文件级手术（恢复布局）前提不充分且需复原全部原生内容=工程黑洞
 - **M 线 dnlib 重写路线关闭。主线回到 surgical5 原位等长补丁**（surgical5.exe = baseline + P1-P4 + 182 陷阱补丁，零重排零丢失）
 - 脚本：work/s5/{m1r.cs,m1r.csproj}（dnlib 复用 tools3/unpacker/bin 的 dnlib.dll）
+
+# v7 二分终判 + M 线结构性关闭（2026-10-28 深夜）
+
+## Windows CI 单补丁二分矩阵闭合（s5probe mode=ag）
+| 补丁集 | module cctor | 死点 |
+|---|---|---|
+| baseline（金标准） | OK | 无 |
+| v6d = {92} | OK | AG.cctor @ GAE `Exception("AirExplorer")` |
+| v6c = {RSA/WRAP} | FAIL | cctor `AirExplorer is tampered.` @ 06004192 |
+| v7 = {traps×182}（run 40639294102） | FAIL | cctor `AirExplorer is tampered.` @ 06004192 |
+| v3/v6a/v6b = {92+…} | OK | GAE 同 v6d（92 掩盖 tamper 但毒 GAE） |
+- **三套补丁全毒**：92 毒 GAE；WRAP 推进验签成功分支 → tampered；陷阱补丁 → tampered
+- **182 陷阱站点 = NRS 完整性哨兵体**（改体即触发 InstantiateGlobalCalculator 篡改分支）——"暗桩清理=补丁陷阱"路线证伪，与"官方异常驱动控制流"结论互洽
+- 哨兵体哈希集不覆盖 06004192 自身（v6d 改它 cctor 却 OK）→ 校验集是选择性的
+
+## VerifyProcessor 82B 体反汇编（m1b 死点机制钉死）
+```
+if (fld_04001FC5==null){ call 060041A6; ldstr;call; ldstr;call;
+  call 0600419F(StopClient,rva=0!); ldc.i4 0x02000630; call 06004284;
+  call;call; castclass 02000630; stsfld }
+ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
+```
+- **恒定路径 callvirt 0600427F（dump-MISSING rva=0）→ JIT 无体方法 = InvalidProgramException**（m1b/m1_s1_full/Slayed 三案同死于此）
+- baseline 能活 = NRS 引导链（原生 stub + dump-MISSING 的补体驱动方法）在 VerifyProcessor JIT 前已回填 0600427F/0600419F
+
+## rva=0 普查（step30，M 线关棺钉）
+- baseline 30886 方法中 **7956 个 rva=0**（全非抽象，真体只在 3.2MB 加密 payload）
+- dump 体（c2_pack 7782 样本）引用其中 **657 个、2436 调用点**（work/s5/step30_refs.json）
+- 回填引擎（原生引导 + 驱动方法，后者 dump-MISSING）随任何 dnlib 重写丢失 → 7956 个方法永远无法物质化 → **重写版结构上不可能活**
+- 固定 RVA 常量补丁捷径不存在：0x6231C0/0x44B830/0x929B9E 在 baseline 全文件仅出现于 PE 头目录，m1b 零残留
+
+## M 线终判
+**M 线（dnlib 重写族：Slayed/m1b/m1r/m1c）结构性关闭**。脱壳版（独立完整 exe）对本 NRS 构建不可达：payload-only 方法体 ×7956 无法离线物质化。
+**唯一可加载形态 = 未重写的 baseline。** 可行交付 = A 线原位路线：
+- A3 便携 ✅（launcher 零修改，CI 已验收）
+- 暗桩清理：陷阱=哨兵体不可批改（v7 实证），结论=保留+文档化
+- **A1 激活直通：06000CEE rva=0x3D3404 原位真体可补 → 下一实验 = a1patch 五补丁重定向 baseline 宿主 + CI probe**（哨兵哈希集是否覆盖激活方法待测）
