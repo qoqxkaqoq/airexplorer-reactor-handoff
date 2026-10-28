@@ -1885,3 +1885,9 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 42B0 = BinaryReader(MemoryStream) + 大量分散 ExecuteExplorer 调度器（060077cc/004834/005338/004734/0077b8/005364）+ 42B1——**逻辑在数据数组+反射层，IL 只见调度**（Reactor 控制流打散）
 - 42AC 无 ldc 0x2c 常量点——功能号经 ldarg.0 直接索引缓存表（0x2c 由 4195 传入）
 - **下一轮**：① xref 4523 上游（定位 4528 在装载链位置）；② 42AC @0048-0300 计算路径 + _AdjustableTransformerElements 填充者；③ a10 决策点：第二哨兵哈希输入若不在 41ED 链 → 需评估「哈希域外补丁」或解剖 4523→4528 服务检查的具体输入
+
+### step161：4528 上游链闭合 + 42AC 计算路径
+- **4523 上游（depth 0-2）**：4523 ← 4521(PlanRunner)/**42AC@0a17 callvirt** ←（42AC 无静态调用者，仅经 42AD gspec 反射层进入）；4521 还被 4523@0288/03dd 回调；4524/4525 仅被 4523 调。**4528 编排器确认在 4196 重初始化链上：4196→4195(0x2c)→42AD→42AC→4521→4523→4528**
+- **_AdjustableTransformerElements(001feb) 写者**：42B0@0305（填充者，经 42AC@002a→42AF→42B0 初始化链）+ 42B3 cctor@003c（ldnull）
+- 42AC 计算路径（缓存 miss）：`_TemplateController(BinaryReader) 大量消费` + ExecuteExplorer 调度器家族（060077b8/0053a4/00463c/0077bc/0077b0/0077c0/0077c4/0077c8）+ newobj 44f7/44e7 —— 0x2c 功能 = 从 'ValidatorAllocator.ValidatorProc'(47915B DB) 解析结构化配置
+- **probe2 新增 mode=trap**（commit 14368066）：全类型 RunClassConstructor 扫描，死类型打印完整内层异常链 + StackTrace（8 层 inner、600 字符栈）——直接曝光第二哨兵 trap 的消息与 4528 内偏移
