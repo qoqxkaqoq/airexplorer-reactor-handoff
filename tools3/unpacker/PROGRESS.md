@@ -1524,3 +1524,24 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 
 ### r5.F（第二轮，进行中）
 - 全 6 资源落盘 dump/res_*.bin + **进程内 rsa.Decrypt(res5, OAEP=true/false)**（私钥不可导出但 Decrypt 可用）→ res5 明文（哈希表本体 ≤245B）
+
+## step98（2026-10-28 续XV）：r5.F 判定——RSA-1024 实锤 + 全 6 资源密文入库
+
+### r5.F 第二轮（run 40730174633）判定
+- **RSA = 1024 位**：`rsa.Decrypt(256B)` 抛 "exceeds the maximum for this modulus of **128 bytes**" → modulus 128B = RSA-1024，**res5 256B = 2×128B 密文块**（先前"RSA-2048 块"判断作废）
+- **两种 padding（OAEP=true/false）均失败**——但失败点在长度检查之前/之中，无法确定 padding 是否正确；需分块后重试
+- `CspKeyContainerInfo`："Key does not exist" + ExportParameters(true) 被拒 → **私钥在 CSP 内可 Decrypt 但不可导出**（.NET 默认 CSP 容器行为）
+- **全 6 资源密文落盘成功**（R5.A 路径 + res5 双路径），两路径逐字节一致：
+  - res5（ValidatorArgument.EmitterReporter）= 256B，md5 A6983C8D1BFE0688D82E8EA7851DF95C
+  - ErrorReceiver.ValidatorViewer = 356328B；ValidatorGenerator.DefinitionError = 2337031B；GlobalValidator.FactoryValidator = 398794B；ValidatorAllocator.ValidatorProc = 47915B；CollectorTransaction.ValidatorProject = 26128B
+- 持久化：work/s5/mem5/r5/res_*.bin（+res5_cipher.bin、res5_via_asm.bin）入库
+
+### 薄壳族实名收官（step97 补记）
+- 060041D7=SymmetricAlgorithm::set_Mode、060041D8=CreateDecryptor、060041DA=Stream::Write → **4192 的资源解密 = 对称算法**（set_Mode→CreateDecryptor→CryptoStream(mode=Write)→Write）
+- 060041CF=CryptoConfig::MapNameToOID（'SHA1' 串走 MapNameToOID，非 SHA1.Create 直接 new）→ SHA1 实例来自 060041D0 族（待实名）
+- 未解剖工厂：060041D6 InstantiateAdjustableAuditor、060041D9 GenerateInterruptibleHandler（对称算法类型/Key/IV 来源）
+
+### 下一步
+1. 解剖 041D6/041D9 → 对称算法类型（Aes/Rijndael/RC2?）、Mode 值、Key/IV 来源（IL 硬编码 stelem 数组 vs RSA 解密块 vs 资源头）
+2. res5 分 2×128B 块 Decrypt（PKCS1/OAEP 各试）→ 或 CI 进程内直接重放 4192 解密管线 dump 明文
+3. res5 明文 = 哈希表本体 → 解析格式（域标识+SHA1）→ 重算被改域回写 → A7 出包
