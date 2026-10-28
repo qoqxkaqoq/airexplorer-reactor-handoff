@@ -1,0 +1,13 @@
+21:20:41.763 exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+21:20:41.824 size = 9305088  md5 = 58FECAF3A17672BC1950A638F549A70D
+21:20:41.833 OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+21:20:41.856 started pid = 7776
+21:20:44.387 stderr head: 
+Unhandled Exception: System.TypeInitializationException: The type initializer for '<Module>' threw an exception. ---> System.InvalidProgramException: Common Language Runtime detected an invalid program.
+   at CloudClient.Templating.DispatcherInitializer.VerifyProcessor(IntPtr var1)
+   at CloudClient.Templating.DispatcherInitializer.DefineEfficientProfiler()
+   at .cctor()
+   --- End of inner exception stack trace ---
+
+21:20:44.393 VERDICT = FAIL-EXITED(code=-532462766)  (window=False cpu=0s busySamples=0/0 title=[])
+21:20:44.395 done

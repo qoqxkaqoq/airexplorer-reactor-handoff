@@ -1,0 +1,7 @@
+
+Unhandled Exception: System.TypeInitializationException: The type initializer for '<Module>' threw an exception. ---> System.InvalidProgramException: Common Language Runtime detected an invalid program.
+   at CloudClient.Templating.DispatcherInitializer.VerifyProcessor(IntPtr var1)
+   at CloudClient.Templating.DispatcherInitializer.DefineEfficientProfiler()
+   at .cctor()
+   --- End of inner exception stack trace ---
+

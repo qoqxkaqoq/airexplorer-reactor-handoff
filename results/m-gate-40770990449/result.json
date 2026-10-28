@@ -1,0 +1,13 @@
+{
+  "exe": "AirExplorer.exe",
+  "md5": "58FECAF3A17672BC1950A638F549A70D",
+  "hasWindow": false,
+  "windowTitle": "",
+  "firstWindowSec": -1,
+  "exited": true,
+  "exitCode": -532462766,
+  "maxCpuSec": 0.0,
+  "busySamples": 0,
+  "totalSamples": 0,
+  "verdict": "FAIL-EXITED(code=-532462766)"
+}
