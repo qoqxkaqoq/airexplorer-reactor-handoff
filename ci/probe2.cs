@@ -406,6 +406,37 @@ class Probe2 {
             }
         } catch (Exception ex) { Log("[mem] J3 FAIL " + Chain(ex)); }
 
+        // ---- M/N. 映像负载区 dump ×2 (PrepareMethod 全扫前后) → 本地 diff 定位条目表/逐条目解密 ----
+        // 依据: 4609 内存体 = call 0600419C; ret 桩 (JIT hook 标记); 唯一托管回填链 0600419C→060041FA→Marshal.WriteInt32
+        // .text payload RVA 0x620000-0x920000 (file 0x61E200-0x91E200); 映像内 VA = base+RVA
+        try {
+            IntPtr ibase = Marshal.GetHINSTANCE(mod);
+            Log("[mem] M. image base=" + ibase.ToInt64().ToString("X"));
+            byte[] img = new byte[0x340000];
+            var blk = new byte[0x10000];
+            for (int pass = 1; pass <= 2; pass++) {
+                if (pass == 2) {
+                    int pOK = 0, pFail = 0;
+                    for (int rid = 1; rid <= 30912; rid++) {
+                        MethodBase mb = null;
+                        try { mb = mod.ResolveMethod(0x06000000 | rid); } catch {}
+                        if (mb == null) continue;
+                        try { RuntimeHelpers.PrepareMethod(mb.MethodHandle); pOK++; } catch { pFail++; }
+                    }
+                    Log("[mem] N. PrepareMethod sweep: ok=" + pOK + " fail=" + pFail);
+                }
+                int readOK = 0;
+                for (int off = 0; off < img.Length; off += 0x10000) {
+                    bool ok = SafeRead(new IntPtr(ibase.ToInt64() + 0x600000 + off), blk);
+                    if (ok) { Buffer.BlockCopy(blk, 0, img, off, 0x10000); readOK++; }
+                }
+                Log("[mem] M" + pass + ". image dump [base+0x600000,+0x340000): blocksOK=" + readOK + "/52");
+                using (var md = System.Security.Cryptography.MD5.Create())
+                    Log("[mem] M" + pass + ". img md5=" + BitConverter.ToString(md.ComputeHash(img)).Replace("-", ""));
+                File.WriteAllBytes(Path.Combine(DumpDir, "img" + pass + ".bin"), img);
+            }
+        } catch (Exception ex) { Log("[mem] M FAIL " + Chain(ex)); }
+
         if (diT != null) {
             foreach (var f in diT.GetFields(flags)) DumpFieldValue(f.Name, f.GetValue(null), "stat2", 0);
         }

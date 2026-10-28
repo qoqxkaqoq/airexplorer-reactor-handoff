@@ -1342,3 +1342,23 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - step68_ksloc.py 证伪 payload 双重搜索（RVA 0x620000-0x920000 → file 0x61E200-0x91E200 共 3145728B：keystream 900k 字 + 16B 窗口 dict 784756 项 + 五目标 plain^ks 滑窗）→ 06002133/06002145 NONE（小目标 <4I 越界不修，假设已证伪）
 - probe2 mode=mem 基础设施摸清：B 节全方法 IL dump（v2 已证 16598/16598 与 dump 全等）内层 catch{} 静默失败是扩展点；C 节五目标 sanity 带错误日志；G/K2/I 已 invoke 驱动器 + ITP 预热
 - **下一步：probe2 mem 追加 J 节 = 缺体族重试（PrepareMethod 强制 JIT 触发 hook 回填 → GetMethodBody）+ 全量 diff（il_index 外新真体全 dump）+ 驱动器类静态字段全 dump（条目表候选）→ dispatch → 06003909 真体到手后静态模拟条目表**
+
+## step70-71（2026-10-28 续VI）：mem run 40713045622 —— C 线 forcedump 失败 ≠ 反射失败，22734 真体全量到手
+
+### J 节判定（run 40713045622，success）
+- J1：17 缺体族 token 全部 ResolveMethod 成功 + PrepareMethod OK（06003909=RequestVerifierTransformer::.ctor、06002BD1=InitializerReg::.ctor，其余 DispatcherInitializer 族）
+- **J2：new=0 fail=98 —— 驱动器×2+ITP×18+PrepareMethod×17 全部执行后，反射 GetMethodBody 仍读不到新真体**；B 节口径 resolved=30754 / bodies=22734（22734-16598=**6136 个真体 C 线 dump 没有**）
+- **核心反转：C 线 forcedump 失败名单（06003909/06002BD1/06004264 等）只是 C 线 dump 技术够不着，反射 GetMethodBody 直接可读**——step70_carve 从 il_all.bin 切出全部 6136 体（mem5/carve/，24B 头兼容），**06003909=2205B、06002BD1=817B 真体到手**
+- 06003909 解剖（546 insns）：平坦化 ctor，xor 链 12 处、62 call——**与 060041FA/WriteInt32/资源流零关联，不是 payload 回填驱动器**（先前假设证伪）
+- 五目标内存体全部在且尺寸与 dump 一致（212A=7B、2145=471B、2157=7B、2127=20B、2133=946B）
+
+### 全量体扫描（22734 体）定桩
+- `call 060041FA` 唯一托管调用方 = 0600419C（回填链铁证闭合：0600419C→060041FA→Marshal::WriteInt32 0A0009E2/0A000A24；WriteInt32 另一调用方 06004198/060041F9 值得查）
+- **4609 个内存体 = `call 0600419C; ret` 桩**（offset 0 命中）——这些是 JIT hook 标记体：真体在 .text payload，JIT 时由 hook（060041A3/getJit 链）替换供给；桩体从未真执行
+- 真无体族（null IL / throw）≈ 8020（含 0600419E 等 native stub）
+
+### 下一步（probe2 mem v6 = M/N 节，已上线）
+- **M1：映像 payload 区 dump（base+0x600000 起 0x340000，64KB 块 AV-proof）→ N：PrepareMethod 全扫 30912 → M2 再 dump** —— 本地 diff img2-img1-file 三方：
+  - img vs file 差异区 = 运行时解密/回填写入点（cctor 后条目若在原位解密 → 直接给出 token→RVA+offset 映射与逐条目 key=cipher^plain）
+  - img2-img1 差异 = PrepareMethod 触发的新解密条目（JIT hook 解密落点实证）
+- 期望产出：五目标（+4609 桩族）token→(file offset,len,key) 全表 → 离线重加密 → A1 出包
