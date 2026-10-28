@@ -1732,3 +1732,17 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - a7c 池空的候选解释（待 a1 istat 判定）：① 41EE 结果经 loc12@09f4 影响状态机 → 池装载路径；② a7c 等长票据 patch 使 41EE 变体丢了副作用
 - **决定性实验 dispatch（run 40764937940）：baseline vs a1 的 R5.I istat_all.txt**——若 a1 池**满** → a7c 池空纯属 patch 副作用 → a7g 设计 = a1 + 4192@04e0-04e3 `16 FE01 130C`(ldc.i4.0; ceq; stloc.s 12) → `26 16 130C 00`(pop; ldc.i4.0; stloc.s 12; nop，等长 4B，**净栈 0 平衡**) 使 loc12 恒 0；若 a1 池**空** → 41EE 结果真门控装载 → 需更深解剖 42AC 密钥静态初始化链
 - 工具债：step114-126 脚本落 `work/s5/step11x-12x_*.py`；il_index.tsv 列格式 = `tok\tclen\ttype\tmethod\tpos`
+
+### 决定性实验判定（run 40764937940，baseline vs a1，R5.G+I）
+| | D 段 invoke 4192 | G 段 _ExtractorVisitors | I 段 fields（GetValue 成功数 = cctor 活的度量） |
+|---|---|---|---|
+| baseline（md5=A12B5C57 确认） | guard1 OK | **BYTE[0]**（空！） | **6201**（全活） |
+| a1 | **THROW TypeInitializationException `<Module>` cctor → "AirExplorer is tampered." @ 4192** | READ-FAIL（cctor 死） | **2**（全灭） |
+| （历史 a7c） | OK | BYTE[0] | 5979（70 类型 cctor 死） |
+
+**模型终版（全部观测自洽）**：
+1. **4192 在 `<Module>::.cctor` 里被调**（a1 的 THROW 类型 = `<Module>`，非 DispatcherInitializer）——它 throw 则整个启动链初始化死 → fields=2
+2. **池装载有两条路**：① 4192 第一遍（boot）经 42AC→418b 装（上轮 baseline G 段=398794 证明）；② **4196 lazy-load 兜底**（本轮 baseline G=0 但 fields=6201 证明：I 段反射扫触发各类型 cctor → 4196 → lazy 装池 → 后续全活）。两轮 baseline G 段不同 = **4192 状态机路径非确定**（G 段时机竞态），非重点
+3. **fields 是权威健康度量**：baseline=6201 / a7c=5979（lazy-load 链死，42AC 密钥静态未初始化）/ a1=2（boot 链全死）
+4. **a7f（@00d3 恒 0）fields=5979**：只挡 throw 不够，41EE 结果经 @09f4 状态选择仍把 4192 引向"42AC 密钥不初始化"路径
+5. **a7g = a1 + 4192@04e0 `16 FE01 130C` → `26 16 130C 00`**（pop 弹 41EE 返回值；ldc.i4.0；stloc.s 12；nop。5B 等长，净栈 0）：41EE 真跑（RSA verify 副作用保留）+ loc12 恒 0 → @09f4 走 baseline 健康分支 → 42AC 密钥初始化 → 池装 → 发布候选。md5=F671C0012DCBB35F640D6B9AD6147C0C，dispatch 已发（r5）
