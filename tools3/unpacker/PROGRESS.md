@@ -1877,3 +1877,11 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 4528 = `.TemplateThread::DefineSetSet`（27546B/6819 ins，主 switch 176+ case，trap 分布于各 case 检查出口）
 - 42AD 跳板 gspec 0x2B000170 → **060042AC InstantiateStatelessUser**（42AC = 42AD 真身；4528 不在此链直接可见，调用者待查）
 - **修复路线回归 a10**（41ED 换体返回官方哈希 H）：verify 输入=H→verify=true→loc12=0→4192 健康；第二哨兵若读同一哈希链→官方 H→沉默。**前提待验证：第二哨兵的哈希输入来自 41ED 链而非独立重算文件**（下一步：4528 输入源解剖 + 42AC 0x2c 功能分支）
+
+### step160：4528 链与 42AC 调度层（第二哨兵结构收窄）
+- **4528 唯一调用者 = 06004523 GenerateAdaptableExtractor@01b9**（上游链待查）
+- **4528 census 无 FileStream/SHA1/41ED**——68 traps = 各 case 的服务调用检查出口，4528 是编排器而非直接文件哈希哨兵；68 死类型 ↔ 68 trap 待语义确认（可能 = 主库 68 类型的初始化编排）
+- 42AC 头部：`m_ProviderTemplateObj(锁对象) → 5214 ExecuteExplorer(Monitor)` + isObserverTemplate 一次性 gate → 42AF + **`_AdjustableTransformerElements[功能号]` 缓存表**（命中→leave 708 返回；未命中→`_TemplateController + 02002d88` 计算路径）
+- 42B0 = BinaryReader(MemoryStream) + 大量分散 ExecuteExplorer 调度器（060077cc/004834/005338/004734/0077b8/005364）+ 42B1——**逻辑在数据数组+反射层，IL 只见调度**（Reactor 控制流打散）
+- 42AC 无 ldc 0x2c 常量点——功能号经 ldarg.0 直接索引缓存表（0x2c 由 4195 传入）
+- **下一轮**：① xref 4523 上游（定位 4528 在装载链位置）；② 42AC @0048-0300 计算路径 + _AdjustableTransformerElements 填充者；③ a10 决策点：第二哨兵哈希输入若不在 41ED 链 → 需评估「哈希域外补丁」或解剖 4523→4528 服务检查的具体输入
