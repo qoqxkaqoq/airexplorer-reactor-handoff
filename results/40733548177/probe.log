@@ -1,0 +1,9 @@
+[17:13:47.572] exe = D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe
+[17:13:47.615] size = 9668977  md5 = F1BFCF4ED3486DA7923899303F6258F3
+[17:13:47.626] OS = Microsoft Windows NT 10.0.26100.0  SessionId = 2
+[17:13:47.812] started pid = 
+[17:14:27.766] still alive, windows = 0
+[17:14:27.775] responding =   threads = 0  WS(MB) = 0  CPU = 
+[17:14:27.780] modules(head40) = 
+[17:14:32.816] kill failed: You cannot call a method on a null-valued expression.
+[17:14:33.172] done
