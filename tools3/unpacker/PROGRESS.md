@@ -1471,3 +1471,24 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 唯一正解 = **哈希表同步（路径乙）**：让 SHA1 检查**真正通过**——重算被改数据域（res0 cipher 区 + 文件代码区）的哈希并回写 res5 哈希表，则 06004528 全部检查点自然放行，初始化完整保留
 - 侦察（本轮双空）：mem5/probe2.log grep `s1_bigarr` 无结果（res5 明文从未 dump 过）；06004528 反汇编**无任何 ldstr**（哈希表资源名不经字符串常量，或在 06004523 / 经 060077xx/060078xx 辅助族传参）
 - 下一步：追 06004528/06004523 的资源读取路径（GetManifestResourceStream MemberRef 调用点）→ 扩展 probe2 mem 模式 dump res5 明文 → ks_res5 → 解析哈希表格式 → 重算回写 → A6 出包 CI
+
+## step84-89（2026-10-28 续XIII）：4528 侦察 + a6 变量分离实验——4192 有实质副作用，路径乙回归
+
+### 4528 静态侦察（step84-88）
+- 4523/4524/4528 **无 ldstr、无资源类调用**（resource/manifest/assembly 全零命中）——res5 哈希表与 4528 无关，它是 06004192 独有（'ValidatorArgument.EmitterReporter' 全库仅 4192 引用）
+- 4528 = TemplateThread（30 方法）的 27546B 平坦化状态机：74 throw 全部 `newobj` 构造异常，操作 `identifiableGatewayProxy` 对象图（callvirt 虚分派 06004409/06004559 均 RVA=0 abstract）+ ExecuteExplorer 族 22 个 = **委托 Invoke 壳**（Reactor 委托混淆）
+- 4528 不引用 5 个被改方法 token、**无任何 RVA 匹配常量**——不是内嵌哈希域表的方法体校验器
+- 'AirExplorer' 消息串不在 #US（运行时生成——AssemblyName 或解密串）
+- a5 栈帧复核：NRE 抛在 GenerateAdaptableExtractor 帧本身（4523 已 JIT 内联）——pop 吞 rethrow 后 4528 检查失败留下半初始化状态，4524 用到 null
+
+### a6 变量分离实验（step89_patch6.py → run 40727334153）
+- 设计：baseline + **仅 06004192 ret**（五数据补丁不加）——分离「数据改」与「4192 缺失」两变量
+- 结果：`AG.cctor FAIL: System.Exception: AirExplorer @ GenerateAdaptableExtractor`——**与 a3（五补丁+4192ret）死法逐字一致**
+- **判定：4528 的触发与数据补丁无关——是 06004192 ret 的副作用缺失**。4192 不是纯检查器：它是每方法前导的运行时组件，ret 掉后全局状态缺失，4528 检测到
+- 时间线重排：a1（4192 完整+数据改）死于 4192 自己的 SHA1 哨兵（'is tampered.' @ InstantiateGlobalCalculator，未到 4528）；a3/a6（4192 ret）死于 4528（副作用缺失）
+
+### 结论：路径乙（哈希表同步）是唯一路线，且需同时满足两点
+1. **06004192 保持完整执行**（提供 4528 依赖的运行时副作用）
+2. **res5 哈希表同步**：重算被改数据域 SHA1 回写哈希表 → 4192 的 SHA1 校验自然通过 → 不抛 'is tampered.' → 副作用完整 → 4528 放行
+- 即正确形态 = **a1 + 哈希表同步**（A7），而非任何 4192 改动
+- 下一步：解剖 4192 的 SHA1 校验域（8970B 状态机：SHA1 创建@0x0b01、资源名@0x0be5、throw@0x0a9a——要找 ComputeHash 输入与哈希表读取/对比逻辑）→ 恢复 res5 明文（ks_res5）→ 解析哈希表 → 重算回写
