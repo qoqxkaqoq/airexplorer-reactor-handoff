@@ -1120,3 +1120,28 @@ S1(修复35: 22930 全注入) → S3(修复36/37: 3239 委托, 过滤 Dispose族
 - 原理：回填机制（Marshal.WriteInt32）会把 payload 解密内容再写一遍 = 与注入体相同 → 功能等同官方；磁盘上 22930 方法全明文
 - **CI s5probe A/B（m1b vs baseline_verified）dispatch 进行中**
 - 脚本：work/s5/{step18,19,20,21,22,23,23b,24,25}.py
+
+# m1b A/B 结果 + payload 位移理论 + m1r 终判（2026-10-28 晚）
+
+## m1b CI A/B（s5probe run 40637212213, mode=ag）
+- baseline_verified（金标准）：module cctor OK + AG.cctor OK + EVA OK + 字段明文全读出
+- m1b：module cctor FAIL `System.InvalidProgramException` → at `CloudClient.Templating.DispatcherInitializer.VerifyProcessor(060041A5)`
+- 与 Slayed 版（run 107）死点完全一致，但 Slayed 有签名污染混淆变量；m1b 零重映射 → 污染源只剩"dnlib 重写本身"
+
+## payload 位移理论（step24-29）
+- 三方体字节一致（step24/26/27）：060041A5/0600419C 注入体=dump 体=baseline 磁盘体 → 注入对这两个方法零改动，死因不在注入内容
+- cor20 布局对照（step25 + dnfile 解析）：
+  - baseline: md_rva=0x44B830 md_size=0x1D7990, res_rva=**0x6231C0** res_size=0x30510C, sn_rva=0x929A88, entry=0x929B9E（metadata 尾 0x6231C0 恰=资源起点，无缝衔接）
+  - m1b: md_rva=0x7418B0, res_rva=**0x43C7A0**（dnlib 把 resources 排到 metadata 之前，前移 0x1E6A20≈-1.99MB）, res_size=0x30510E（+2B 头部差）, sn_rva=0, entry=0x91924E
+  - 资源头 24B 逐字节相同 → **内容保留、仅位置变**；payload 区文件偏移整体位移 delta≈-1993247（0x700000~0x920000 区验证）
+- 理论：NRS 运行时按固定偏移读 3.2MB 加密 payload → 位移后读到垃圾 → 引导状态机失序 → VerifyProcessor 提前 JIT（StopClient 0600419F rva=0 须运行时先补体）→ InvalidProgramException
+
+## m1r 终判实验：纯 dnlib 重写零注入（run 40638675071, s5probe mode=ag）
+- m1r = baseline 仅经 dnlib ModuleWriter 重写（PreserveAll|KeepOldMaxStack 全旗标），零注入零补丁，md5=ab1f0c4a…，5362176B
+- dnlib 重写副作用：res_rva=0x34328（同样前移）、总大小 9.67MB→5.36MB（**丢弃 .text 中 4.2MB 非托管间隙内容**：NRS 原生引导/桩代码）、entry 重定位 0x510DDE、IAT/三节结构完好
+- CI 结果：`module cctor FAIL: BadImageFormatException 0x8007000B` + `RUN-FAIL TypeLoadException: The signature is incorrect.`
+- **死得比 m1b 更早**（连 cctor 都进不去；m1b 好歹跑到 VerifyProcessor）
+- **终判：dnlib ModuleWriter 重写 baseline 本身就致命，与注入无关**——m1r（零注入）BadImageFormat、m1b（全注入）InvalidProgram@VerifyProcessor，唯一可加载形态=未动过的 baseline_verified
+- "位移毒源"假说无法单独成立（m1r 同时叠加了原生内容丢失），m1c 文件级手术（恢复布局）前提不充分且需复原全部原生内容=工程黑洞
+- **M 线 dnlib 重写路线关闭。主线回到 surgical5 原位等长补丁**（surgical5.exe = baseline + P1-P4 + 182 陷阱补丁，零重排零丢失）
+- 脚本：work/s5/{m1r.cs,m1r.csproj}（dnlib 复用 tools3/unpacker/bin 的 dnlib.dll）
