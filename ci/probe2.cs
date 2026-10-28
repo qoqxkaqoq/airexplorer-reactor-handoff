@@ -213,6 +213,7 @@ class Probe2 {
     static bool LooksLikeHeap(ulong pv) { return pv > 0x10000UL && pv < 0x7FFFFFFEFFFFUL; }
     static int censHits = 0, censDumps = 0;
 
+    static ICryptoTransform _keepT;      // 自建 transform 标定引用 (布局校验)
     static void MemRun(Assembly asm) {
         try { Directory.CreateDirectory(DumpDir); } catch {}
         var mod = asm.GetModules()[0];
@@ -259,7 +260,8 @@ class Probe2 {
 
         // ---- D. MT 指针准备 (自建同型实例取 MethodTable*) ----
         ulong mtRMCrypt = 0, mtAesCSPCrypt = 0, mtRijndael = 0, mtAesCSP = 0;
-        try { mtRMCrypt = (ulong)new RijndaelManaged().CreateDecryptor(new byte[32], new byte[16]).GetType().TypeHandle.Value.ToInt64(); } catch (Exception ex) { Log("[mem] D RMCrypt FAIL " + ex.Message); }
+        try { _keepT = new RijndaelManaged().CreateDecryptor(new byte[32], new byte[16]); mtRMCrypt = (ulong)_keepT.GetType().TypeHandle.Value.ToInt64(); }
+        catch (Exception ex) { Log("[mem] D RMCrypt FAIL " + ex.Message); }
         try { mtAesCSPCrypt = (ulong)new AesCryptoServiceProvider().CreateDecryptor(new byte[32], new byte[16]).GetType().TypeHandle.Value.ToInt64(); } catch (Exception ex) { Log("[mem] D AesCSPCrypt FAIL " + ex.Message); }
         try { mtRijndael = (ulong)typeof(RijndaelManaged).TypeHandle.Value.ToInt64(); } catch {}
         try { mtAesCSP = (ulong)typeof(AesCryptoServiceProvider).TypeHandle.Value.ToInt64(); } catch {}
@@ -303,6 +305,31 @@ class Probe2 {
             catch (Exception ex) { Log("[mem] G. driver EX " + Chain(ex)); }
         } catch (Exception ex) { Log("[mem] G resolve FAIL " + ex.Message); }
         ScanHeap("s2", algMTs, algNames, mtByteArr, 60, 32 << 20, scanBuf, true);
+
+        // ---- K2. NoGC 区: 驱动器+ITP+立即扫描 (transform/Key/IV 原址残留, 零复用) ----
+        try {
+            bool nogc = false;
+            try { nogc = GC.TryStartNoGCRegion(256L << 20); } catch {}
+            if (!nogc) { try { nogc = GC.TryStartNoGCRegion(128L << 20); } catch {} }
+            Log("[mem] K2. NoGC=" + nogc);
+            try {
+                if (nogc) {
+                    try {
+                        var mD2 = (MethodInfo)mod.ResolveMethod(0x0600419C);
+                        Log("[mem] K2. driver (fresh)...");
+                        mD2.Invoke(null, null);
+                        Log("[mem] K2. driver OK");
+                    } catch (Exception ex) { Log("[mem] K2. driver EX " + Chain(ex)); }
+                    ScanHeap("censD", algMTs, algNames, mtByteArr, 40, 8 << 20, scanBuf, true);
+                }
+                var itp0 = (MethodInfo)mod.ResolveMethod(0x06004196);
+                var s0 = (string)itp0.Invoke(null, new object[] { 0 });
+                Log("[mem] K2. ITP(0) len=" + (s0 == null ? -1 : s0.Length));
+                ScanHeap("censI", algMTs, algNames, mtByteArr, 40, 8 << 20, scanBuf, true);
+            } finally {
+                if (nogc) { try { GC.EndNoGCRegion(); } catch {} }
+            }
+        } catch (Exception ex) { Log("[mem] K2 FAIL " + Chain(ex)); }
 
         // ---- I. ITP 预热 (res5 字符串池填充; 新鲜 token 收尾强制全解密路径) → stat2 ----
         try {
