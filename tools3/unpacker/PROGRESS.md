@@ -1362,3 +1362,25 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
   - img vs file 差异区 = 运行时解密/回填写入点（cctor 后条目若在原位解密 → 直接给出 token→RVA+offset 映射与逐条目 key=cipher^plain）
   - img2-img1 差异 = PrepareMethod 触发的新解密条目（JIT hook 解密落点实证）
 - 期望产出：五目标（+4609 桩族）token→(file offset,len,key) 全表 → 离线重加密 → A1 出包
+
+## step72-73（2026-10-28 续VII）：重建假说全库实锤 + A1 五补丁落地
+
+### step72：全库重建验证（work/s5/step72_rebuild.py）
+- **假说**：文件体@RVA = 桩覆写头 + 明文尾残留；res0 明文（DB）= 被覆写头（dword 序列）；运行时回填 = DB dwords 写回 RVA（0x00 dword 在 pad/桩区，两语义等价）→ 完整真体，**全程零密码学**
+- **验证：14252/14252 全字面重建，fail=0**（tiny 4200 + fat 10052）；DB 14407 条走库闭合 356328/356328，155 条 notok（反射未触达族，不阻塞）
+- 假阴性陷阱：真体 7B 按方法体 4B 对齐 → DB 存 8B（尾 pad 00）；bytearray 切片赋值越界把 buf 撑长 → 比较须截断到真体长
+- 语义注：DB 覆盖 = fat 头 12B + 码前缀（2133/2145/2127 n=5/5/6 → 覆盖码前 8/8/12B）；桩形态实测 `12 0000002a` 族（tiny codesize 4）与 `22 …`（codesize 8）
+- zero_kept=0：真体范围内无 0 dword → skip0/writeall 语义对补丁均安全
+
+### step73：ks 恢复 + 五补丁 → AirExplorer_a1.exe（work/s5/step73_patch.py + step72b_verify_a1.py）
+- **ks_res0 恢复**：ks = res0_cipher（ManifestResource `ErrorReceiver.ValidatorViewer` @file 0x6213C4，356328B）^ res0_plain；无简单周期（≤2048，AES 流类）→ 但位置静态 → **delta 补丁法成立：cipher' = cipher ^ (plain ^ plain') = cipher ^ delta**
+- 五补丁（全部实测命中预期字节）：
+  - P1 06002133@IL+0x290：file@0x194524 0x16→0x17（文件明文尾直改，DB 覆盖区外，运行时保留）
+  - P2 06002145@IL+0x120：file@0x197af0 0x16→0x17（同上）
+  - P3 0600212A：DB 条目 `1e027b3d0c00042a` → `0a172a00 00000000`（tiny `17 2a` = ldc.i4.1;ret）
+  - P4 06002157：`1e027b4b0c00042a` → `0a172a00 00000000`
+  - P5 06002127：24B 条目（fat 头 12B+码 12B）→ `0a172a00`+全 0（tiny 3B 体，JIT 只读 codesize=2）
+- delta 仅 28 字节；selftest：cipher' ^ ks == plain' 全 356328B True
+- **step72b 端到端复验（A1 exe + 修改后 DB）：ok=14247 fail=0（零附带损伤）+ targets_ok=5/5**
+- 产物：`exes/AirExplorer_a1.exe`（9668976B，md5 8D791E29DD905D952BF1B7A6FFA9BC78）；修改后 DB 落盘 mem5/res0_plain_a1.bin
+- res5 哨兵哈希表未动（本批补丁不触 res5 域）；下一步 dispatch s5probe（probe2 mode=ag）Windows 实测判定
