@@ -1612,3 +1612,18 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
   - a7c 活 → 4528 死因 = 3 目标行为变化（守卫网元一致性校验）→ 正解 = **外科式补丁**（保留真体，仅翻转特定分支），而非整体 `17 2a`
   - a7c 死 → 4528 连 4192 体区域也做完整性校验（整文件哈希网）→ 需定位 4528 的校验机制并废除
 - ui-probe 已派发
+
+## step108（2026-10-28 续XIX）：a7c 判定 = 死——4528 校验守卫网方法体本身
+
+### 判定（run 40735919859 UI Probe，candidate = exes/AirExplorer_a7c.exe，md5 7F59A039D1B53BC9812CFBDDDD410800 确认）
+- **死，与 a7probe v2/a3/a6 逐字同死法**：`System.Exception: AirExplorer @ TemplateThread.GenerateAdaptableExtractor` ← AG cctor 链
+- 判别矩阵右支成立。a7c 与 baseline **唯一差异 = 041EE VerifyHash 壳 23B**（res0 DB/资源/5 目标全零改动）
+- **推理链更新（四元组自洽）**：
+  - baseline（原版）活
+  - a1（补丁数据+真校验）死在 4192 自己 throw 'is tampered.'
+  - a7probe（3 目标补丁 + 041EE 恒真）死 4528
+  - **a7c（仅 041EE 恒真，语义与 baseline 等价——原版 VerifyHash 本就返回 true）仍死 4528**
+  - → 4528 消费的**不是** 4192 哈希值（a7c 中数据未补、哈希正确）、**不是** 3 目标行为（a7c 未补）、**不是** DispatcherInitializer 静态（R5.G 零差异）
+  - → **4528 对方法体字节本身做完整性校验，覆盖至少 041EE（守卫网成员）**；语义等价但字节不同即触发
+- 遗留疑点：4528 零 crypto MemberRef → 校验手段待查（反射调 crypto？或与 res0 DB 期望片段字节比对？——但 041EE 体在文件内明文，RVA 可能不在 DB）
+- 下一步：step109 = 解剖 4528 数据流（178 calls 找反射 crypto 证据；throw 前驱判定定位）→ 决定 a7d 实验（粒度二分：无关方法 pad 字节 vs 守卫网范围确认）
