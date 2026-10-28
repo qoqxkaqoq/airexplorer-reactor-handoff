@@ -1919,3 +1919,10 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **工具链坑**：① s5probe inputs.exes 必须传 JSON 短名数组（如 ["a13b_trapnop"]），完整路径会 matrix 求值失败 → jobs=0 + conclusion=failure；② workflow 旧版 timeout=120s 且 `| Out-String` 全缓冲——probe2 逐类型输出在卡死时不可见 → 已改流式（Tee|Write-Host）+ 300s 并 push（commit b7a00d5c）；③ run 状态可能长时间 in_progress 不翻转（step 实际早已 exit）——以日志/manifest 为准
 - **step172 a13c**：陷阱块改 `ldc.i4.0; stloc.s c; br 2309`（5B+5B？= 2+2+5=9B，br 4B delta=0x188e，+32B nop 填满 41B）——到达陷阱 = 校验失败但 c=0、直接跳 4192 公共出口 @2309 ret（避开后继死区）；@0a72 不在任何已知 try 区（读出的自洽 clause：try[0a9b+ab)/try[0be0+16a3)/try[00fb+894)/try[0b51+70) 均不含 0a72）→ leave 不合法用 br
 - `exes/AirExplorer_a13c_trapbr.exe` md5=06FB05263CEABCC30A092C1B3FE3EDB9，待 trap 判定
+
+### a13c trap 判定（run 40790464823）——br off-by-one 实锤 JIT 拒绝，a13d 修正
+- **a13c 结果 = probe2 正常跑完不挂死（DONE），但所有到达 4192 的 cctor 抛 InvalidProgramException（非 ' is tampered.'）**：`[trap] FAIL ... inner0 System.InvalidProgramException ... at DispatcherInitializer.InstantiateGlobalCalculator() at .cctor()`，6 fail 即停；GetTypes 到达（4883/4907，loaderEx 68→24）；module cctor FAIL 同因
+- **根因 = br delta off-by-one**：陷阱块 [0x0a72,0x0a9a)，重写后 `16@0a72; 13 0C@0a73; 38@0a75; delta@0a76-79` → **br 指令尾 = 0x0a7a**，脚本误用 next=0x0a7b（注释"br @0a76"错，实为 @0a75）→ delta=0x188E 实际落 **0x2308 = ret 前一字节（指令中间）** → JIT 校验失败拒编译整个 4192 → 所有触链 cctor InvalidProgramException
+- **积极信号**：陷阱块 nop 死区不再可达（br 生效方向对）；异常从 ' is tampered.' 变 InvalidProgram 证明 trap 路径已被截断，只差 1 字节落点
+- **step173 a13d**：动态定位出口——`@22f2 add; @22f3 stloc.0; @22f7 brtrue 12; @22fc br bdf; @2301 ldnull; @2302 stloc.s 1a; @2304 br fb; @2309 ret` → **ret@2309 实锤**，delta = 0x2309 - 0x0a7a = **0x188F**；`exes/AirExplorer_a13d_trapbr2.exe` md5=EF5472793091D6A812B11970D50D8703
+- 判定计划：s5probe mode=trap → 期望 InvalidProgram 消失、回归 ' is tampered.'（br 修正后 trap 路径落 ret → 4192 静默返回）或 ok 大幅回升
