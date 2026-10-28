@@ -278,6 +278,38 @@ class Probe2 {
                 }
             }
         } catch (Exception ex) { Log("[r5] E FAIL " + Chain(ex)); }
+
+        // R5.F 全资源落盘 + RSA 进程内解密 res5(私钥不可导出但 Decrypt 可用)
+        try {
+            foreach (var n in asm.GetManifestResourceNames()) {
+                var safe = n.Replace('.', '_');
+                using (var s = asm.GetManifestResourceStream(n)) {
+                    if (s == null) continue;
+                    var ms = new MemoryStream(); s.CopyTo(ms);
+                    File.WriteAllBytes(Path.Combine(DumpDir, "res_" + safe + ".bin"), ms.ToArray());
+                }
+            }
+            Log("[r5] F. all resources dumped");
+        } catch (Exception ex) { Log("[r5] F dump-all FAIL " + Chain(ex)); }
+        try {
+            var diT3 = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+            var f3 = diT3.GetField("m_ExtendedSchemaTemplate", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            var rsa = (RSACryptoServiceProvider)f3.GetValue(null);
+            var c5 = File.ReadAllBytes(Path.Combine(DumpDir, "res5_cipher.bin"));
+            foreach (var fOAEP in new[] { true, false }) {
+                try {
+                    var pt = rsa.Decrypt(c5, fOAEP);
+                    File.WriteAllBytes(Path.Combine(DumpDir, "res5_plain_oaep" + fOAEP + ".bin"), pt);
+                    Log("[r5] F. Decrypt OAEP=" + fOAEP + " OK len=" + pt.Length);
+                    Log("[r5] F. plain head=" + BitConverter.ToString(pt, 0, Math.Min(96, pt.Length)).Replace("-", ""));
+                    try {
+                        var hex = BitConverter.ToString(pt).Replace("-", "");
+                        Log("[r5] F. plain full=" + hex);
+                    } catch {}
+                } catch (Exception ex) { Log("[r5] F. OAEP=" + fOAEP + " FAIL " + (ex.InnerException ?? ex).Message); }
+            }
+            try { Log("[r5] F. CspKeyContainerInfo: name=" + rsa.CspKeyContainerInfo.KeyContainerName + " exportable=" + rsa.CspKeyContainerInfo.Exportable); } catch (Exception ex) { Log("[r5] F. CspInfo FAIL " + (ex.InnerException ?? ex).Message); }
+        } catch (Exception ex) { Log("[r5] F decrypt FAIL " + Chain(ex)); }
     }
 
     // ===================== mode=mem: 运行时提取 =====================
