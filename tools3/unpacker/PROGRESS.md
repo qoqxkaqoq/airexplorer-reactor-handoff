@@ -1267,3 +1267,22 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **probe2 mode=mem 上线（ci/probe2.cs，mcs 编译通过）**，七阶段：A=DispatcherInitializer 38 静态全 dump（递归 IDictionary/IEnumerable/byte[]→文件）；B=全 30912 方法 ResolveMethod+GetILAsByteArray→il_all.bin+il_index.tsv（内存真体 ground truth）；C=四目标已知明文 sanity；D=自建 RijndaelManaged/AesCryptoServiceProvider CreateDecryptor 同型实例取 transform MT*；E=module cctor 后自进程 VirtualQuery 堆扫描 S1（算法 MT + byte[] MT ≥32KB 大数组→解密明文流捕获）；F=invoke 0600418C 工厂→反射读返回对象 Key/IV/Mode；G=invoke 0600419C 驱动器→立即 S2 扫描 + transform MT 命中 768B 上下文+指针追链（Key/IV byte[] 剥出）；H=静态重 dump（stat2，diff 新增对象）
   - 工程细节：Marshal.UnsafeIntPtrAdd 换可移植 long 算术（mono 4.5 profile 无此 API）；mts[2] 访问加长度守卫；s5probe.yml artifact 增加 app\dump\**
 - **下一步**：push + dispatch `{"exes":["baseline_verified"],"mode":"mem"}` → 从 artifact 提取 AES Key/IV 或解密明文流 → 本地重加密路径定案
+
+## step59-60（2026-10-28 续III）：mem v2/v3 闭环 + TypeDesc 雷 + NoGC 确定性捕获（v4）
+
+### v2 run 40673429916（success）三大判定
+- **res5 明文到手**：`stat2__ExtractorVisitors.bin` = byte[398794]（= res5 原尺寸），head `000000007B007B0020006100...` = `[int32 0]` + UTF-16 `"{{ alg = {0}, typ = {1} }}"`（= ITP(0) 返回值）。res5 解密为**原位等长变换**（明文长 = 密文长），非 PKCS7 整体 CBC（398794 % 16 = 10，不可能整体 CBC）
+- **il_all 交叉验证全等**：mem B 阶段 16598 方法 IL vs dump_official_16598.zip = 16598/16598 逐字节全等，0 mismatch —— 运行时内存 IL = dump 铁证
+- **追链零命中根因（TypeDesc 雷）**：`typeof(byte[]).TypeHandle.Value` = 0x7FFFEAC84FCA **非 8 对齐** —— SZ 数组的 TypeHandle 是 **TypeDesc** 不是 MethodTable* → 堆扫描 `qword == mtByteArr` 永假 → bigarrKB=0、`_arr*` 零命中全部由此而来（v2 的 866 个 dump 全是伪命中/周边噪音；s1_RMCrypt_2 实为 CSP 名字符串伪命中）
+
+### v3 run 40675585407（success，修 MT 后）
+- **mtByteArr 修复**：GCHandle.AddrOfPinnedObject−16 取真 MT = 7FFAFE7E5848（8 对齐）；TypeHandle=7FFAFE794FCA（TypeDesc）对照在案
+- **修复后战果**：s1/s2/cens 三扫描 bigarr 14.2MB/15.6MB/13.2MB；**cens 发现 9+ 个 356328B（=res0 尺寸）缓冲，头全零 → 驱动器解密回填后主动清零**（防内存转储）；47915B（=res2）缓冲头非零（`3A9C012E...`，未清零，artifact 含全量）；res5 池 buffer 亦在 bigarr
+- **key 普查零命中**：4424 条 cens byte[16/24/32/64] hex 全收集（step59b），128 个唯一 byte[32] 全跑 CBC 关系测试 `D_K(C_i)⊕C_{i-1}==P_i`（res5 已知明文对，免 IV）→ 全部 0/8；byte[16] 作 AES-128 key 亦零命中 → **扫描时刻堆内无 key byte[]（transform 已死/复用）**
+- **seeded-PRNG 假设证伪（step60）**：KS=C⊕P 直接恢复 keystream（KS[0]=EF168180...），`round(KS[i])≠KS[i+1]`（0/11）→ res5 ≠ 带种子 PRNG-XOR，AES 路线坐实
+- **0600419C 静态新证据**：dis 内 `stelem.i1` + 常数运算（`ldc;ldc;add;stloc` / `ldc;ldc;sub`）**内联构造 byte[]**（loc4/loc33 两个数组 = Key/IV 的 IL 级构造）；CryptoStream 用 **Write 模式**（解密变换+写 MemoryStream 的经典姿势）；06004228/29/2A/2B = Write/ToArray/Flush 等 wrapper
+
+### v4（ec79e505，已 dispatch）：NoGC 确定性捕获
+- `GC.TryStartNoGCRegion(256MB→128MB)` 包住 **0600419C 驱动器 + ITP(0) + 立即双扫描（censD/censI）** —— NoGC 区内零 GC → transform/Key/IV byte[] 保证原址残留零复用，census 必中
+- 自建 transform 挂 `_keepT` 静态引用（s1 扫描可 chase 到 zeros[32]/zeros[16] = 布局标定）
+- 工具：work/s5/step59_verify_key.py（候选 key × res5 对 CBC/ECB 验证 + IV 恢复）、step60_ks.py（keystream 假设检验）
