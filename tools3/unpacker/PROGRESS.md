@@ -1384,3 +1384,25 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **step72b 端到端复验（A1 exe + 修改后 DB）：ok=14247 fail=0（零附带损伤）+ targets_ok=5/5**
 - 产物：`exes/AirExplorer_a1.exe`（9668976B，md5 8D791E29DD905D952BF1B7A6FFA9BC78）；修改后 DB 落盘 mem5/res0_plain_a1.bin
 - res5 哨兵哈希表未动（本批补丁不触 res5 域）；下一步 dispatch s5probe（probe2 mode=ag）Windows 实测判定
+
+## step74-76（2026-10-28 续VIII）：CI 判定 tampered 哨兵 + A2 杀哨兵出包
+
+### CI run 40718914660（a1 vs baseline_verified, probe2 ag）
+- baseline：全链路 OK（AG.cctor OK / EVA OK / CHAIN 全通）——五补丁的宿主链路本身健康
+- **a1：module cctor 推进到 `DispatcherInitializer.InstantiateGlobalCalculator` 后抛 `System.Exception: AirExplorer is tampered.`**
+  - 证明 res0 回填机制运行正常（方法体执行、代码链推进），死点 = res5 哨兵完整性检查
+- 五补丁的三个 bool 检查翻转不足以过哨兵 → 哨兵不是逻辑检查，是数据完整性校验
+
+### step74-75：06004192 哨兵解剖（step74_4192.py / step74b / step75_tok.py）
+- 06004192 = 控制流平坦化状态机（8970B，2521 指令，switch 分发 + var0 状态累加）
+- **唯一 throw** @IL 0x0a9a：`callvirt call call ldstr call newobj throw`
+- #US 解码实锤（a1 exe）：0x0a8b = `' is tampered.'`（String::Concat 拼前缀）；
+  **0x0b01 = `'SHA1'`**（newobj@0xbef = SHA1 实例）→ **哨兵 = SHA1 数据完整性校验**；
+  0x0be5 = `'ValidatorArgument.EmitterReporter'`（res5 哈希表资源名）
+- 全部 call 目标 = 060041C9-060041F2 自族状态机辅助 + 06004264 + 少量 MemberRef
+
+### step76：A2 = A1 + 杀哨兵（step76_patch2.py）
+- 补丁：06004192 IL 0x0a9a `7a`(throw) → `26`(pop)，file@0x3f9c76（文件明文尾直改，DB 覆盖区外）
+- 语义：SHA1 校验照样执行，失败异常对象 newobj 后被 pop 丢弃，初始化链继续——最小侵入
+- 产物：`exes/AirExplorer_a2.exe`（9668976B，md5 17D44EF4C102552D80774147079F2474）
+- 风险预案：若哨兵失败路径另设标志位/其他哨兵方法（06004264 等），CI 死点会前移暴露 → 迭代
