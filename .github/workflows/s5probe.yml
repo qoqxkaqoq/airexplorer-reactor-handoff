@@ -37,7 +37,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path app | Out-Null
           Copy-Item $cand app\AirExplorer.exe
           Set-Location app
-          $out = & ..\probe2.exe AirExplorer.exe "${{ inputs.mode }}" 120 2>&1 | Out-String
+          $out = & ..\probe2.exe AirExplorer.exe "${{ inputs.mode }}" 300 2>&1 | Out-String
           $out | Tee-Object -FilePath "..\s5probe.${{ matrix.exe }}.log"
           Write-Host $out
 
