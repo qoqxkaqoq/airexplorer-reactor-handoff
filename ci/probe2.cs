@@ -365,6 +365,40 @@ class Probe2 {
                 }
             } catch (Exception ex2) { Log("[r5] H post-dump FAIL " + Chain(ex2)); }
         } catch (Exception ex) { Log("[r5] H resolve FAIL " + ex.Message); }
+
+        // R5.I full-assembly static snapshot (diff baseline vs a7c -> 4528's real input)
+        try {
+            int ti = 0, fi = 0;
+            var sb3 = new StringBuilder();
+            foreach (var t in asm.GetTypes()) {
+                if (t.IsGenericType || t.IsArray) continue;
+                ti++;
+                System.Reflection.FieldInfo[] fs = null;
+                try { fs = t.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic); } catch { continue; }
+                foreach (var f in fs) {
+                    object v = null;
+                    try { v = f.GetValue(null); } catch (Exception) { continue; }
+                    fi++;
+                    string vs;
+                    if (v == null) vs = "NULL";
+                    else if (v is string) vs = "STR(" + ((string)v).Length + ")=" + (string)v;
+                    else if (v is byte[]) {
+                        var bb = (byte[])v;
+                        using (var mh = System.Security.Cryptography.MD5.Create())
+                            vs = "BYTE[" + bb.Length + "]md5=" + BitConverter.ToString(mh.ComputeHash(bb)).Replace("-", "");
+                        try { File.WriteAllBytes(Path.Combine(DumpDir, "istat_" + t.Name + "_" + f.Name + ".bin"), bb); } catch {}
+                    } else if (v is int || v is long || v is uint || v is bool || v is short || v is byte || v is char || v is ulong || v is double || v is float || v is sbyte || v is ushort) vs = "PRIM " + v.ToString();
+                    else if (v is Array) {
+                        var arr = (Array)v; var sb4 = new StringBuilder("ARR[" + arr.Length + "] "); int c3 = 0;
+                        foreach (var x in arr) { if (c3++ > 32) { sb4.Append("..."); break; } sb4.Append(x == null ? "null " : (x is byte ? ((byte)x).ToString("x2") + " " : x.ToString() + " ")); }
+                        vs = sb4.ToString();
+                    } else vs = "TYP " + v.GetType().FullName;
+                    sb3.Append("I. ").Append(t.FullName).Append("::").Append(f.Name).Append(" = ").Append(vs).AppendLine();
+                }
+            }
+            File.WriteAllText(Path.Combine(DumpDir, "istat_all.txt"), sb3.ToString());
+            Log("[r5] I. static snapshot: types=" + ti + " fields=" + fi + " -> istat_all.txt");
+        } catch (Exception ex) { Log("[r5] I FAIL " + Chain(ex)); }
     }
 
     // ===================== mode=mem: 运行时提取 =====================

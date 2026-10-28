@@ -1627,3 +1627,23 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
   - → **4528 对方法体字节本身做完整性校验，覆盖至少 041EE（守卫网成员）**；语义等价但字节不同即触发
 - 遗留疑点：4528 零 crypto MemberRef → 校验手段待查（反射调 crypto？或与 res0 DB 期望片段字节比对？——但 041EE 体在文件内明文，RVA 可能不在 DB）
 - 下一步：step109 = 解剖 4528 数据流（178 calls 找反射 crypto 证据；throw 前驱判定定位）→ 决定 a7d 实验（粒度二分：无关方法 pad 字节 vs 守卫网范围确认）
+
+## step109-110（2026-10-28 续XX）：4528 输入通道收敛——假说修正 + R5.I 全程序静态差分
+
+### step109 实锤
+- res0 DB 重解析（off=24 起，[rva][n][4n dwords]，0=保留原字节）：14407 条全量消费 ✓
+- **DB 覆盖：4192/4194/41CF/41EE NOT-IN-DB（文件内真体）；4528/452E/457D/457F/4581 + P1-P5 全 IN-DB**
+- 4528 文件内 = `12 0000002a` 桩（3×nop+ret），真体 DB 头 + dump 重建（fat 0x301b codesize 0x6b9a ✓）
+- **4528 高频调用全是 identifiableGatewayProxy 转发壳**：dA6wGcPgJA=4 ins（ldarg.0; ldfld proxy; callvirt 0A000467; ret）、PatchCommand/WriteLocator 同构；**06004509 Invoke = Rva=0 抽象接口方法**（不在 dump，impl 在运行时构造的处理器）
+- 4528 的 178 callees：41 IN-DB / 27 文件桩 / 55 文件"真体"（多为 0000172a 型桩，待细判）
+
+### step110 实锤（4192 全量 dump：8970B/2521 ins，/tmp/step110_4192.txt）
+- 4192 状态机：`VerifyHash(41EE) @04db → ldc.i4.0; ceq; stloc.s 12 → br 0977` —— **结果取反进状态机**；loc12 消费 @09f4 → 状态两路（brtrue/br）
+- 4192 静态写：**仅 m_ExtendedSchemaTemplate**（RSA 实例 @0054）；automatedError @0be0 是 **ldsfld 读**（全局错误槽，非 4192 专写）
+- ldstr×3：' is tampered.'（throw @0a8b，ldtoken 0x02000562 GetTypeFromHandle 链）、'SHA1'、'ValidatorArgument.EmitterReporter'
+- **核心假说（待 CI 实锤）：baseline 的 VerifyHash 可能本来就返回 false**（res5=公钥 XML，sig 无匹配私钥——校验设计成"期望 false"），ceq 取反 → loc12=1=正常；a7c 恒真 → loc12=0=异常 → 状态机走异路 → 可能写别的静态 → 4528 读到。该假说统一解释四元组（a6/a7probe/a7c 死、baseline 活），且 4528 读的是状态而非方法体字节
+- automatedError 消费者 = 0600419C(9992 ins)/4196/4181，被全程序 20 处调用 = 通用错误检查助手，非 4192→4528 专用通道
+
+### R5.I 新增（probe2.cs）
+- 4192 invoke 后**全程序静态快照**（所有非泛型类型 static 字段：NULL/STR/PRIM/BYTE-md5/ARR/TYP 落 istat_all.txt + istat_*.bin）→ baseline vs a7c 差分 = 4528 真实输入 hunt（R5.G 只 diff 了 DispatcherInitializer 是盲区）
+- dispatch：s5probe mode=r5 exes=[baseline_verified, a7c]
