@@ -1286,3 +1286,27 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - `GC.TryStartNoGCRegion(256MB→128MB)` 包住 **0600419C 驱动器 + ITP(0) + 立即双扫描（censD/censI）** —— NoGC 区内零 GC → transform/Key/IV byte[] 保证原址残留零复用，census 必中
 - 自建 transform 挂 `_keepT` 静态引用（s1 扫描可 chase 到 zeros[32]/zeros[16] = 布局标定）
 - 工具：work/s5/step59_verify_key.py（候选 key × res5 对 CBC/ECB 验证 + IV 恢复）、step60_ks.py（keystream 假设检验）
+
+## step62-67（2026-10-28 续IV）：expand256 修复 + f8 schedule 判定 + 0600419C 解释器资源流建模（0x53B8 越过）
+
+### expand256（step62_recover.py v2）修复与双验证
+- **根因**：SBOX 仿射变换用了截断左移 `(q<<1)^(q<<2)^(q<<3)^q^(q<<4)^0x63` —— 必须 8 位**循环旋转**（`_rotl8`）；SBOX[0] 单独补 0x63；RCON 需 10 项（AES-128 用到 Rcon[10]，之前只有 7 项 → IndexError）
+- 自测：FIPS spot（0x00→0x63, 0x53→0xED, 0x19→0xD4, 0xFF→0x16, 0x52→0x00）+ 置换性 + **pycryptodome 随机 key 对拍 128/192/256 全 PASS**（expand_nk 通用 nk=4/6/8）
+
+### cens_RMCrypt_23_f8 判定（step62b/63/64/64b）
+- **f8 dump = 完整合法前向 AES-256 schedule**：L1 恢复（解密布局→key）60/60 词全等；key = `d8f47a2592dd52540fa7d978fc90ce2acd3929d7c56520bcc89d1c26edcb810e`；L4 仅 8/60（解密轮布局不适用）
+- f8/f16 相等词 = [0,1,2,3,56,57,58,59]；f16 ≠ InvMix(f8) → f16 非同 key 解密布局
+- **res5 全模式零命中 → f8 key 不是 res5 的**：CBC（免 IV 链式验证 8 段）、CBC 前缀、CFB128、OFB 链、CTR 全部 0 命中；判定 = 其他组件（app 级）的 key
+- step52 静态 majority 数组（32B `5FAA2E64...`、16B `729D8D86...`）与 step66 解释器首批数组（32B `86BB632D...`、16B `D5C89673...`）对 res5 全模式亦零命中 → 证伪（BFS 候选集过宽 + GATE 假设路径不完整）
+
+### 0600419C 解释器（step66_interp419c.py）资源流建模 —— 数据链全解
+- 0x53B8 `ldlen 0` 中止根因：`loc100 = loc24 = RandomDecryptor.DecryptSimpleTransmitter((int)stream.Length)` —— **不是 AES，是 ReadBytes**：
+  - `06004217 MatchTransaction` = `GetManifestResourceStream` 转发（fe.ldarg×2 + callvirt 0A0009A7）
+  - `06004218/421A/421B` = 转发包装：`mEUCVjfljX()` → `_AdvancedDecryptor.BaseStream`、`0600421A` = `Stream::get_Length`、`0600421B` = `_AdvancedDecryptor.ReadBytes(len)`
+  - `06004264 RandomDecryptor::.ctor`（dump 缺体）= `this._AdvancedDecryptor(04001FE1) = new BinaryReader(argStream)`；RandomDecryptor 只是 BinaryReader 转发壳（与 agent.md 0600428A 结论一致）
+  - loc63 两分支：`new RandomDecryptor(automatedError.GetManifestResourceStream(<加密串 70000C5A>))` / `new RandomDecryptor(new MemoryStream(loc10))`
+- **#US 堆 Reactor 加密实证**：合法 UTF-16 串只走到 offset 0x20，0x70000C5A 处是密文 blob → 资源名静态不可得；改用资源尺寸/内容判定
+- 6 ManifestResource 全清单+尺寸：res0=356328 / res1=256 / res2=47915 / res3=26128 / res4=2337031 / **res5=GlobalValidator.FactoryValidator=398794**
+- 解释器新增：资源区全提取（cor20 ResourcesRva）+ ResStream/MemoryStream/BinaryReader 建模（get_BaseStream/get_Length/ReadBytes 流位置语义）+ RandomDecryptor ctor 特判；bug 修：`ldc.i4.s` 被 `ldc.i4.` 前缀分支截胡、brfalse/brtrue/beq/ceq 的**引用判空**（`if (bytes == null)` 编译形态：数组/Obj 直接判 non-null、intp==0 判 null）
+- **RESSEL=FactoryValidator 跑通**：0x53B8 越过；**数组1 = res5 密文原样**（398794B，head `808116EF...` 与 res5_FactoryValidator.bin 逐字节一致 → ReadBytes 副本实证，建模正确）；**数组2 = 解密输出缓冲**（写入进行中，161276 非零 ≈ writes=162124）
+- **判定：0600419C 体内自带 res5 解密循环**（密文读入 → 体内变换 → 输出缓冲），解释器正 300M 步全量执行中；跑完即得明文+算法（keystream/key 从 trace 提取）→ res5 重加密可行
