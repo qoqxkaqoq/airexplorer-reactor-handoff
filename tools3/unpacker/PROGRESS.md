@@ -1545,3 +1545,24 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 1. 解剖 041D6/041D9 → 对称算法类型（Aes/Rijndael/RC2?）、Mode 值、Key/IV 来源（IL 硬编码 stelem 数组 vs RSA 解密块 vs 资源头）
 2. res5 分 2×128B 块 Decrypt（PKCS1/OAEP 各试）→ 或 CI 进程内直接重放 4192 解密管线 dump 明文
 3. res5 明文 = 哈希表本体 → 解析格式（域标识+SHA1）→ 重算被改域回写 → A7 出包
+
+## step99-104（2026-10-28 续XVI）：res5 完全破解——res5=RSA 公钥 XML，A7 改道 VerifyHash 恒真
+
+### 工厂与管线实名（step99-101）
+- 060041D6→0600418C = **SymmetricAlgorithm 工厂**：AesCryptoServiceProvider（GenerateInternalFunction()真）/RijndaelManaged（假），双 Activator 兜底（System.Core 3.5/4.0）
+- 060041D9→060041A8 = `new MemoryStream()`（CryptoStream sink）
+- 4192 内管线实锤（0x21ff-0x2261）：`sym=工厂(); sym.set_Mode(1)=CBC; icrypt=sym.CreateDecryptor(loc16,loc5); ms=新MemoryStream; cs=CryptoStream(ms,icrypt,Write=1); cs.Write(loc22=res5 全256B); cs.FlushFinalBlock; UTF8.GetString(ms.ToArray) → rsa.FromXmlString(xml)`
+- 041DB=FlushFinalBlock、041DC=UTF8 getter、041DD=ms.ToArray(经041A9)、041DE=GetString、041DF=FromXmlString、041EC=Array.Reverse、041EA=TransformFinalBlock、041ED=get_Hash、**041EE=RSACryptoServiceProvider::VerifyHash**
+
+### res5 离线解密成功（step102-103，pycryptodome）
+- Key 数组 = loc16（32B，1aad `ldloc21→stloc16` 实锤）、IV = loc5（16B）；全部 226 个 stelem.i1 在**单个线性基本块 blk0be0**，块内 locals 跟踪 + last-wins → 确定性还原
+- **KEY = d8f47a2592dd52540fa7d978fc90ce2acd3929d7c56520bcc89d1c26edcb810e**（AES-256）
+- **IV = fc7ae2e62b0fdf486fc6230410a90b78**
+- res5 明文（PKCS7 pad 13×0x0D ✓）= **RSA-1024 公钥 XML**：`<RSAKeyValue><Modulus>zlUkMywGKDNbeJxH/zDotBK2KGsq3+fCyOXuaEHc38tL8CEymadHC4IvnPJ4ZHsuEIho1JVEVlJXYmPAkmiAboHJvV8Wnei2yfvn6tWX/Cnz7brgK+XlQVtVXlGUfU/ygy3kahGh10KW3yBgqs8Nuz7UlYBB7QLjBzyjFFy4chM=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>`
+- **结论：res5 不是哈希表 = RSA 公钥**（私钥不可得）→ "重算 SHA1 回写 res5" 路线作废
+
+### A7 新形态（step104）：a1 + VerifyHash 壳恒真
+- 060041EE 壳 @ fileoff 0x405ac8（tiny hdr 0x5A/22B：4×ldarg + callvirt VerifyHash + ret）→ 补丁为 tiny hdr 0x0A/2B：`ldc.i4.1; ret`（恒真）
+- 原理：4192 全部副作用（AES 解密 res5→FromXmlString→静态字段）原样保留（4528 依赖不变），仅篡改判定翻转；签名不可伪造但验证可废除
+- 产物 exes/AirExplorer_a7probe.exe（md5 F1BFCF4ED3486DA7923899303F6258F3）
+- 待 CI：ui-probe（probe.ps1 VERDICT）+ s5probe mode=r5（4192 进程内自检）
