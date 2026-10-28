@@ -1,0 +1,51 @@
+name: s5probe
+# surgical5 V6 矩阵: AG_CCTOR 探针 (probe2 mode=ag) 在 windows-latest + 真 .NET FW 4.8
+# 候选直接取本分支 exes/ (checkout 已含), 不再 raw 下载
+on:
+  workflow_dispatch:
+    inputs:
+      exes:
+        description: 'candidate short names (JSON array, e.g. ["v6b","v6a"])'
+        required: false
+        default: '["v6b","v6a","v3"]'
+      mode:
+        description: 'probe mode: ag | itp'
+        required: false
+        default: 'ag'
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        exe: ${{ fromJSON(inputs.exes) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run probe2
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /nologo /target:exe /out:probe2.exe /r:System.dll ci\probe2.cs 2>&1 | Out-String | Write-Host
+          $cand = "exes\AirExplorer_${{ matrix.exe }}.exe"
+          if (-not (Test-Path $cand)) { Write-Host "MISSING $cand"; exit 1 }
+          Write-Host ("md5 = " + (Get-FileHash $cand -Algorithm MD5).Hash)
+          New-Item -ItemType Directory -Force -Path app | Out-Null
+          Copy-Item $cand app\AirExplorer.exe
+          Set-Location app
+          $out = & ..\probe2.exe AirExplorer.exe "${{ inputs.mode }}" 120 2>&1 | Out-String
+          $out | Tee-Object -FilePath "..\s5probe.${{ matrix.exe }}.log"
+          Write-Host $out
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s5probe-${{ matrix.exe }}
+          path: |
+            s5probe.${{ matrix.exe }}.log
+            app\probe2.log
