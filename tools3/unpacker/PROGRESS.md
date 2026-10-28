@@ -1911,3 +1911,11 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **栈帧假象修正**：68 死异常全部出自 4192 陷阱块（4523 catch `stloc.s c` + `ldloc.s c; throw` 重写 StackTrace → 4523/4528 帧为重抛假象；"4523 内独立 PE 自检"作废）；@09b5 合法对照块（同三件套但走 41cc get_EntryPoint 存 loc2）
 - **step171 a13b 修复实验**：a13（@3f96bc 恒 loc12=0）+ **陷阱块 41B nop**（文件偏移 0x3F9C4E = IL0 0x3F91DC + 0x0a72；原始字节 `d0220600 0228cb41 0006...` 验证通过）→ `exes/AirExplorer_a13b_trapnop.exe` md5=B945033159531C041924CE901958F925
 - 判定计划：s5probe mode=trap → 期望 fail 类型从 68/6 停大幅收敛；若 ok 回升 → a15 = a1patch + a13b 组合
+
+### a13b trap 判定（run 40788918986/40789721087）——陷阱后继 = 死区，a13c 转向
+- **a13b（陷阱块 41B nop）trap run 两连挂**：probe2 `loaded AirExplorer` 后 120s/300s watchdog 零 [trap] 输出被杀——**GetTypes 都未到达**。对照 a13 同模式 ok=325 fail=6 → 唯一差异 = 陷阱块 nop 化
+- **结论：@0a72 陷阱块被真实到达后，nop 使 fall-through 落入 @0a9b "陷阱后继区"——官方永不执行的惩罚区（0a9b-0b46 在 catch try[0a9b+0xab) 保护内，cls=0x01000018），行为 = 挂死**。反证：4192 陷阱块在正常流程中真实可达（a13 文件改动 → 状态机走陷阱），且到达即死（throw 或挂）
+- **消息构造最终定案**：`<AssemblyName=AirExplorer> + " is tampered."`（41f0 GetName→41f1 get_Name→41f2 Concat），全库唯一 ' is tampered.' @4192:0a8b
+- **工具链坑**：① s5probe inputs.exes 必须传 JSON 短名数组（如 ["a13b_trapnop"]），完整路径会 matrix 求值失败 → jobs=0 + conclusion=failure；② workflow 旧版 timeout=120s 且 `| Out-String` 全缓冲——probe2 逐类型输出在卡死时不可见 → 已改流式（Tee|Write-Host）+ 300s 并 push（commit b7a00d5c）；③ run 状态可能长时间 in_progress 不翻转（step 实际早已 exit）——以日志/manifest 为准
+- **step172 a13c**：陷阱块改 `ldc.i4.0; stloc.s c; br 2309`（5B+5B？= 2+2+5=9B，br 4B delta=0x188e，+32B nop 填满 41B）——到达陷阱 = 校验失败但 c=0、直接跳 4192 公共出口 @2309 ret（避开后继死区）；@0a72 不在任何已知 try 区（读出的自洽 clause：try[0a9b+ab)/try[0be0+16a3)/try[00fb+894)/try[0b51+70) 均不含 0a72）→ leave 不合法用 br
+- `exes/AirExplorer_a13c_trapbr.exe` md5=06FB05263CEABCC30A092C1B3FE3EDB9，待 trap 判定
