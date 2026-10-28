@@ -1803,3 +1803,10 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **a10 方案定案（41ED 换体 = 哈希源豁免）**：41ED 体（10B：ldarg.0; callvirt get_Hash; ret）替换为「返回官方哈希 byte[20] 常量」。因 41ED 是全链唯一哈希出口：① verify 输入 = 官方哈希 → 必过官方签名；② 下游（4528/lazy 链）若经 41ED 链拿哈希 → 拿到官方值 → 5979 死因同时修复；③ **此后文件的任何改动（激活补丁/公钥替换/41ED 体本身）全部获得哨兵豁免**
 - **官方哈希 H 的获取**：H = SHA1(官方文件按 4192 的 PE 解析规则选段)。签名数学不可反推（需私钥）→ 唯一路径 = **静态重放 4192 哈希循环**（@010d dispatch + @03de/06ca/07a4/093b TransformBlock + @022c FinalBlock + BinaryReader PE 头解析），Python 实现对 baseline 文件算 H；判定器 = a10 CI（fields=6201 即 H 正确）
 - 41ED 新体 token 需求：newarr Byte + RuntimeHelpers.InitializeArray + FieldRVA 官方哈希数据字段 → 下一步全程序扫「ldtoken field + InitializeArray」模式借 token
+
+### a11/a12 判定（run 40770014841）+ istat 深挖：5979 = 主库装载链死，与补丁数据无关
+- **a11_dbonly（a9_p12 + @04e0）= 5979；a12_p12only（a9_all + @04e0）= 5979**——guard1 均 OK（哨兵绕过生效不 throw）
+- **交叉矩阵完结**：DB-only+绕过 = 5979；P1/P2-only+绕过 = 5979；全 5 补丁+绕过（a7g）= 5979 → **5979 表型与改了哪些数据无关**——哨兵绕过后是统一的下游死法
+- **istat 值差异（9 个）直击要害**：`_TemplateNotifierSize 75→0`（4196 字符串解密分发器一次都没成功调用）；`WrapperProvider::m_TesterSenders ARR[626]→ARR[0]`（主库 626 资源未装载）；`m_WrapperProfilerObj RuntimeAssembly→NULL`（主库 Assembly 未解出）；`_ExtractorVisitors BYTE[398794]→BYTE[0]`（池空，次生）。222 缺失字段分布于 70 类型 = 主库装载链（419C DefineEfficientProfiler AES 驱动器 → 42B3 密钥 → 42AC → 4195 → 4196 lazy）全灭
+- **哈希值出口复查结论**：4192 stsfld 仅 1 处（@22ae RSA）、返回 void、参数无 ref、get_Hash 唯一调用在 verify 内部 → **SHA1 哈希值物理上出不了 4192**——「哈希值 = 下游密钥」模型作废；5979 毒源是**数据改动的独立下游效应**（419C/428A 主库解密链的自身完整性机制，机制待查）
+- **盲点自查**：@04e0 补丁本身也是 5B 文件改动（4192 体在哨兵域）——5979 也可能是 @04e0 自毒 → **a13 = baseline + 仅 @04e0（step142_a13.py，md5=9590B04F77A71F58EA1025A95324CA35）已 dispatch**：6201 → @04e0 无毒，毒 = 数据改动（任意文件改动都毒下游）；5979 → **存在第二个哨兵**（419C/428A 内部，盯 4192 体区域）→ 多哨兵系统
