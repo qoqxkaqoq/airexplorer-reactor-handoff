@@ -183,7 +183,101 @@ class Probe2 {
             }
         } else if (mode == "mem") {
             MemRun(asm);
+        } else if (mode == "r5") {
+            R5Run(asm);
         }
+    }
+
+    // ===================== mode=r5: res5 哈希表资源 + RSA 静态实例抓取 =====================
+    static void R5Run(Assembly asm) {
+        var mod = asm.GetModules()[0];
+        try { Directory.CreateDirectory(DumpDir); } catch {}
+
+        // R5.A manifest 资源全清单 + res5 密文全 dump
+        try {
+            string[] names = asm.GetManifestResourceNames();
+            Log("[r5] A. manifest resources=" + names.Length);
+            foreach (var n in names) {
+                using (var s = asm.GetManifestResourceStream(n)) {
+                    if (s == null) { Log("[r5] A. res '" + n + "' NULL"); continue; }
+                    var ms = new MemoryStream();
+                    s.CopyTo(ms);
+                    var buf = ms.ToArray();
+                    Log("[r5] A. res '" + n + "' len=" + buf.Length + " head=" + BitConverter.ToString(buf, 0, Math.Min(32, buf.Length)).Replace("-", ""));
+                    if (n == "ValidatorArgument.EmitterReporter") {
+                        File.WriteAllBytes(Path.Combine(DumpDir, "res5_cipher.bin"), buf);
+                        Log("[r5] A. res5_cipher.bin written (" + buf.Length + "B)");
+                    }
+                }
+            }
+        } catch (Exception ex) { Log("[r5] A FAIL " + Chain(ex)); }
+
+        // R5.B DispatcherInitializer.m_ExtendedSchemaTemplate (RSA 静态实例) ExportParameters
+        try {
+            var diT = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+            var f = diT.GetField("m_ExtendedSchemaTemplate", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            var v = f.GetValue(null);
+            Log("[r5] B. m_ExtendedSchemaTemplate = " + (v == null ? "NULL" : v.GetType().FullName));
+            if (v is RSACryptoServiceProvider) {
+                var rsa = (RSACryptoServiceProvider)v;
+                var p = rsa.ExportParameters(true);
+                Log("[r5] B. RSA priv D=" + (p.D == null ? "NULL" : p.D.Length + "B") + " modulus=" + (p.Modulus == null ? "NULL" : p.Modulus.Length + "B"));
+                using (var w = new StreamWriter(Path.Combine(DumpDir, "rsa_params.txt"))) {
+                    w.WriteLine("D=" + (p.D == null ? "NULL" : BitConverter.ToString(p.D).Replace("-", "")));
+                    w.WriteLine("DP=" + (p.DP == null ? "NULL" : BitConverter.ToString(p.DP).Replace("-", "")));
+                    w.WriteLine("DQ=" + (p.DQ == null ? "NULL" : BitConverter.ToString(p.DQ).Replace("-", "")));
+                    w.WriteLine("Exponent=" + (p.Exponent == null ? "NULL" : BitConverter.ToString(p.Exponent).Replace("-", "")));
+                    w.WriteLine("InverseQ=" + (p.InverseQ == null ? "NULL" : BitConverter.ToString(p.InverseQ).Replace("-", "")));
+                    w.WriteLine("Modulus=" + (p.Modulus == null ? "NULL" : BitConverter.ToString(p.Modulus).Replace("-", "")));
+                    w.WriteLine("P=" + (p.P == null ? "NULL" : BitConverter.ToString(p.P).Replace("-", "")));
+                    w.WriteLine("Q=" + (p.Q == null ? "NULL" : BitConverter.ToString(p.Q).Replace("-", "")));
+                }
+                Log("[r5] B. rsa_params.txt written");
+            } else if (v != null) {
+                DumpFieldValue("rsaStatic", v, "r5b", 0);
+            }
+        } catch (Exception ex) { Log("[r5] B FAIL " + Chain(ex)); }
+
+        // R5.C 06004264 类型信息(BinaryReader 包装器)
+        try {
+            var mb = mod.ResolveMethod(0x06004264);
+            var dt = mb.DeclaringType;
+            Log("[r5] C. 06004264 decl=" + dt.FullName);
+            foreach (var ff in dt.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                Log("[r5] C. field " + ff.Name + " : " + ff.FieldType.FullName);
+        } catch (Exception ex) { Log("[r5] C FAIL " + ex.Message); }
+
+        // R5.D invoke 06004192(守卫1 自检: baseline 上应通过)
+        try {
+            var m = (MethodInfo)mod.ResolveMethod(0x06004192);
+            int np = m.GetParameters().Length;
+            Log("[r5] D. invoke 06004192 params=" + np);
+            try {
+                m.Invoke(null, np == 0 ? null : new object[np]);
+                Log("[r5] D. guard1 OK (no throw)");
+            } catch (Exception ex) { Log("[r5] D. guard1 THROW " + Chain(ex)); }
+        } catch (Exception ex) { Log("[r5] D resolve FAIL " + ex.Message); }
+
+        // R5.E automatedError 字段(4192 用它读资源)→ 同路径读 res5
+        try {
+            var diT2 = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+            var f2 = diT2.GetField("automatedError", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            var v2 = f2.GetValue(null);
+            Log("[r5] E. automatedError = " + (v2 == null ? "NULL" : v2.GetType().FullName));
+            if (v2 is Assembly) {
+                var a2 = (Assembly)v2;
+                try { Log("[r5] E. location=" + a2.Location); } catch {}
+                using (var s = a2.GetManifestResourceStream("ValidatorArgument.EmitterReporter")) {
+                    if (s == null) Log("[r5] E. res5 via automatedError = NULL");
+                    else {
+                        var ms = new MemoryStream(); s.CopyTo(ms);
+                        var buf = ms.ToArray();
+                        File.WriteAllBytes(Path.Combine(DumpDir, "res5_via_asm.bin"), buf);
+                        Log("[r5] E. res5 via asm len=" + buf.Length);
+                    }
+                }
+            }
+        } catch (Exception ex) { Log("[r5] E FAIL " + Chain(ex)); }
     }
 
     // ===================== mode=mem: 运行时提取 =====================
