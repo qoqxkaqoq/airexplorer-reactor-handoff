@@ -310,6 +310,61 @@ class Probe2 {
             }
             try { Log("[r5] F. CspKeyContainerInfo: name=" + rsa.CspKeyContainerInfo.KeyContainerName + " exportable=" + rsa.CspKeyContainerInfo.Exportable); } catch (Exception ex) { Log("[r5] F. CspInfo FAIL " + (ex.InnerException ?? ex).Message); }
         } catch (Exception ex) { Log("[r5] F decrypt FAIL " + Chain(ex)); }
+
+        // R5.G 4192 跑完后 DispatcherInitializer 全静态字段 dump (baseline vs a7probe 差分 → 4528 的输入)
+        try {
+            var diT4 = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+            var fs4 = diT4.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            int gi = 0;
+            foreach (var f in fs4) {
+                object v = null; string vs;
+                try { v = f.GetValue(null); } catch (Exception ex) { Log("[r5] G. " + f.Name + " READ-FAIL " + ex.GetType().Name); continue; }
+                if (v == null) vs = "NULL";
+                else if (v is string) vs = "STR(" + ((string)v).Length + ")=" + (string)v;
+                else if (v is byte[]) {
+                    var bb = (byte[])v;
+                    vs = "BYTE[" + bb.Length + "]=" + BitConverter.ToString(bb, 0, Math.Min(256, bb.Length)).Replace("-", "");
+                    try { File.WriteAllBytes(Path.Combine(DumpDir, "gstat_" + f.Name + ".bin"), bb); } catch {}
+                } else if (v is Array) {
+                    var arr = (Array)v;
+                    var sb2 = new StringBuilder("ARR[" + arr.Length + "] ");
+                    int c2 = 0;
+                    foreach (var x in arr) { if (c2++ > 48) { sb2.Append("..."); break; } sb2.Append(x == null ? "null " : (x is byte ? ((byte)x).ToString("x2") + " " : x.ToString() + " ")); }
+                    vs = sb2.ToString();
+                } else if (v is int || v is long || v is uint || v is bool || v is short || v is byte || v is char || v is ulong || v is IntPtr) vs = "PRIM " + v.ToString();
+                else vs = v.GetType().FullName;
+                Log("[r5] G. " + f.Name + " = " + vs);
+                gi++;
+            }
+            Log("[r5] G. total statics=" + gi);
+        } catch (Exception ex) { Log("[r5] G FAIL " + Chain(ex)); }
+
+        // R5.H invoke 06004528 GenerateAdaptableExtractor (二层守卫) → 抓异常 + 静态再 dump
+        try {
+            var m2 = (MethodInfo)mod.ResolveMethod(0x06004528);
+            var ps = m2.GetParameters();
+            Log("[r5] H. invoke 06004528 params=" + ps.Length + (ps.Length > 0 ? " p0=" + ps[0].ParameterType.FullName + (ps[0].ParameterType.IsByRef ? "(byref)" : "") : ""));
+            object[] args2 = new object[ps.Length];
+            for (int i2 = 0; i2 < ps.Length; i2++) if (ps[i2].ParameterType.IsValueType) args2[i2] = Activator.CreateInstance(ps[i2].ParameterType);
+            try {
+                m2.Invoke(null, args2);
+                Log("[r5] H. 4528 OK (no throw)");
+                if (ps.Length > 0 && ps[0].ParameterType.IsByRef) Log("[r5] H. byref p0 after=" + args2[0]);
+            } catch (Exception ex) { Log("[r5] H. 4528 THROW " + Chain(ex)); }
+            try {
+                var diT5 = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+                foreach (var f in diT5.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)) {
+                    object v = null;
+                    try { v = f.GetValue(null); } catch { continue; }
+                    if (v is string) Log("[r5] H. post " + f.Name + " = STR(" + ((string)v).Length + ")=" + (string)v);
+                    else if (v is byte[]) {
+                        var bb = (byte[])v;
+                        try { File.WriteAllBytes(Path.Combine(DumpDir, "hstat_" + f.Name + ".bin"), bb); } catch {}
+                        Log("[r5] H. post " + f.Name + " = BYTE[" + bb.Length + "] " + BitConverter.ToString(bb, 0, Math.Min(64, bb.Length)).Replace("-", ""));
+                    }
+                }
+            } catch (Exception ex2) { Log("[r5] H post-dump FAIL " + Chain(ex2)); }
+        } catch (Exception ex) { Log("[r5] H resolve FAIL " + ex.Message); }
     }
 
     // ===================== mode=mem: 运行时提取 =====================
