@@ -1796,3 +1796,10 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
   - p12=2 & all=2 → 全文件哈希哨兵（或双毒）→ 走哈希替换路线（41ED 换体/官方哈希常量）
   - p12=6201 & all=6201 → 与 a8 矛盾，预期不可能
 - run 已 dispatch（exes=["a9_p12","a9_all"], mode=r5）
+
+### a9 判定（run 40768762384）+ step139 xref：文件级补丁路线全灭，41ED 哈希源替换定案
+- **a9 交叉对分 = 全 2（双双 throw "is tampered." @4192）**：a9_p12（仅 DB 区 28B 改动）throw；a9_all（仅 P1/P2 两字节）throw → **哈希哨兵域同时覆盖 .text 方法体明文区（0x194524/0x197AF0）与 FieldRVA 数据区（0x6444C0-0x6448FA）→ 实际 = 全文件哈希**。四象限落在「p12=2 & all=2」格：文件级数据补丁（A1 五补丁/A2 公钥替换/DB 修复）全部撞哨兵，无一幸免
+- **step139 全程序 xref（step139_xref.py）**：SHA1 哨兵链完全封闭——41ce(SHA1.Create)/41cf(MapNameToOID)/41e2(TransformBlock×4)/41ea(TransformFinalBlock)/41eb(ReadBytes 签名)/41ed(get_Hash)/41ee(VerifyHash) **全部仅被 4192 调用**；`HashAlgorithm::get_Hash`(0A000A0B) 全程序唯一调用点 = 41ED@0004。业务侧另有 SHA1Managed/ComputeHash（0600418e/4190 等）但与文件哨兵无关
+- **a10 方案定案（41ED 换体 = 哈希源豁免）**：41ED 体（10B：ldarg.0; callvirt get_Hash; ret）替换为「返回官方哈希 byte[20] 常量」。因 41ED 是全链唯一哈希出口：① verify 输入 = 官方哈希 → 必过官方签名；② 下游（4528/lazy 链）若经 41ED 链拿哈希 → 拿到官方值 → 5979 死因同时修复；③ **此后文件的任何改动（激活补丁/公钥替换/41ED 体本身）全部获得哨兵豁免**
+- **官方哈希 H 的获取**：H = SHA1(官方文件按 4192 的 PE 解析规则选段)。签名数学不可反推（需私钥）→ 唯一路径 = **静态重放 4192 哈希循环**（@010d dispatch + @03de/06ca/07a4/093b TransformBlock + @022c FinalBlock + BinaryReader PE 头解析），Python 实现对 baseline 文件算 H；判定器 = a10 CI（fields=6201 即 H 正确）
+- 41ED 新体 token 需求：newarr Byte + RuntimeHelpers.InitializeArray + FieldRVA 官方哈希数据字段 → 下一步全程序扫「ldtoken field + InitializeArray」模式借 token
