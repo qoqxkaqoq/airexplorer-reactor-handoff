@@ -1442,3 +1442,19 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 06004528 体 → 裸 ret：DB 条目（n=5，原头 `1b3008009a6b0000580c0011`）dwords[0] → `06 2a`（tiny ret），cipher XOR delta 16 字节
 - 产物：`exes/AirExplorer_a4.exe`（md5 37C5FDCF3AA2D341DE2411C180FC06C0）+ mem5/res0_plain_a4.bin
 - 06004523 的 rethrow 依赖 try 内异常，主守卫死后自然短路（预判，待 CI 验证）
+
+## step82（2026-10-28 续XI）：a4 判定 06004528=业务混合体 + A5 吞异常策略
+
+### CI run 40723706656（a4）：tampered 消失但换死法
+- `AirExplorer` 哨兵异常**消失**（二层守卫检查死透）
+- 新死法：`<Module>{a8c2e9b2-...}`（Reactor 注入类型）的 **cctor 抛 ArgumentOutOfRangeException**（List index），AG.cctor 链死
+- 判定：**06004528 不是纯守卫——是「业务初始化 + 74 检查点」混合体**（calls 大量 060077xx/060078xx 辅助族）；ret 它导致初始化数据缺失 → guid cctor 集合越界
+- 结论：套娃 ret 路径对此层失效，必须保 06004528 完整执行
+
+### A5（step82_patch5.py）：保初始化 + 吞异常
+- 06004528 **恢复原体**（a4 作废）
+- 杀 06004523 的 catch-rethrow：THROW@IL 0x046f = `ldloc.s 12; throw`（catch 内重抛）→ `7a`→`26`(pop)，file@0x41d50b（文件明文尾直改）
+- pop 语义安全：06004523 是普通 catch handler（非状态机），pop 后正常离开 handler 继续方法后文，无死循环风险（与 a2 的失败模式本质不同）
+- 06004528 检查失败异常 → try 内抛 → catch handler → pop 吞掉 → 06004523 继续 → 初始化完整保留
+- 产物：`exes/AirExplorer_a5.exe`（md5 2EDF7B993E68E188E1BB030DD29662FB）= A1 + [4192 ret] + [4523 rethrow pop]
+- 风险：06004528 检查失败可能在抛出前已置坏部分状态（后续功能验证看 probe2 ag 输出字段）
