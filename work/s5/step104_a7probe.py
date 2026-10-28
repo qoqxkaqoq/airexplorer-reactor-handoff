@@ -18,10 +18,10 @@ OLD_BODY = bytes.fromhex('fe090000fe090100fe090200fe0903006f0c0a000a2a')
 
 exe = bytearray(open(SRC, 'rb').read())
 assert exe[FO] == OLD_HDR and exe[FO + 1:FO + 1 + 22] == OLD_BODY, exe[FO:FO + 24].hex()
-exe[FO] = 0x0A          # tiny hdr, codesize=2
-exe[FO + 1] = 0x17      # ldc.i4.1  (true)
-exe[FO + 2] = 0x2A      # ret
-exe[FO + 3:FO + 1 + 22] = b'\x00' * 21
+SRCLEN = len(exe)
+# replace the full 23-byte body region in-place: hdr + 2B code + 20B zero pad
+exe[FO:FO + 23] = bytes([0x0A, 0x17, 0x2A]) + b'\x00' * 20
+assert len(exe) == SRCLEN, 'length changed! %d' % len(exe)
 open(OUT, 'wb').write(bytes(exe))
 print('[a7probe] %s size=%d md5=%s' % (OUT, len(exe), hashlib.md5(bytes(exe)).hexdigest().upper()))
 print('[a7probe] patched head:', bytes(exe[FO:FO + 12]).hex())

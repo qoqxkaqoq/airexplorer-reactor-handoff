@@ -1566,3 +1566,9 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 原理：4192 全部副作用（AES 解密 res5→FromXmlString→静态字段）原样保留（4528 依赖不变），仅篡改判定翻转；签名不可伪造但验证可废除
 - 产物 exes/AirExplorer_a7probe.exe（md5 F1BFCF4ED3486DA7923899303F6258F3）
 - 待 CI：ui-probe（probe.ps1 VERDICT）+ s5probe mode=r5（4192 进程内自检）
+
+### step104b：a7probe v1 修复（CI run 40733531139 判定）
+- v1（F1BFCF4E...）CI 死于 **BadImageFormatException**（"expected to contain an assembly manifest"）——根因 = bytearray 切片赋值长度不匹配：FO+3..FO+23 是 20B 槽却赋了 21B 零 → **文件被插入 1 字节整体后移**（9668976→9668977）
+- v2（**22D3D64C59DC2D210D980EE8C37743B3**）改为整段 23B 原位替换（hdr 0x0A + `17 2a` + 20×00），dnfile 解析通过
+- 教训：**bytearray 切片赋值长度必须严格等于槽长**，否则 resize 污染整文件
+- UI Probe run 40733548177 用的是 v1 污染版，作废；v2 重派 s5probe r5 + ui-probe
