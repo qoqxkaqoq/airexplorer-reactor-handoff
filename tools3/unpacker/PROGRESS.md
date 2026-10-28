@@ -1693,3 +1693,42 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - md5=6D49F1DF68F0DE7B64FC60CDBE43CA81
 - 预期：throw 块死代码化，**41EE 委托照常执行**（blob 装载副作用保留），返回值被无视
 - 判读：若 D 段不 throw 且 _ExtractorVisitors=BYTE[398794] → 活，发布候选；若死法移到 4528/AG（blob 没装）→ 委托副作用依赖判定结果 → 需定位委托真体验证逻辑（060041ED/0A000A0C 链）
+
+## step112-126（2026-10-29 续XXII）：a7e/a7f 判定 + 字符串池全链解剖（41EE=RSA VerifyHash 真身 + 4196 双守卫结构）
+
+### a7e 判定（run 40762444755）——FAIL，IL 补丁栈平衡教训
+- 死法 `InvalidProgramException`（boot 即死）：`brfalse→br` 等长换 opcode **不弹栈**（brfalse 弹 1、br 弹 0）→ 合并点 0x12 栈失衡 → JIT 拒整个方法
+- 教训：**等长 ≠ 栈平衡**。改分支必须保"弹出数"一致，或改为改数据流（压栈值）
+
+### a7f 判定（run 40762753705）——throw 已除但 blob 仍空
+- a7f = a1 + @00d3 `ldloc.s 12`(11 0C) → `ldc.i4.0; nop`(16 00)（压栈恒 0）@ file off 0x3F92AF；md5=83154E45358BBA2525ABAD253AD34396
+- 结果：**不 throw ✓，但 fields=5979 = a7c 表型（_ExtractorVisitors=BYTE[0]，blob 没装）**
+- 结论：a1 的池空不依赖 throw 守卫；**装载门在 4192 状态机更深处（41EE 结果消费点 @09f4）**
+
+### 41EE 真身定案（step114-119，token 级确认）
+- `0x04001FCD = m_ExtendedSchemaTemplate`、`0x04001FD0 = _ExtractorVisitors`（dnfile FieldList 迭代坑：fl 是 list、元素是 MDTableIndex(.row/.row_index)、Name 要 str()）
+- **060041EE VerifyDynamicStrategy = `ldarg×4; callvirt RSACryptoServiceProvider::VerifyHash; ret`**（0A000A0C 确认 = RSACryptoServiceProvider::VerifyHash；060041ED VerifyVirtualMatcher = `m_ExtendedSchemaTemplate.VerifyHash(rgbHash, alg, sig)` 转发）
+- 全程序 IL 扫描：41ED 唯一引用 = 4192@04d2；41EE 唯一引用 = 4192@04db —— 都是 4192 直调，无委托表
+- **m_ExtendedSchemaTemplate 的 stsfld 全程序仅 1 处 = 4192@22ae**（前置 `newobj 0A0009A5` = RSA ctor；cctor 06004181 里是 ldnull 占位）；4192 里 @2204-2266 是 41D7-41E1 stub 族调用现场
+
+### _ExtractorVisitors 写点定位（step115-117）
+- stsfld 仅 2 处：06004181（**cctor：`ldc.i4.0; newarr; stsfld` = 空数组占位**）+ **0600418b GenerateAlphabeticVerifier**（@0392，解密循环 `and/shr.un/conv.u1/stelem.i1`+`blt`，920B/425 ins）
+- **0600418b 全 IL 零引用**（call/callvirt/ldftn 全 0，扫描器经 41ED/41EE sanity check 验证正确）→ 只能被反射调用（Necrobit 间接层）
+- 读点 06004196：4 处 ldsfld（@0000/00eb/013d/018b）
+
+### 字符串池全链解剖（step120-125，Necrobit 间接层全貌）
+- **06004196 InstantiateTransferableProgram = 字符串解密分发器**：全程序 **21295 个调用点**（形态：`常量算术(shl/xor) ^ ldsfld 密钥静态 → call 4196`，如 0600000a@001d）。4196 逻辑：
+  - 池空（ldlen==0）→ lazy init 两个缓存字典 + `GetManifestResourceStream`（资源名是普通 ldstr）+ **call 06004195 SearchStrategy（真装载）**
+  - `_TemplateNotifierSize >= N` → 跳过反调试段；否则 **StackFrame 调用者程序集校验**（GetName().Name 对比 + 引用程序集遍历，失败 newobj Exception throw）→ 通过后 `_TemplateNotifierSize++`（**75 vs 0 = 4196 成功调用计数器**）
+  - Monitor 锁内：`BitConverter.ToInt32(blob, arg0)`=len → `Array.Copy(blob, arg0+4, ...)` → `Encoding.Unicode.GetString` = **池布局 = [int32 len][UTF-16LE str] 链表**
+  - @012f call 06004282 DirectDefinition（= `nop; ret` 空方法，占位）
+- **06004195 SearchStrategy = 反射转发器**：打包 `object[]` → call 060042ad InstantiateAccessibleProcessor(argc, args, null)
+- 060042ad = thin wrapper → **MethodSpec 2B000170** = 060042AC InstantiateStatelessUser<T>（泛型实例）
+- **060042AC = Necrobit 通用间接调用核心**（3038B/923 ins）：`ExecuteExplorer` 族解密器（06005214/0077b8/0053a4/00463c/004f8c...）从密钥静态（m_ProviderTemplateObj/_TemplateController/templateStateArray/ValidateAdaptableAuditorComparator...）动态解出 Type/Method/Field，`_AdjustableTransformerElements[argc]` 参数缓存，`ldtoken`+MatchRunner 类型识别 → 最终反射构造调用
+- **blob 的真装载链 = 4196 lazy → 4195 → 42ad → 42AC（反射解密核心）**；42AC 依赖的密钥静态若未初始化 → lazy 链死 → 池永远空
+
+### a7c 矛盾点新认识 + a7g 候选
+- **@00d3 与 @09f4 都是 switch 状态入口**：@00d3 = 早期状态 throw 守卫（此刻 41EE 尚未跑，loc12=初始 0）→ a7f 杀它只挡 throw；@09f4 = 41EE 结果消费点（状态选择，决定后续是否走装载路径）
+- a7c 池空的候选解释（待 a1 istat 判定）：① 41EE 结果经 loc12@09f4 影响状态机 → 池装载路径；② a7c 等长票据 patch 使 41EE 变体丢了副作用
+- **决定性实验 dispatch（run 40764937940）：baseline vs a1 的 R5.I istat_all.txt**——若 a1 池**满** → a7c 池空纯属 patch 副作用 → a7g 设计 = a1 + 4192@04e0-04e3 `16 FE01 130C`(ldc.i4.0; ceq; stloc.s 12) → `26 16 130C 00`(pop; ldc.i4.0; stloc.s 12; nop，等长 4B，**净栈 0 平衡**) 使 loc12 恒 0；若 a1 池**空** → 41EE 结果真门控装载 → 需更深解剖 42AC 密钥静态初始化链
+- 工具债：step114-126 脚本落 `work/s5/step11x-12x_*.py`；il_index.tsv 列格式 = `tok\tclen\ttype\tmethod\tpos`
