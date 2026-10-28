@@ -1572,3 +1572,15 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - v2（**22D3D64C59DC2D210D980EE8C37743B3**）改为整段 23B 原位替换（hdr 0x0A + `17 2a` + 20×00），dnfile 解析通过
 - 教训：**bytearray 切片赋值长度必须严格等于槽长**，否则 resize 污染整文件
 - UI Probe run 40733548177 用的是 v1 污染版，作废；v2 重派 s5probe r5 + ui-probe
+
+## step105（2026-10-28 续XVII）：a7probe v2 CI 判定——VerifyHash 恒真生效，但 4528 独立检测仍在
+
+### 判定（run 40734008604 UI Probe，md5 22D3D64C59DC2D210D980EE8C37743B3 确认）
+- **4192 不再抛 'is tampered.'** —— 041EE VerifyHash 壳恒真补丁本身有效，4192 完整跑完（AES 解密 res5 → FromXmlString → 副作用全在）
+- 但死法与 a3/a6 逐字相同：`System.Exception: AirExplorer @ TemplateThread.GenerateAdaptableExtractor` ← AG cctor 链
+- **推理链闭合**：
+  - a6（干净数据 + 4192 ret）死 4528 → 副作用缺失
+  - a7probe（补丁数据 + 4192 完整跑 + 校验恒真）**仍死 4528** → 副作用都在还死
+  - → 4528 检测的不是"4192 是否完成"，也不是 VerifyHash 判定，而是 **4192 计算出的 SHA1 哈希值本身**（哈希值 = 下游密钥/校验输入；数据补丁 → 哈希变 → 下游产物变 → 4528 抛）
+  - 三元组自洽：baseline（正确哈希）活；a1（补丁数据+真校验）死在 4192 自己 throw；a3/a6/a7probe 死在 4528
+- 下一步：解剖 06004528 GenerateAdaptableExtractor 的数据源（读哪个静态字段/哈希值怎么被消费）→ 决定是否可"哈希值回写"（如哈希是 res0 解密密钥则死局，如是存储比对则可同步）
