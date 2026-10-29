@@ -911,6 +911,7 @@ class Probe2 {
 
     // ==================== mtrack: 并发抓解密窗口的 transform/KEY ====================
     static volatile bool MT_stop = false;
+    static volatile bool MT_hot = false;
     static int MT_round = 0;
     static ulong MT_mtRMCrypt = 0, MT_mtByteArr = 0;
     static byte[] MT_C1, MT_C2, MT_C3;
@@ -1004,14 +1005,17 @@ class Probe2 {
                 }
             }
         } catch (Exception ex) { Log("[mtrack2] cache bust FAIL " + Chain(ex)); }
-        // ---- 强制重解密 ----
+        // ---- 强制重解密 (热点窗口: 扫描线程高频只扫 GC 快区) ----
         try {
             var mod2 = asm.GetModules()[0];
             var mD = (MethodInfo)mod2.ResolveMethod(0x0600419C);
-            Log("[mtrack2] invoking driver (fresh decrypt)...");
+            Log("[mtrack2] invoking driver (fresh decrypt, HOT scan)...");
+            MT_hot = true;
             try { mD.Invoke(null, null); Log("[mtrack2] driver OK"); }
             catch (Exception ex) { Log("[mtrack2] driver EX " + Chain(ex)); }
-        } catch (Exception ex) { Log("[mtrack2] resolve FAIL " + Chain(ex)); }
+            MT_hot = false;
+            Log("[mtrack2] HOT window closed, rounds=" + MT_round);
+        } catch (Exception ex) { MT_hot = false; Log("[mtrack2] resolve FAIL " + Chain(ex)); }
         Thread.Sleep(3000);
         MT_stop = true;
         Thread.Sleep(2000);
@@ -1096,7 +1100,7 @@ class Probe2 {
                 IntPtr next = (IntPtr)(mbi.BaseAddress.ToInt64() + rsz);
                 if (rsz <= 0) break;
                 bool inFast = mbi.BaseAddress.ToInt64() >= 0x2800000 && mbi.BaseAddress.ToInt64() < 0x3800000;
-                if (r == 1 && !inFast) { if (next.ToInt64() <= (long)addr) break; addr = next; continue; }
+                if ((r == 1 || MT_hot) && !inFast) { if (next.ToInt64() <= (long)addr) break; addr = next; continue; }
                 if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && (mbi.Protect & 0xFF) != 0x01) {
                     long done = 0;
                     while (done < rsz && !MT_stop) {
