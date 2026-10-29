@@ -1929,7 +1929,7 @@ class Probe2 {
                 try { File.WriteAllBytes("dump\\mt7_buf_" + cnt + ".bin", img); } catch {}
                 for (long k = MT7_seen; k < cnt; k++) {
                     int slot = (int)(k & 7);
-                    long baseOff = 128 * slot;
+                    int baseOff = 128 * slot;
                     IntPtr kp = new IntPtr(Marshal.ReadInt64(MT7_bufAddr, baseOff));
                     IntPtr ip = new IntPtr(Marshal.ReadInt64(MT7_bufAddr, baseOff + 8));
                     long rip = Marshal.ReadInt64(MT7_bufAddr, baseOff + 16);
