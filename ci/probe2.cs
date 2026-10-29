@@ -1483,7 +1483,7 @@ class Probe2 {
                         MT4_saw356Addr = oa;
                         // res[0] CT/PT 头 8B 区分 (20efb9d7a4dc0500=CT, f5410006215b4000=PT)
                         ulong h = BitConverter.ToUInt64(buf, off + 16);
-                        if (h == 0x0500dca4d7b9ef20UL) MT4_ctSeen = true;
+                        if (h == 0x0005DCA4D7B9EF20UL) MT4_ctSeen = true;
                         else if (h == 0x00405b21060041f5UL) MT4_ptSeen = true;
                     }
                     MT3_nAr++;
