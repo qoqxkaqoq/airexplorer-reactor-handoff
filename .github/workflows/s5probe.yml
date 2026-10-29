@@ -36,6 +36,15 @@ jobs:
           Write-Host ("md5 = " + (Get-FileHash $cand -Algorithm MD5).Hash)
           New-Item -ItemType Directory -Force -Path app | Out-Null
           Copy-Item $cand app\AirExplorer.exe
+          # legacyCorruptedStateExceptionsPolicy: 让 catch(Exception) 能捕获 AV 链 (cctor AV 不再秒杀进程, worker 存活继续收 DR 命中)
+          @'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <runtime>
+              <legacyCorruptedStateExceptionsPolicy enabled="true"/>
+            </runtime>
+          </configuration>
+          '@ | Out-File -Encoding ascii ..\probe2.exe.config
           Set-Location app
           $out = & ..\probe2.exe AirExplorer.exe "${{ inputs.mode }}" 300 2>&1
           $out | Tee-Object -FilePath "..\s5probe.${{ matrix.exe }}.log" | Write-Host
@@ -47,5 +56,6 @@ jobs:
           name: s5probe-${{ matrix.exe }}
           path: |
             s5probe.${{ matrix.exe }}.log
+            probe2.exe.config
             app\probe2.log
             app\dump\**
