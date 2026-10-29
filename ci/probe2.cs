@@ -1615,12 +1615,16 @@ class Probe2 {
         Log("[mtrack4] *** SNAP cycle=" + cycle + " bytes=" + written + " segs=" + MT4_nSeg + " (budget left " + budget + ")");
     }
 
-    // 热窗快照 (.147 loader/native 区 + GC 快区)
-    static void MT4_DumpHot(byte[] buf, int cycle) {
-        long budget = 64L << 20;
+    // 热窗快照 (动态锚点: LOH±32MB + loaderMT±16MB + 快区)
+    static void MT4_DumpHot(byte[] buf, int cycle, long lohAddr, long mtAddr) {
+        long budget = 96L << 20;
         IntPtr h = CreateFileW("dump\\snap_hot_" + cycle + ".bin", MT4_GENERIC_WRITE, 0, IntPtr.Zero, MT4_CREATE_ALWAYS, MT4_FILE_ATTR, IntPtr.Zero);
         if (h == (IntPtr)(-1)) return;
-        foreach (long[] wh in new long[][] { new long[] { 0x14000000, 0x15000000 }, new long[] { 0x2800000, 0x3800000 } }) {
+        var wins = new List<long[]>();
+        if (lohAddr > 0) { long lo = Math.Max(0x10000, lohAddr - (32L << 20)); wins.Add(new long[] { lo, lohAddr + (32L << 20) }); }
+        if (mtAddr > 0) { long lo = Math.Max(0x10000, mtAddr - (16L << 20)); wins.Add(new long[] { lo, mtAddr + (16L << 20) }); }
+        wins.Add(new long[] { 0x2800000, 0x3800000 });
+        foreach (long[] wh in wins) {
             long a = wh[0];
             while (a < wh[1] && budget > 0) {
                 int take = (int)Math.Min((long)buf.Length, Math.Min(wh[1] - a, budget));
@@ -1650,8 +1654,18 @@ class Probe2 {
             var ap = new byte[101]; var gh = GCHandle.Alloc(ap, GCHandleType.Pinned);
             MT_mtByteArr = (ulong)Marshal.ReadIntPtr(new IntPtr(gh.AddrOfPinnedObject().ToInt64() - 16)).ToInt64(); gh.Free();
         } catch (Exception ex) { Log("[mtrack4] arr calib FAIL " + ex.Message); }
+        // 动态锚点: LOH (pin >85KB 数组 → 大对象堆实时地址) + loader 堆 (byte[] MT 地址)
+        long lohAddr = 0;
+        GCHandle lohPin = new GCHandle();
+        try {
+            var big = new byte[1 << 20]; big[0] = 0xAA;
+            lohPin = GCHandle.Alloc(big, GCHandleType.Pinned);
+            lohAddr = lohPin.AddrOfPinnedObject().ToInt64() - 16;
+        } catch (Exception ex) { Log("[mtrack4] LOH pin FAIL " + ex.Message); }
+        long mtAddr = (long)MT_mtByteArr;
         for (int i = 0; i < MT3_MAXARR; i++) MT3_arSnap[i] = new byte[272];
-        Log("[mtrack4] freezer start RMCrypt=" + MT_mtRMCrypt.ToString("X") + " byteArr=" + MT_mtByteArr.ToString("X"));
+        Log("[mtrack4] freezer start RMCrypt=" + MT_mtRMCrypt.ToString("X") + " byteArr=" + MT_mtByteArr.ToString("X")
+            + " loh=0x" + lohAddr.ToString("X") + " mt=0x" + mtAddr.ToString("X"));
 
         var buf = new byte[4 << 20];
         var mbi = new MBI();
@@ -1673,9 +1687,16 @@ class Probe2 {
                 if (SuspendThread(h) != 0xFFFFFFFFu) hs.Add(h); else CloseHandle(h);
             }
             MT3_susp += hs.Count;
-            // ---- 冻结态扫描: .147 窗 + 快区 ----
+            // ---- 冻结态扫描: 动态锚点窗口 (LOH±32MB + loaderMT±16MB + 快区) ----
             MT4_saw356Addr = 0;
-            MT3_FrozenRange(buf, mbi, sz, 0x14000000, 0x15000000);
+            if (lohAddr > 0) {
+                long lo = lohAddr - (32L << 20); if (lo < 0x10000) lo = 0x10000;
+                MT3_FrozenRange(buf, mbi, sz, lo, lohAddr + (32L << 20));
+            }
+            if (mtAddr > 0) {
+                long lo2 = mtAddr - (16L << 20); if (lo2 < 0x10000) lo2 = 0x10000;
+                MT3_FrozenRange(buf, mbi, sz, lo2, mtAddr + (16L << 20));
+            }
             MT3_FrozenRange(buf, mbi, sz, 0x2800000, 0x3800000);
             // ---- 命中 BIG356K → 冻结态内当场快照 ----
             if (MT4_saw356Addr != 0 && MT4_armed) {
@@ -1683,9 +1704,8 @@ class Probe2 {
                 MT4_slowLeft = 40; MT4_dumpLeft = 2;
                 Log("[mtrack4] *** BIG356K FIRST SEEN @0x" + MT4_saw356Addr.ToString("X") + " cycle=" + MT3_cycles + " → SNAP NOW");
                 MT4_DumpAll(buf, MT3_cycles);
-                // 段表 post-thaw 由 segSb 复用 (DumpAll 填 MT4_seg*)
             }
-            if (MT4_dumpLeft > 0) { MT4_dumpLeft--; MT4_DumpHot(buf, MT3_cycles); }
+            if (MT4_dumpLeft > 0) { MT4_dumpLeft--; MT4_DumpHot(buf, MT3_cycles, lohAddr, mtAddr); }
             // ---- resume ----
             for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
             // ---- 解冻段处理 ----
@@ -1700,6 +1720,7 @@ class Probe2 {
             Thread.Sleep(MT4_slowLeft > 0 ? 1 : 8);
             if (MT4_slowLeft > 0) MT4_slowLeft--;
         }
+        if (lohPin.IsAllocated) lohPin.Free();
         Log("[mtrack4] freezer exit cycles=" + MT3_cycles + " suspends=" + MT3_susp + " dumps=" + MT4_nDumps
             + " keyFound=" + MT_nKey + " uKeys=" + MT_uKeys + " uIvs=" + MT_uIvs);
     }
