@@ -50,7 +50,11 @@ class Probe2 {
 
         Exception runEx = null;
         var worker = new Thread(delegate() {
-            try { Run(exe, mode); Log("[probe2] DONE"); }
+            try {
+                if (mode == "mtrack") RunMTrack(exe);
+                else Run(exe, mode);
+                Log("[probe2] DONE");
+            }
             catch (Exception ex) { runEx = ex; Log("[probe2] RUN-FAIL " + ex.GetType().FullName + ": " + ex.Message); }
         });
         worker.SetApartmentState(ApartmentState.STA);
@@ -902,5 +906,205 @@ class Probe2 {
             if (e.InnerException != null) sb.Append("  <--  ");
         }
         return sb.ToString();
+    }
+
+    // ==================== mtrack: 并发抓解密窗口的 transform/KEY ====================
+    static volatile bool MT_stop = false;
+    static int MT_round = 0;
+    static ulong MT_mtRMCrypt = 0, MT_mtByteArr = 0;
+    static byte[] MT_C1, MT_C2, MT_C3;
+    static int MT_nKey = 0, MT_nTf = 0, MT_nIv = 0, MT_nB32 = 0;
+
+    static void RunMTrack(string exe) {
+        MT_C1 = new byte[] {0x04,0x65,0xe8,0x5a,0xe8,0xab,0xba,0x16,0xf4,0xf9,0x0e,0x16,0xce,0x3b,0x3d,0xbf};
+        MT_C2 = new byte[] {0x42,0xe4,0xb7,0xf2,0x12,0x84,0x62,0xe4,0x46,0xd9,0x5f,0x36,0xbd,0xbb,0x82,0x8e};
+        MT_C3 = new byte[] {0x07,0x4d,0x8b,0x9b,0x40,0xd5,0x0a,0xa5,0x50,0x49,0xbf,0x72,0x21,0x83,0x62,0x1e};
+        try { Directory.CreateDirectory(DumpDir); } catch {}
+        try { var t0 = new RijndaelManaged().CreateDecryptor(new byte[32], new byte[16]);
+              MT_mtRMCrypt = (ulong)t0.GetType().TypeHandle.Value.ToInt64(); } catch (Exception ex) { Log("[mtrack] MT calib FAIL " + ex.Message); }
+        try { var ap = new byte[101]; var gh = GCHandle.Alloc(ap, GCHandleType.Pinned);
+              MT_mtByteArr = (ulong)Marshal.ReadIntPtr(new IntPtr(gh.AddrOfPinnedObject().ToInt64() - 16)).ToInt64(); gh.Free(); } catch (Exception ex) { Log("[mtrack] MT arr calib FAIL " + ex.Message); }
+        Log("[mtrack] MT RMCrypt=" + MT_mtRMCrypt.ToString("X") + " byteArr=" + MT_mtByteArr.ToString("X"));
+
+        var mts = new Thread(MT_ScanLoop); mts.IsBackground = true; mts.Priority = ThreadPriority.AboveNormal; mts.Start();
+
+        Directory.SetCurrentDirectory(Path.GetDirectoryName(exe));
+        var asm = Assembly.LoadFrom(exe);
+        Log("[mtrack] loaded " + asm.FullName);
+        foreach (var m in asm.GetModules()) {
+            try { RuntimeHelpers.RunModuleConstructor(m.ModuleHandle); Log("[mtrack] module cctor OK"); }
+            catch (Exception ex) { Log("[mtrack] module cctor FAIL: " + Chain(ex)); }
+        }
+        // 触发 payload 解密路径 (JIT hook 在首次 resolve/JIT 时回填)
+        try {
+            var mod2 = asm.GetModules()[0];
+            var mb0 = mod2.ResolveMethod(0x06002133);
+            Log("[mtrack] P1 = " + (mb0.DeclaringType == null ? "?" : mb0.DeclaringType.FullName) + "::" + mb0.Name);
+            try { RuntimeHelpers.PrepareMethod(mb0.MethodHandle); Log("[mtrack] PrepareMethod OK"); }
+            catch (Exception ex2) { Log("[mtrack] PrepareMethod FAIL " + (ex2.InnerException ?? ex2).Message); }
+        } catch (Exception ex) { Log("[mtrack] resolve FAIL " + Chain(ex)); }
+        Thread.Sleep(5000);              // 尾扫窗口
+        MT_stop = true;
+        Thread.Sleep(2500);
+        Log("[mtrack] rounds=" + MT_round + " tf=" + MT_nTf + " key=" + MT_nKey + " b32=" + MT_nB32 + " iv=" + MT_nIv);
+        // 验证解密确实发生
+        try {
+            var mod2 = asm.GetModules()[0];
+            var mb = mod2.ResolveMethod(0x06002133);
+            var il = mb.GetMethodBody().GetILAsByteArray();
+            Log("[mtrack] P1 body len=" + il.Length + " head=" + BitConverter.ToString(il, 0, Math.Min(16, il.Length)).Replace("-", ""));
+        } catch (Exception ex) { Log("[mtrack] P1 body FAIL " + Chain(ex)); }
+    }
+
+    static int MT_Score(byte[] p) { int s = 0; foreach (var b in p) { if (b == 0) s += 2; else if (b < 0x10) s++; } return s; }
+
+    static byte MT_GMul(byte a, byte b) {
+        int r = 0, aa = a, bb = b;
+        while (bb > 0) { if ((bb & 1) != 0) r ^= aa; aa <<= 1; if ((aa & 0x100) != 0) aa ^= 0x1B; bb >>= 1; }
+        return (byte)r;
+    }
+    // MixColumns on 16B = 4 columns (memory order); used to invert D-table mid entries
+    static byte[] MT_MixCols(byte[] d) {
+        var o = new byte[16];
+        for (int c = 0; c < 4; c++) {
+            byte s0 = d[c*4], s1 = d[c*4+1], s2 = d[c*4+2], s3 = d[c*4+3];
+            o[c*4+0] = (byte)(MT_GMul(2,s0) ^ MT_GMul(3,s1) ^ s2 ^ s3);
+            o[c*4+1] = (byte)(s0 ^ MT_GMul(2,s1) ^ MT_GMul(3,s2) ^ s3);
+            o[c*4+2] = (byte)(s0 ^ s1 ^ MT_GMul(2,s2) ^ MT_GMul(3,s3));
+            o[c*4+3] = (byte)(MT_GMul(3,s0) ^ s1 ^ s2 ^ MT_GMul(2,s3));
+        }
+        return o;
+    }
+
+    static void MT_TryAndLog(byte[] key, string tag) {
+        if (key == null || key.Length != 32) return;
+        bool allZero = true; foreach (var b in key) if (b != 0) { allZero = false; break; }
+        if (allZero) return;
+        try {
+            using (var rm = new RijndaelManaged()) {
+                rm.Mode = CipherMode.CBC; rm.Padding = PaddingMode.None; rm.IV = new byte[16];
+                rm.Key = key;
+                using (var dec = rm.CreateDecryptor()) {
+                    byte[] d2 = new byte[16], p2 = new byte[16], d3 = new byte[16], p3 = new byte[16];
+                    dec.TransformBlock(MT_C2, 0, 16, d2, 0);   // D(C2) ^ IV(0)
+                    dec.TransformBlock(MT_C3, 0, 16, d3, 0);   // D(C3) ^ C2
+                    for (int i = 0; i < 16; i++) { p2[i] = (byte)(d2[i] ^ MT_C1[i]); p3[i] = (byte)(d3[i] ^ MT_C2[i]); }
+                    int s2 = MT_Score(p2), s3 = MT_Score(p3);
+                    if (s2 >= 20 && s3 >= 20) {
+                        MT_nKey++;
+                        Log("[mtrack] *** KEYFOUND tag=" + tag + " key=" + MT_Hex(key) + " s2=" + s2 + " s3=" + s3);
+                        Log("[mtrack] *** P2=" + MT_Hex(p2) + " P3=" + MT_Hex(p3));
+                        try { File.WriteAllBytes(Path.Combine(DumpDir, "KEYFOUND_" + MT_nKey + "_" + tag + ".bin"), key); } catch {}
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    static string MT_Hex(byte[] b) {
+        var sb = new StringBuilder(b.Length * 2);
+        foreach (var x in b) sb.Append(x.ToString("X2"));
+        return sb.ToString();
+    }
+
+    static void MT_Dump(string name, byte[] data) {
+        try { File.WriteAllBytes(Path.Combine(DumpDir, name), data); } catch {}
+    }
+
+    static void MT_ScanLoop() {
+        try { MT_ScanLoopInner(); }
+        catch (Exception ex) { Log("[mtrack] SCAN-THREAD FAIL " + ex.GetType().FullName + ": " + ex.Message); }
+        Log("[mtrack] scan thread exit, rounds=" + MT_round);
+    }
+
+    static void MT_ScanLoopInner() {
+        var buf = new byte[4 << 20];
+        var mbi = new MBI();
+        var sz = (IntPtr)Marshal.SizeOf(typeof(MBI));
+        var seenTf = new HashSet<long>();
+        var seen32 = new HashSet<long>();
+        while (!MT_stop) {
+            MT_round++;
+            int r = MT_round;
+            IntPtr addr = new IntPtr(0x10000);
+            while ((long)addr < 0x7FFFFFFEFFFF && !MT_stop) {
+                if (VirtualQuery(addr, ref mbi, sz) == IntPtr.Zero) break;
+                long rsz = mbi.RegionSize.ToInt64();
+                IntPtr next = (IntPtr)(mbi.BaseAddress.ToInt64() + rsz);
+                if (rsz <= 0) break;
+                if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && (mbi.Protect & 0xFF) != 0x01) {
+                    long done = 0;
+                    while (done < rsz && !MT_stop) {
+                        int take = (int)Math.Min((long)buf.Length, rsz - done);
+                        IntPtr src = (IntPtr)(mbi.BaseAddress.ToInt64() + done);
+                        if (!SafeReadN(src, buf, take)) { done += take; continue; }
+                        for (int off = 0; off + 16 <= take; off += 8) {
+                            ulong v = BitConverter.ToUInt64(buf, off);
+                            if (MT_mtRMCrypt != 0 && v == MT_mtRMCrypt) {
+                                long oa = src.ToInt64() + off;
+                                if (!seenTf.Add(oa)) continue;
+                                MT_nTf++;
+                                var obj = new byte[512];
+                                if (!SafeRead((IntPtr)oa, obj)) continue;
+                                Log("[mtrack] r" + r + " RMCrypt @0x" + oa.ToString("X"));
+                                MT_Dump("mtrack_tf_0x" + oa.ToString("X") + "_r" + r + ".bin", obj);
+                                for (int fo = 8; fo < 0x100; fo += 8) {
+                                    ulong pv = BitConverter.ToUInt64(obj, fo);
+                                    if (!LooksLikeHeap(pv)) continue;
+                                    var tgt = new byte[272];
+                                    if (!SafeRead((IntPtr)(long)pv, tgt)) continue;
+                                    if (BitConverter.ToUInt64(tgt, 0) != MT_mtByteArr) continue;
+                                    int tlen = BitConverter.ToInt32(tgt, 8);
+                                    if (tlen == 60) {
+                                        var ed = new byte[240];
+                                        Array.Copy(tgt, 16, ed, 0, 240);
+                                        MT_Dump("mtrack_tbl_0x" + oa.ToString("X") + "_f" + fo + "_r" + r + ".bin", ed);
+                                        // E 表头 32B = KEY 原文 (encrypt expansion W[0..7])
+                                        var kE = new byte[32]; Array.Copy(ed, 0, kE, 0, 32);
+                                        MT_TryAndLog(kE, "Ehead_0x" + oa.ToString("X") + "_f" + fo);
+                                        // D 表头: D[0..3]=E[0..3]=KEY[0:16]; D[4..7]=InvMixCol(E[4..7]) → MixCols 还原
+                                        var kD = new byte[32];
+                                        Array.Copy(ed, 0, kD, 0, 16);
+                                        var mid = new byte[16]; Array.Copy(ed, 16, mid, 0, 16);
+                                        var mc = MT_MixCols(mid);
+                                        Array.Copy(mc, 0, kD, 16, 16);
+                                        MT_TryAndLog(kD, "Dhead_0x" + oa.ToString("X") + "_f" + fo);
+                                    } else if (tlen == 4) {
+                                        var iv = new byte[16];
+                                        Array.Copy(tgt, 16, iv, 0, 16);
+                                        MT_nIv++;
+                                        Log("[mtrack] r" + r + " IV4 @0x" + oa.ToString("X") + " tf@0x" + oa.ToString("X") + " f" + fo + " = " + MT_Hex(iv));
+                                        MT_Dump("mtrack_iv_0x" + oa.ToString("X") + "_f" + fo + "_r" + r + ".bin", iv);
+                                    }
+                                }
+                            } else if (MT_mtByteArr != 0 && v == MT_mtByteArr) {
+                                int alen = BitConverter.ToInt32(buf, off + 8);
+                                if (alen == 32) {
+                                    long oa = src.ToInt64() + off;
+                                    if (!seen32.Add(oa)) continue;
+                                    MT_nB32++;
+                                    if (MT_nB32 <= 4000) {
+                                        var k = new byte[32];
+                                        Array.Copy(buf, off + 16, k, 0, 32);
+                                        MT_TryAndLog(k, "b32_r" + r + "_0x" + oa.ToString("X"));
+                                    }
+                                } else if (alen == 16 && MT_nIv < 600) {
+                                    long oa = src.ToInt64() + off;
+                                    var iv = new byte[16];
+                                    Array.Copy(buf, off + 16, iv, 0, 16);
+                                    MT_nIv++;
+                                    MT_Dump("mtrack_b16_0x" + oa.ToString("X") + "_r" + r + ".bin", iv);
+                                }
+                            }
+                        }
+                        done += take;
+                    }
+                }
+                if (next.ToInt64() <= (long)addr) break;
+                addr = next;
+            }
+            if (r % 5 == 0) Log("[mtrack] round " + r + " tf=" + MT_nTf + " key=" + MT_nKey + " b32=" + MT_nB32 + " iv=" + MT_nIv);
+        }
+        Log("[mtrack] scan thread exit, rounds=" + MT_round);
     }
 }

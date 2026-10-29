@@ -1993,3 +1993,16 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **ag 判定（run 40835380362）**：AG.m_AdaptableModelValueMsg/FinderRecommenderTitle 等 URL 字段全部健康、EvaluateVisibleAttribute OK（no exception）、WriteRequest=inst、配置链 CHAIN dir/label/airexplorer.xml 全通、GenerateAdjustableAggregator=True、globalTemplate.Count=1、LOADEX 仅 WebView2/GongSolutions 环境性缺 DLL、**DONE** —— 主库装载链完全健康（对比 a13 的 5979 全灭）
 - **结论**：①哨兵算法静态复刻与运行时行为**完全一致**（Authenticode 风格自哈希 + 签名区豁免 + 公钥运行时 AES 解密全链受控）；②**A2 施工图验证成功**——任何文件级补丁都可按「补丁→算H→自签→回写0x927C88」三步免迭代通过哨兵；③**无需 p1/p3/p5**（4192 保持官方体，签名匹配即健康路）
 - **下一步（按交接 §5/§6）**：①A1 激活直通回接——06000CEE AssertValidLicense 逻辑在 3.2MB 加密负载内，走 work/decrypt_prng.py 已知明文重加密路线，补丁后再做哨兵三步（改密文/资源/签名一次打包）；②暗桩清单处理随 A1 同包；③ui-probe/a-soak 出窗验证
+
+### step197-205（2026-10-29 续XXVII）：A1 攻坚——payload AES 密钥猎取（堆挖→反推→并发抓取 mtrack）
+- **step197（XOR 定位否定）**：全相位已知明文 XOR 搜索 0 命中 → res[0] 载荷非 PRNG-XOR，确证 AES-CBC
+- **step198d/199（静态状态机）**：0600419C stelem.i1 backward need-driven 切分提取 v4(KEY 31/32B)/v33(IV 15/16B)；beam search 全模拟得候选 KEY 5373f55e…d503943 → **AES oracle 证伪（decoy 路径）**
+- **mem run 40848890399 复盘（step200-203）**：
+  - censD_RMCrypt_2 f16/f8 = **uint[60] 展开密钥对**，MixCols(D[52..55])==E[52..55] **自洽 100%** → 实为 probe 自身 D 段标定 transform（_keepT，KEY=全零），头部 32B 零=真实 KEY 而非覆写
+  - referencesource 定案：m_encryptKeyExpansion/m_decryptKeyExpansion = int[60]（Nb*(Nr+1)），D[0..3]=E[0..3]=**KEY[0:16] 明文直读位**，D[56..59]=E[56..59]；Dispose 时 Array.Clear 全清 → **transform 一旦释放 E 表清零，抓活体是唯一途径**
+  - **F 段工厂返回 RijndaelManaged**（CI 环境）→ res[0] 解密走托管 transform 路径
+  - **关键时序修正**：mem 模式 B 段 ResolveMethod 已拿到 22734 解密后方法体 → **解密发生在 probe 主动 invoke 之前**（assembly LoadFrom/首次访问）；G/K2 二次 invoke 走缓存；cens 轮 byte[] 普查 0 行（censHits 4000 上限恰在 censI 耗尽 1583+843+673+901=4000）
+  - step201/204/205 扫描：artifact 全文件 32B 滑窗、日志 137 unique byte[32]、68 个 int[60] E 表候选全反推 → **0 命中**（KEY 数组已被 Clear/覆写，或非 byte[] 形态）
+- **mtrack 模式（step205，本步新增）**：probe2 并发抓取——**Assembly.LoadFrom 之前启动 AboveNormal 扫描线程**，30-200ms/轮全堆扫：①RMCrypt MT 命中 → dump 512B + chase f8..f100 → int[60] E 表头 32B=KEY 明文直读、D 表头+MixCols 还原、**m_IV int[4] 直读=IV**；②byte[32] 数组 → 在线 TryKeyNet（CBC 链 D(C2)^C1/D(C3)^C2 双块 score≥20）→ KEYFOUND 即 log+dump；③byte[16] 收集 600 个备 IV 配对；oracle 常量 = baseline res[0] C1/C2/C3（skip=8）硬编码
+  - mono mcs 编译通过 + 本地冒烟（扫描线程 try-catch 保护，Windows API 失败优雅退出）
+  - **判定预期**：KEYFOUND 行出现 → KEY+IV 到手 → build_a19.py 出包
