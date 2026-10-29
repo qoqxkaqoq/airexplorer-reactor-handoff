@@ -101,8 +101,10 @@ class Probe2 {
                 Marshal.WriteInt64(MT7_sc, 277, MT7_cntAddr.ToInt64());
                 uint oldProt;
                 VirtualProtect(MT7_sc, (IntPtr)sc.Length, 0x40, out oldProt);
-                MT7_vehHand = AddVectoredExceptionHandler(1, MT7_sc);
-                Log("[mtrack7] VEH(shellcode) @ " + MT7_vehHand.ToString("X") + " sc=" + MT7_sc.ToString("X"));
+                // v11: VEH+DR 全部停用 — 检测点(cctor 中段/哨兵AES后)查 DR, v1/v8/v9/v10 皆死于武装早于检测点;
+                //   burst 快照不需要 DR, 无武装则检测永远通过 → 进程全程存活
+                // MT7_vehHand = AddVectoredExceptionHandler(1, MT7_sc);
+                Log("[mtrack7] VEH(shellcode) DISABLED (v11 no-DR mode), sc=" + MT7_sc.ToString("X"));
             } catch (Exception ex) { Log("[mtrack7] VEH FAIL " + ex.Message); }
             // 注意: 不在启动期对运行线程 SetThreadContext (与执行竞态会写坏 RIP → AV)。
             // DR 设置全部由 freezer 的 freeze 态完成 (线程已挂起), cycle1 即覆盖 worker。
@@ -1983,10 +1985,10 @@ class Probe2 {
             foreach (ProcessThread pt in proc.Threads) {
                 if ((uint)pt.Id == myTid) continue;
                 if (hs.Count >= 60) break;
-                // GET_CONTEXT|SET_CONTEXT|SUSPEND_RESUME — 冻结态下补设 DR (新线程)
-                IntPtr h = OpenThread(MT3_THREAD_SUSPEND_RESUME | 0x0008 | 0x0010, false, (uint)pt.Id);
+                // v11: 不武装 DR (检测点查 DR, 无武装=干净) — OpenThread 仅 SUSPEND_RESUME
+                IntPtr h = OpenThread(MT3_THREAD_SUSPEND_RESUME, false, (uint)pt.Id);
                 if (h == IntPtr.Zero) continue;
-                if (SuspendThread(h) != 0xFFFFFFFFu) { hs.Add(h); MT7_SetThreadDR(h); } else CloseHandle(h);
+                if (SuspendThread(h) != 0xFFFFFFFFu) { hs.Add(h); } else CloseHandle(h);
             }
             MT3_susp += hs.Count;
             // v10: invoke burst — worker 挂起中, 内存快照切片按需解密窗口 (RPM only ~10ms/份, 免写盘)
