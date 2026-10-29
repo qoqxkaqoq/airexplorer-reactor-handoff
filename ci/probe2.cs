@@ -1909,8 +1909,8 @@ class Probe2 {
             long rsz = mbi.RegionSize.ToInt64();
             IntPtr next = new IntPtr(mbi.BaseAddress.ToInt64() + rsz);
             if (rsz <= 0) break;
-            bool exec = (mbi.Protect & 0xF0) != 0;   // PAGE_EXECUTE_* 家族
-            if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && exec && mbi.Type == 0x20000) {
+            bool exec = true;   // v15: S-box 是数据表 (.data RW 页) 不限 exec — 与 SnapMem 同款过滤 (commit+非guard+MEM_PRIVATE)
+            if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && (mbi.Protect & 0xFF) != 0x01 && mbi.Type == 0x20000) {
                 long a = mbi.BaseAddress.ToInt64(), hi = a + rsz;
                 while (a < hi && MT7_nSbox < 4) {
                     int take = (int)Math.Min((long)buf.Length, hi - a);
