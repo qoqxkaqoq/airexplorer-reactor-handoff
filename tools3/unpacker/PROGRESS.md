@@ -2149,3 +2149,9 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
   - 产物 `exes/AirExplorer_a19b.exe` md5=**C6EE8843450B672A5C26A9AD4FF68085**
 - **判定计划**：s5probe mode=trap 期望 ok≈4878 fail=5（缺 DLL）零 "AirExplorer "；mode=ag 期望 fields=6201 链全通；若 trap 过而 ag 的 license 相关字段变绿 = 五补丁生效；劫持若因 first-wins 失效则 license 门不翻（可判别）
 - 资产：work/s5/step235_exact_oracle.py、work/s5/step236_build_a19b.py、work/s5/mem5/res0_plain_full.bin
+
+### step248 补遗（同日）：精确判据终审 + a19b AV 根因（off-by-8）→ a19c 修正
+- **step235 精确判据终审（59/59 文件）**：D_K(B1)^B0==out[16:32] && D_K(B2)^B1==out[32:48]（2^-256 假阳性）对 v27 全 50 份 + mtk6b 全 9 份 → **hits=0，无 .exact.txt** → **res0 KEY 不存在于任何已捕获快照，快照捕钥路线正式关闭**（KEY 生命周期 ~0.4ms、解密完即清的两代快照（mtrack6 burst 相位 + v27 freezer 相位）均未触及）
+- **a19b trap 判定（run 40974337804，job 2s 即亡）**：`<Module>` cctor `AccessViolationException @ Marshal.WriteInt32 → DispatcherInitializer.DisableBuilder(IntPtr,Int32)` → md5 核对 = 本地 a19b ✓
+- **AV 根因 = CBC XOR 目标 off-by-8**：C_{j-1} 在 res0 中起点 = `8+16*(j-1)`（8B 头之后），step236 初版写在 `16*(j-1)` → δ 后 8 字节（data 补丁段 `0a 17 2a`）落到 **C_{j-2} 尾 8B** → 未审查的 P_{j-2} 块（含结构字段）整块乱码 → DB 走库/写指针脱轨 → WriteInt32 野指针 AV；同时 P_j 的 data 补丁未落位（仅 rva/n 生效）
+- **a19c 修正（同脚本改名）**：XOR 目标改为 `ct[8+16*(j-1)+i]`，全链自模拟 PASS；产物 md5=**D30D067CB7DA6201F8EF05113308E976**；trap 已派发
