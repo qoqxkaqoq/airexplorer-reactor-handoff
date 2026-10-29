@@ -82,16 +82,16 @@ class Probe2 {
             Log("[mtrack7] targets: " + t0.ToString("X") + " " + t1.ToString("X") + " " + t2.ToString("X") + " " + t3.ToString("X"));
             // 2) 原生 shellcode VEH (managed delegate 在异常派发上下文会 CLR failfast — 必须纯 native)
             try {
-                byte[] sc = new byte[] { 0x48,0x8B,0x41,0x08,0x48,0x8B,0x50,0x68,0x48,0x85,0xD2,0x0F,0x84,0xA0,0x00,0x00,0x00,0x49,0xBA,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x4C,0x39,0x90,0xF8,0x00,0x00,0x00,0x75,0x7B,0x4C,0x8B,0x98,0x88,0x00,0x00,0x00,0x48,0xB9,0xFF,0xFF,0xFE,0xFF,0xFF,0x7F,0x00,0x00,0x49,0x39,0xCB,0x73,0x65,0x48,0xB9,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x49,0x39,0xCB,0x72,0x56,0x49,0xBA,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x4D,0x8B,0x12,0x48,0xB9,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x49,0x83,0xE2,0x07,0x49,0xC1,0xE2,0x06,0x4C,0x01,0xD1,0xF3,0x41,0x0F,0x6F,0x43,0x10,0xF3,0x0F,0x7F,0x01,0xF3,0x41,0x0F,0x6F,0x4B,0x20,0xF3,0x0F,0x7F,0x49,0x10,0x4C,0x8B,0x98,0xB8,0x00,0x00,0x00,0xF3,0x41,0x0F,0x6F,0x43,0x10,0xF3,0x0F,0x7F,0x41,0x20,0x49,0xBB,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x49,0xFF,0x03,0x48,0xC7,0x40,0x68,0x00,0x00,0x00,0x00,0x81,0x48,0x44,0x00,0x00,0x01,0x00,0x31,0xC0,0xC3,0xB8,0x01,0x00,0x00,0x00,0xC3 };
+                byte[] sc = new byte[] { 0x48,0x8B,0x41,0x08,0x48,0x8B,0x50,0x68,0x48,0x85,0xD2,0x74,0x69,0x49,0xBA,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x4C,0x39,0x90,0xF8,0x00,0x00,0x00,0x75,0x44,0x48,0xB9,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x48,0x8B,0x09,0x48,0x83,0xE1,0x07,0x48,0xC1,0xE1,0x06,0x49,0xBA,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x4C,0x01,0xD1,0x4C,0x8B,0x90,0x88,0x00,0x00,0x00,0x4C,0x89,0x11,0x4C,0x8B,0x90,0xB8,0x00,0x00,0x00,0x4C,0x89,0x51,0x08,0x49,0xBA,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x49,0xFF,0x02,0x48,0xC7,0x40,0x68,0x00,0x00,0x00,0x00,0x81,0x48,0x44,0x00,0x00,0x01,0x00,0x31,0xC0,0xC3,0xB8,0x01,0x00,0x00,0x00,0xC3 };
                 MT7_sc = Marshal.AllocHGlobal(sc.Length);
                 Marshal.Copy(sc, 0, MT7_sc, sc.Length);
                 MT7_bufAddr = Marshal.AllocHGlobal(512);   // 8 槽 x 64B (key32+iv16+pad)
                 MT7_cntAddr = Marshal.AllocHGlobal(8);
                 Marshal.WriteInt64(MT7_cntAddr, 0, 0);
-                Marshal.WriteInt64(MT7_sc, 19, MT7_targets[0].ToInt64());
-                Marshal.WriteInt64(MT7_sc, 75, MT7_cntAddr.ToInt64());
-                Marshal.WriteInt64(MT7_sc, 88, MT7_bufAddr.ToInt64());
-                Marshal.WriteInt64(MT7_sc, 148, MT7_cntAddr.ToInt64());
+                Marshal.WriteInt64(MT7_sc, 15, MT7_targets[0].ToInt64());
+                Marshal.WriteInt64(MT7_sc, 34, MT7_cntAddr.ToInt64());
+                Marshal.WriteInt64(MT7_sc, 55, MT7_bufAddr.ToInt64());
+                Marshal.WriteInt64(MT7_sc, 89, MT7_cntAddr.ToInt64());
                 uint oldProt;
                 VirtualProtect(MT7_sc, (IntPtr)sc.Length, 0x40, out oldProt);
                 MT7_vehHand = AddVectoredExceptionHandler(1, MT7_sc);
@@ -1811,6 +1811,14 @@ class Probe2 {
     static long MT7_seen = 0;
     static long MT7_nThreadDR = 0;
     static IntPtr MT7_vehHand;
+    // 冻结态命中消费缓冲 (预分配, shellcode 只存指针, 内容由 freezer SafeRead 解引用)
+    static byte[][] MT7_cKey = new byte[8][];
+    static byte[][] MT7_cIv = new byte[8][];
+    static IntPtr[] MT7_cKeyPtr = new IntPtr[8];
+    static IntPtr[] MT7_cIvPtr = new IntPtr[8];
+    static long[] MT7_cFlag = new long[8];       // -1=槽读失败 0=指针读失败 bit1=keyOK bit2=ivOK
+    static byte[] MT7_cHdr = new byte[16];
+    static long MT7_pendLo = 0, MT7_pendHi = 0;  // 本轮已消费命中区间 (解冻段转储用)
 
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool VirtualProtect(IntPtr addr, IntPtr size, uint newProt, out uint oldProt);
@@ -1868,6 +1876,7 @@ class Probe2 {
             MT_mtByteArr = (ulong)Marshal.ReadIntPtr(new IntPtr(gh.AddrOfPinnedObject().ToInt64() - 16)).ToInt64(); gh.Free();
         } catch (Exception ex) { Log("[mtrack7] arr calib FAIL " + ex.Message); }
         for (int i = 0; i < MT3_MAXARR; i++) MT3_arSnap[i] = new byte[272];
+        for (int i = 0; i < 8; i++) { MT7_cKey[i] = new byte[32]; MT7_cIv[i] = new byte[16]; }
         Log("[mtrack7] freezer start RMCrypt=" + MT_mtRMCrypt.ToString("X") + " byteArr=" + MT_mtByteArr.ToString("X"));
 
         var buf = new byte[4 << 20];
@@ -1889,26 +1898,63 @@ class Probe2 {
                 if (SuspendThread(h) != 0xFFFFFFFFu) { hs.Add(h); MT7_SetThreadDR(h); } else CloseHandle(h);
             }
             MT3_susp += hs.Count;
+            // ---- DR 命中消费 (冻结态: 全线程挂起 → GC 停 → key/iv 数组不移动; SafeRead 防坏指针 AV) ----
+            // shellcode 为指针-only 版: 槽+0 存 caller RDX (key 数组引用), 槽+8 存 caller R8 (iv 数组引用)。
+            // 必须在冻结态解引用 (解冻后 GC 可能提升/移动数组 → 裸指针失效)。
+            MT7_pendLo = MT7_pendHi = 0;
+            long cnt = Marshal.ReadInt64(MT7_cntAddr, 0);
+            if (cnt > MT7_seen) {
+                MT7_pendLo = MT7_seen; MT7_pendHi = cnt;
+                for (long k = MT7_seen; k < cnt; k++) {
+                    int slot = (int)(k & 7);
+                    MT7_cFlag[slot] = -1; MT7_cKeyPtr[slot] = IntPtr.Zero; MT7_cIvPtr[slot] = IntPtr.Zero;
+                    if (!SafeRead(new IntPtr(MT7_bufAddr.ToInt64() + 64 * slot), MT7_cHdr)) { Log("[mtrack7] HIT#" + k + " slot read FAIL"); continue; }
+                    IntPtr kp = new IntPtr(BitConverter.ToInt64(MT7_cHdr, 0));
+                    IntPtr ip = new IntPtr(BitConverter.ToInt64(MT7_cHdr, 8));
+                    MT7_cKeyPtr[slot] = kp; MT7_cIvPtr[slot] = ip;
+                    MT7_cFlag[slot] = 0;
+                    if (kp != IntPtr.Zero) {
+                        bool okK = false; long lenK = -1;
+                        if (SafeRead(kp, MT7_cHdr)) {
+                            lenK = BitConverter.ToInt64(MT7_cHdr, 8);   // byte[] 头: [MT 8B][len 8B][data]
+                            if (lenK == 32) okK = SafeRead(new IntPtr(kp.ToInt64() + 16), MT7_cKey[slot]);
+                        }
+                        if (okK) MT7_cFlag[slot] |= 1;
+                        else Log("[mtrack7] HIT#" + k + " key READFAIL ptr=" + kp.ToString("X") + " len=" + lenK);
+                    }
+                    if (ip != IntPtr.Zero) {
+                        bool okI = false; long lenI = -1;
+                        if (SafeRead(ip, MT7_cHdr)) {
+                            lenI = BitConverter.ToInt64(MT7_cHdr, 8);
+                            if (lenI == 16) okI = SafeRead(new IntPtr(ip.ToInt64() + 16), MT7_cIv[slot]);
+                        }
+                        if (okI) MT7_cFlag[slot] |= 2;
+                        else Log("[mtrack7] HIT#" + k + " iv READFAIL ptr=" + ip.ToString("X") + " len=" + lenI);
+                    }
+                }
+                MT7_seen = cnt;
+                if (MT4_nDumps == 0) MT4_DumpAll(buf, MT3_cycles);   // 首命中 → 冻结态全快照 (证据保全)
+            }
             MT4_saw356Addr = 0; MT4_ctSeen = false; MT4_ptSeen = false;
             if (MT3_cycles % 40 == 1) MT3_FrozenRange(buf, mbi, sz, 0x10000, 0x7FFFFFFEFFFF);
             else {
                 MT3_FrozenRange(buf, mbi, sz, 0x2800000, 0x3800000);
             }
             for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
-            // ---- DR 命中处理 (解冻段, 轮询 shellcode 计数器, 8 槽环形) ----
-            long cnt = Marshal.ReadInt64(MT7_cntAddr, 0);
-            if (cnt > MT7_seen) {
-                byte[] kb = new byte[32], ib = new byte[16];
-                for (long k = MT7_seen; k < cnt; k++) {
-                    long slot = 64 * (k & 7);
-                    Marshal.Copy(new IntPtr(MT7_bufAddr.ToInt64() + slot), kb, 0, 32);
-                    Marshal.Copy(new IntPtr(MT7_bufAddr.ToInt64() + slot + 32), ib, 0, 16);
-                    Log("[mtrack7] *** CREATEDECRYPTOR HIT#" + k + " key=" + MT_Hex(kb) + " iv=" + MT_Hex(ib));
-                    MT_TryAndLog(kb, "mt7dr_" + k);
-                    MT_RegIv(ib);
+            // ---- 解冻段: 命中转储/登记 (分配/Log 安全) ----
+            for (long k = MT7_pendLo; k < MT7_pendHi; k++) {
+                int slot = (int)(k & 7);
+                if (MT7_cFlag[slot] < 0) { Log("[mtrack7] HIT#" + k + " slot corrupt"); continue; }
+                if ((MT7_cFlag[slot] & 1) != 0) {
+                    var kk = new byte[32]; Array.Copy(MT7_cKey[slot], kk, 32);
+                    Log("[mtrack7] *** CREATEDECRYPTOR HIT#" + k + " keyPtr=" + MT7_cKeyPtr[slot].ToString("X") + " key=" + MT_Hex(kk));
+                    MT_TryAndLog(kk, "mt7dr_" + k);
                 }
-                MT7_seen = cnt;
-                if (cnt == 1) MT4_DumpAll(buf, MT3_cycles);
+                if ((MT7_cFlag[slot] & 2) != 0) {
+                    var ii = new byte[16]; Array.Copy(MT7_cIv[slot], ii, 16);
+                    Log("[mtrack7] *** CREATEDECRYPTOR HIT#" + k + " ivPtr=" + MT7_cIvPtr[slot].ToString("X") + " iv=" + MT_Hex(ii));
+                    MT_RegIv(ii);
+                }
             }
             MT3_ProcessHits();
             Thread.Sleep(2);
