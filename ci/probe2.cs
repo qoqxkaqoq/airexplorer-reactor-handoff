@@ -49,6 +49,20 @@ class Probe2 {
         wd.IsBackground = true;
         wd.Start();
 
+        // ---- mtrack4: BIG356K 触发冻结态全内存快照 ----
+        if (mode == "mtrack4") {
+            var w4 = new Thread(delegate() {
+                try { MT4_RunWorker(exe); }
+                catch (Exception ex) { Log("[mtrack4] worker FAIL " + ex.GetType().FullName + ": " + ex.Message); }
+            });
+            w4.SetApartmentState(ApartmentState.STA);
+            w4.Start();
+            MT4_FreezerLoop(w4);
+            w4.Join(20000);
+            Log("[probe2] mtrack4 DONE");
+            return 0;
+        }
+
         // ---- mtrack3: worker 跑解密链, 主线程 SuspendThread 冻结世界扫描 ----
         if (mode == "mtrack3") {
             var w3 = new Thread(delegate() {
@@ -1465,6 +1479,7 @@ class Probe2 {
                     Array.Copy(buf, off + 16, snap, 0, need);
                     MT3_arAddr[MT3_nAr] = oa;
                     MT3_arKind[MT3_nAr] = alen == 32 ? 1 : (alen == 16 ? 2 : 3);
+                    if (MT3_arKind[MT3_nAr] == 3) MT4_saw356Addr = oa;
                     MT3_nAr++;
                 }
             } else if (LooksLikeHeap(v)) {
@@ -1508,5 +1523,184 @@ class Probe2 {
         }
         if (nAr > 0 && (MT3_cycles % 10 == 0))
             Log("[mtrack3] cycle " + MT3_cycles + " arr=" + nAr + " uKeys=" + MT_uKeys + " uIvs=" + MT_uIvs + " keyFound=" + MT_nKey);
+    }
+
+    // ==================== mtrack4: BIG356K 触发 → 冻结态全 MEM_PRIVATE 快照 ====================
+    // 依据 mtrack3 证据: res[0] 密文缓冲 @0x147A92A0 (loader/native 堆, 快区轮不可见, 仅全堆轮命中过一次);
+    // res5 已知 KEY 不在 890 唯一 b32 → KEY 非 GC 堆 byte[32] 或存活期 <thaw 窗。
+    // 策略: PhaseA 快进(thaw 8ms)盯 .147 窗 16MB+快区 16MB; 首次命中 BIG356K(=资源流刚读入, 解密即将开始)
+    // → 冻结态内当轮全 MEM_PRIVATE 快照落盘(预算 768MB, 低址优先) + 后续 2 轮热窗 dump; 慢动作(thaw 1ms) 40 轮。
+    // 本地离线对快照逐 8B 窗口暴力 AES 试解 — KEY 不限形态/位置, 在快照里即可恢复。
+    static bool MT4_armed = true;
+    static int MT4_slowLeft = 0, MT4_dumpLeft = 0, MT4_nDumps = 0;
+    static long MT4_saw356Addr = 0;
+    static long MT4_budget = 768L << 20;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr CreateFileW([MarshalAs(UnmanagedType.LPWStr)] string name, uint access, uint share, IntPtr sa, uint creat, uint flags, IntPtr tmpl);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool WriteFile(IntPtr h, byte[] buf, uint n, out uint written, IntPtr overlapped);
+    const uint MT4_GENERIC_WRITE = 0x40000000, MT4_CREATE_ALWAYS = 2, MT4_FILE_ATTR = 0x80;
+
+    // 段表 (冻结态收集, post-thaw 落盘)
+    const int MT4_MAXSEG = 4096;
+    static long[] MT4_segLo = new long[MT4_MAXSEG], MT4_segHi = new long[MT4_MAXSEG], MT4_segOff = new long[MT4_MAXSEG];
+    static int MT4_nSeg = 0;
+
+    static void MT4_RunWorker(string exe) {
+        MT_InitCt();
+        try { Directory.CreateDirectory(DumpDir); } catch {}
+        Directory.SetCurrentDirectory(Path.GetDirectoryName(exe));
+        Log("[mtrack4] worker: loading (freezer cycling)...");
+        var asm = Assembly.LoadFrom(exe);
+        Log("[mtrack4] loaded " + asm.FullName);
+        foreach (var m in asm.GetModules()) {
+            try { RuntimeHelpers.RunModuleConstructor(m.ModuleHandle); Log("[mtrack4] module cctor OK"); }
+            catch (Exception ex) { Log("[mtrack4] module cctor FAIL: " + Chain(ex)); }
+        }
+        var mod2 = asm.GetModules()[0];
+        for (int it = 0; it < 3; it++) {
+            MT3_Bust(asm);
+            try {
+                var mD = (MethodInfo)mod2.ResolveMethod(0x0600419C);
+                Log("[mtrack4] invoke#" + it + " ...");
+                mD.Invoke(null, null);
+                Log("[mtrack4] invoke#" + it + " OK");
+            } catch (Exception ex) { Log("[mtrack4] invoke#" + it + " EX " + Chain(ex)); }
+            Thread.Sleep(1500);
+        }
+        Thread.Sleep(3000);
+        MT3_stop = true;
+        Log("[mtrack4] worker done");
+    }
+
+    // 冻结态快照: 全 MEM_PRIVATE commit 段, 低址优先, 预算封顶
+    static void MT4_DumpAll(byte[] buf, int cycle) {
+        MT4_nSeg = 0;
+        long budget = MT4_budget;
+        IntPtr h = CreateFileW("dump\\snap_all_" + cycle + ".bin", MT4_GENERIC_WRITE, 0, IntPtr.Zero, MT4_CREATE_ALWAYS, MT4_FILE_ATTR, IntPtr.Zero);
+        if (h == (IntPtr)(-1)) { Log("[mtrack4] snap create FAIL cycle=" + cycle); return; }
+        long written = 0;
+        IntPtr addr = new IntPtr(0x10000);
+        MBI mbi = new MBI();
+        IntPtr sz = (IntPtr)Marshal.SizeOf(typeof(MBI));
+        while ((long)addr < 0x7FFFFFFEFFFF && budget > 0) {
+            if (VirtualQuery(addr, ref mbi, sz) == IntPtr.Zero) break;
+            long rsz = mbi.RegionSize.ToInt64();
+            IntPtr next = new IntPtr(mbi.BaseAddress.ToInt64() + rsz);
+            if (rsz <= 0) break;
+            if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && (mbi.Protect & 0xFF) != 0x01 && mbi.Type == 0x20000) {
+                long lo = mbi.BaseAddress.ToInt64(), hi = lo + rsz, segStart = written;
+                long a = lo;
+                while (a < hi && budget > 0) {
+                    int take = (int)Math.Min((long)buf.Length, Math.Min(hi - a, budget));
+                    if (take <= 0) break;
+                    IntPtr got;
+                    if (ReadProcessMemory(GetCurrentProcess(), new IntPtr(a), buf, (IntPtr)take, out got) && got.ToInt64() == take) {
+                        uint w;
+                        if (!WriteFile(h, buf, (uint)take, out w, IntPtr.Zero)) break;
+                        written += take; budget -= take;
+                    }
+                    a += take;
+                }
+                if (written > segStart && MT4_nSeg < MT4_MAXSEG) {
+                    MT4_segLo[MT4_nSeg] = lo; MT4_segHi[MT4_nSeg] = hi; MT4_segOff[MT4_nSeg] = segStart; MT4_nSeg++;
+                }
+            }
+            if (next.ToInt64() <= (long)addr) break;
+            addr = next;
+        }
+        CloseHandle(h);
+        MT4_nDumps++;
+        Log("[mtrack4] *** SNAP cycle=" + cycle + " bytes=" + written + " segs=" + MT4_nSeg + " (budget left " + budget + ")");
+    }
+
+    // 热窗快照 (.147 loader/native 区 + GC 快区)
+    static void MT4_DumpHot(byte[] buf, int cycle) {
+        long budget = 64L << 20;
+        IntPtr h = CreateFileW("dump\\snap_hot_" + cycle + ".bin", MT4_GENERIC_WRITE, 0, IntPtr.Zero, MT4_CREATE_ALWAYS, MT4_FILE_ATTR, IntPtr.Zero);
+        if (h == (IntPtr)(-1)) return;
+        foreach (long[] wh in new long[][] { new long[] { 0x14000000, 0x15000000 }, new long[] { 0x2800000, 0x3800000 } }) {
+            long a = wh[0];
+            while (a < wh[1] && budget > 0) {
+                int take = (int)Math.Min((long)buf.Length, Math.Min(wh[1] - a, budget));
+                if (take <= 0) break;
+                IntPtr got;
+                if (ReadProcessMemory(GetCurrentProcess(), new IntPtr(a), buf, (IntPtr)take, out got) && got.ToInt64() == take) {
+                    uint w;
+                    WriteFile(h, buf, (uint)take, out w, IntPtr.Zero);
+                    budget -= take;
+                }
+                a += take;
+            }
+        }
+        CloseHandle(h);
+        MT4_nDumps++;
+        Log("[mtrack4] snap_hot cycle=" + cycle + " (budget left " + budget + ")");
+    }
+
+    static void MT4_FreezerLoop(Thread w) {
+        MT_InitCt();
+        try { Directory.CreateDirectory(DumpDir); } catch {}
+        try {
+            var t0 = new RijndaelManaged().CreateDecryptor(new byte[32], new byte[16]);
+            MT_mtRMCrypt = (ulong)t0.GetType().TypeHandle.Value.ToInt64();
+        } catch (Exception ex) { Log("[mtrack4] calib FAIL " + ex.Message); }
+        try {
+            var ap = new byte[101]; var gh = GCHandle.Alloc(ap, GCHandleType.Pinned);
+            MT_mtByteArr = (ulong)Marshal.ReadIntPtr(new IntPtr(gh.AddrOfPinnedObject().ToInt64() - 16)).ToInt64(); gh.Free();
+        } catch (Exception ex) { Log("[mtrack4] arr calib FAIL " + ex.Message); }
+        for (int i = 0; i < MT3_MAXARR; i++) MT3_arSnap[i] = new byte[272];
+        Log("[mtrack4] freezer start RMCrypt=" + MT_mtRMCrypt.ToString("X") + " byteArr=" + MT_mtByteArr.ToString("X"));
+
+        var buf = new byte[4 << 20];
+        var mbi = new MBI();
+        var sz = (IntPtr)Marshal.SizeOf(typeof(MBI));
+        var hs = new List<IntPtr>(64);
+        uint myTid = GetCurrentThreadId();
+        var proc = Process.GetCurrentProcess();
+        var segSb = new StringBuilder();
+        while (!MT3_stop && w.IsAlive) {
+            MT3_cycles++;
+            // ---- freeze ----
+            hs.Clear();
+            proc.Refresh();
+            foreach (ProcessThread pt in proc.Threads) {
+                if ((uint)pt.Id == myTid) continue;
+                if (hs.Count >= 60) break;
+                IntPtr h = OpenThread(MT3_THREAD_SUSPEND_RESUME, false, (uint)pt.Id);
+                if (h == IntPtr.Zero) continue;
+                if (SuspendThread(h) != 0xFFFFFFFFu) hs.Add(h); else CloseHandle(h);
+            }
+            MT3_susp += hs.Count;
+            // ---- 冻结态扫描: .147 窗 + 快区 ----
+            MT4_saw356Addr = 0;
+            MT3_FrozenRange(buf, mbi, sz, 0x14000000, 0x15000000);
+            MT3_FrozenRange(buf, mbi, sz, 0x2800000, 0x3800000);
+            // ---- 命中 BIG356K → 冻结态内当场快照 ----
+            if (MT4_saw356Addr != 0 && MT4_armed) {
+                MT4_armed = false;
+                MT4_slowLeft = 40; MT4_dumpLeft = 2;
+                Log("[mtrack4] *** BIG356K FIRST SEEN @0x" + MT4_saw356Addr.ToString("X") + " cycle=" + MT3_cycles + " → SNAP NOW");
+                MT4_DumpAll(buf, MT3_cycles);
+                // 段表 post-thaw 由 segSb 复用 (DumpAll 填 MT4_seg*)
+            }
+            if (MT4_dumpLeft > 0) { MT4_dumpLeft--; MT4_DumpHot(buf, MT3_cycles); }
+            // ---- resume ----
+            for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
+            // ---- 解冻段处理 ----
+            if (MT4_nSeg > 0) {
+                segSb.Length = 0;
+                for (int i = 0; i < MT4_nSeg; i++)
+                    segSb.AppendLine(MT4_segOff[i] + " " + MT4_segLo[i] + " " + (MT4_segHi[i] - MT4_segLo[i]));
+                try { File.WriteAllText("dump\\snap_index_" + MT3_cycles + ".txt", segSb.ToString()); } catch {}
+                MT4_nSeg = 0;
+            }
+            MT3_ProcessHits();
+            Thread.Sleep(MT4_slowLeft > 0 ? 1 : 8);
+            if (MT4_slowLeft > 0) MT4_slowLeft--;
+        }
+        Log("[mtrack4] freezer exit cycles=" + MT3_cycles + " suspends=" + MT3_susp + " dumps=" + MT4_nDumps
+            + " keyFound=" + MT_nKey + " uKeys=" + MT_uKeys + " uIvs=" + MT_uIvs);
     }
 }
