@@ -1628,6 +1628,7 @@ class Probe2 {
         MT_InitCt();
         try { Directory.CreateDirectory(DumpDir); } catch {}
         Directory.SetCurrentDirectory(Path.GetDirectoryName(exe));
+        MT7_SelfArm();   // v8: LoadFrom 前武装 — 解密可能发生在 LoadFrom 内部 (.NET Reactor runtime 初始化)
         Log("[mtrack4] worker: loading (freezer cycling)...");
         var asm = Assembly.LoadFrom(exe);
         Log("[mtrack4] loaded " + asm.FullName);
@@ -1837,7 +1838,27 @@ class Probe2 {
     static extern bool GetThreadContext(IntPtr h, byte[] ctx);
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool SetThreadContext(IntPtr h, byte[] ctx);
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetCurrentThread();
     const int MT7_CTXLEN = 1232;
+
+    // v8: worker 线程 LoadFrom 前自武装 DR (v7 证明解密可能发生在 LoadFrom 内部 0.7ms 内, freezer cycle1 来不及)
+    // 只写 DEBUG_REGISTERS(+INTEGER), 不含 CONTROL → 不碰 RIP, 对当前线程 SetThreadContext 无竞态
+    static void MT7_SelfArm() {
+        try {
+            if (MT7_targets[0] == IntPtr.Zero) return;
+            var ctx = new byte[MT7_CTXLEN];
+            BitConverter.GetBytes(0x10013).CopyTo(ctx, 48);
+            if (!GetThreadContext(GetCurrentThread(), ctx)) return;
+            for (int i = 0; i < 4; i++) {
+                if (MT7_targets[i] != IntPtr.Zero) BitConverter.GetBytes(MT7_targets[i].ToInt64()).CopyTo(ctx, 72 + 8 * i);
+            }
+            long dr7 = BitConverter.ToInt64(ctx, 112) | 0x55;
+            BitConverter.GetBytes(dr7).CopyTo(ctx, 112);
+            if (SetThreadContext(GetCurrentThread(), ctx)) MT7_nThreadDR++;
+            Log("[mtrack7] self-arm done (worker, pre-LoadFrom)");
+        } catch (Exception ex) { Log("[mtrack7] self-arm FAIL " + ex.Message); }
+    }
 
     static void MT7_SetThreadDR(IntPtr h) {
         var ctx = new byte[MT7_CTXLEN];
