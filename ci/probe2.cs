@@ -1640,8 +1640,8 @@ class Probe2 {
             MT7_preInvoke = 1;
             Log("[mtrack7] pre-invoke flag set, waiting for freezer in-mem burst...");
             int spins2 = 0;
-            // v20: 上限 400ms (freezer 首扫 MEM_PRIVATE ~400ms — v19 的 40ms 超时导致 armed 晚于 invoke#0)
-            while (MT7_invArmed == 0 && spins2 < 2000000) { Thread.SpinWait(200); spins2++; }
+            // v21: 上限 3s (扫描 ulong 优化后 ~300ms, 余量充足)
+            while (MT7_invArmed == 0 && spins2 < 15000000) { Thread.SpinWait(200); spins2++; }
             // v19: 延迟 3ms 再 bust+ResolveMethod — 解密窗推到快照序列 (#0@+0.3ms, 间隔~0.7ms, 30份) 正中 #3-#6
             Thread.Sleep(3);
             Log("[mtrack7] invoke burst armed=" + MT7_invArmed + " spins=" + spins2 + " → bust+invoke");
@@ -1893,6 +1893,7 @@ class Probe2 {
     static IntPtr[] MT7_sbox = new IntPtr[4];
     static int MT7_nSbox = 0;
     static int MT7_sboxScanned = 0;              // 0=未扫 1=已扫(无论命中)
+    static byte[] MT7_sboxSig = new byte[] { 0x63,0x7C,0x77,0x7B,0xF2,0x6B,0x6F,0xC5,0x30,0x01,0x67,0x2B,0xFE,0xD7,0xAB,0x76 };
     static byte[] MT7_scanBuf = null;            // 扫描缓冲 (解冻态分配)
     // res[0] 判据常量: B0/B1/B2 = res0[8:24]/[24:40]/[40:56] (8B 头 + 356320B 密文, 16B 对齐实锤)
     static byte[] MT7_jB0 = new byte[] { 0x04,0x65,0xE8,0x5A,0xE8,0xAB,0xBA,0x16,0xF4,0xF9,0x0E,0x16,0xCE,0x3B,0x3D,0xBF };
@@ -1941,11 +1942,11 @@ class Probe2 {
                     IntPtr got;
                     if (ReadProcessMemory(GetCurrentProcess(), new IntPtr(a), buf, (IntPtr)take, out got) && got.ToInt64() >= 16) {
                         int n = (int)got.ToInt64();
-                        for (int i = 0; i <= n - 16; i++) {
-                            if (buf[i] == 0x63 && buf[i+1] == 0x7C && buf[i+2] == 0x77 && buf[i+3] == 0x7B
-                                && buf[i+4] == 0xF2 && buf[i+5] == 0x6B && buf[i+6] == 0x6F && buf[i+7] == 0xC5
-                                && buf[i+8] == 0x30 && buf[i+9] == 0x01 && buf[i+10] == 0x67 && buf[i+11] == 0x2B
-                                && buf[i+12] == 0xFE && buf[i+13] == 0xD7 && buf[i+14] == 0xAB && buf[i+15] == 0x76) {
+                        // v21: 8B ulong 批量匹配 (逐字节 C# 循环 ~300MB/s 是 v20 400ms 超时根因; 8B 步进×2 ulong = 8x 加速)
+                        ulong sig0 = BitConverter.ToUInt64(MT7_sboxSig, 0);
+                        ulong sig1 = BitConverter.ToUInt64(MT7_sboxSig, 8);
+                        for (int i = 0; i <= n - 16; i += 8) {
+                            if (BitConverter.ToUInt64(buf, i) == sig0 && BitConverter.ToUInt64(buf, i + 8) == sig1) {
                                 long fa = a + i;
                                 bool dup = false;
                                 for (int j = 0; j < MT7_nSbox; j++) if (MT7_sbox[j].ToInt64() == fa) { dup = true; break; }
