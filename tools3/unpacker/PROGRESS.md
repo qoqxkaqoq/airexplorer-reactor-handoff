@@ -2108,3 +2108,10 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **v12（commit d2b9a948）三修**：①10×80MB 分配移至解冻段（先挂 snapBufs 引用再置 volatile invArmed，写序保证）；②invBurst 冻结态 Log 移到 resume 后（v10 该路径从未实际执行过——死于反调试先于 invoke，v12 首跑必须合规）；③flush 完成即 MT3_stop 收工 + freezer 300s wall-clock 保险
 - **MT7_sc 链路确认**：no-DR 模式下 shellcode 仍 AllocHGlobal（VEH 注册行注释但分配无条件）→ `MT7_sc != IntPtr.Zero` 恒真 → worker preInvoke 链完整
 - **派发（run 40930635005，mode=mtrack7）**：预期 cctor OK + INVOKE BURST ARMED + 10 份 inv_snap_N.bin 落盘 → 下载后跑 step232_inv_oracle.py（目录 /root/work/step231/snaps，glob inv_snap_*.bin）暴破 res[0] native KEY → 得手即 build_a19.py <KEY> <IV>
+
+### step232/233（2026-10-29 续XXXIX）：v12 判定 → 判据实锤验证 → v13 S-box 数据断点定案
+- **v12 判定（run 40930635005，✓ 全程存活零死锁）**：burst 全链工作（ARMED → 10×80MB 全落盘 → flush → MT3_stop 收工）；**决定性时序：inv snap[0] @cycle4 恰插在 invoke#0 调用与 OK 之间**；但 step232 暴破 10 份全 NO
+- **判据实锤（离线验证）**：res1_256.bin + 已知 KEY(d8f47a25)/IV(fc7ae2e6) → 解出 `<RSAKeyValue><Modulus>…` ✓（Reactor 资源 = 裸 CBC 密文 + 独立 IV，无头）；res0 长度数学：356328-8=356320=16×22270 整除（8B 头+密文）而 0/16B 头均非整除 → **step232 判据 B0=[8:24] 起正确**；且判据 D(C1)^C0 数学上无需知 IV（相邻块消去）→ **10 份全 NO 唯一解释 = KEY 在 ResolveMethod 瞬间（~44.2830）活跃即清，快照最早 44.2841 全错过 6ms+**；res5key=NO 复证哨兵 KEY 也不驻留（解密完即清实锤）；res0 与 res1 不共用 KEY（4 种布局尝试全随机输出）
+- **v12 快照 vs 解密矛盾定案**：freeze 拍照时 worker 停止 vs 解密需 worker 运行 → 快照只能拍到解密后残留，KEY 无残留 → **快照路径命中率受限于相位且 KEY 清除极快，不可靠**
+- **v13（commit 25320fa2）S-box 数据断点方案**：native AES 必查 S-box（16B 特征 63 7C 77 7B F2 6B 6F C5 30 01 67 2B FE D7 AB 76，100% 特异；限定 MEM_PRIVATE exec 自动排除托管 clr 表）→ **DR0-3=S-box 表地址 RW=11 数据断点（Dr7=0x33330055）→ 解密首次查表即 VEH → KEY 仍在参数寄存器 RCX/RDX/R8/R9 → 实时捕获零窗口损失**；武装时机=preInvoke（cctor OK 后检测点已过，v7 后半程武装存活同款铁证）；shellcode v8（331B keystone）：ExcCode==0x80000004 且 Dr6&0xF!=0 判别（排除单步/复位值）+ 4 指针 deref（RCX/RDX 32B guard/R8 16B/R9 存指针）+ 清 DR + RF；**MT7_AesJudge 实时判据**（res0 B0/B1/B2 硬编码 CBC 双块）命中即日志 KEY FOUND + dump；命中后清 DR 防海量重触发；burst 快照机制保留兜底
+- **派发（run 40938006346）**：预期 SBOX#n 扫描日志 → DR armed → invoke 期 VEH 命中 → KEY FOUND（判据自证）→ build_a19.py <KEY> <IV>
