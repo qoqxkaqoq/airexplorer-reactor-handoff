@@ -1945,3 +1945,15 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - 注：probe2 trap fail 上限 = 6 即停，真实 fail 数可能 >6；ok=325 与 a13 持平
 - 结论：**当前有效组合 = v2（p1+p3）或 v5（+p5）**，最终取舍在守卫破后重测
 - 下一步：①全库扫 newobj Exception 构造点定位 'AirExplorer ' 消息源（重点 4523 try 区被调方 4527/4566/457f/46ac/457e/4526/4524/4525/4546）；②守卫破后最终组合 → trap ok≫325 → ag fields=6201；③交付单 exe + BouncyCastle.Crypto.dll（deps.zip 已固化）
+
+### a16 第二哨兵解剖（r5 差分 run 40795646414 + baseline 复跑 40797571589 + 静态追踪 step187-197）
+- **FCE 实锤原始 throw 点**：probe2 加 FirstChanceException 钩子（精确 System.Exception + Message.StartsWith("AirExplorer")，上限12）→ FCE#1 = 4528 DefineSetSet @3538 `throw (Exception)identifiableGatewayProxy.EncapsulateJoinedTransformer().HandleAutomatableConnection(null)`（74 throw 中唯一非 newobj 448F）；4523 第二 FCE = `throw c` 重抛。异常对象由运行时 4555 返回
+- **baseline 参照三连定案**：baseline trap ok=4878 fail=5 全缺 DLL（BouncyCastle×1+GongSolutions×4），零 AirExplorer → 守卫=真篡改哨兵；baseline ag 全过；**baseline r5 I 段 istat 全量快照 = 数据便携金矿**（ModelError/ModularRequest/TransferableAggregator 等明文：http://127.0.0.1:3021、1.47.1、com.pikcloud.pikpak、Air Explorer、35890、cloud_api scopes）
+- **文件级补丁面大幅修正（step189 对齐比较法）**：4181(cctor,348B)/419c(DefineEfficientProfiler,37072B)/4192(8970B)/4196(446B) **全是原位真体**（fileCodeSize=csize 且 headDiff=0）；4528 file=4B 桩、4555/419e/419f RVA=0 纯运行时。step186 旧结论"仅4192/4196"是漏检
+- **m_RemoteNodeVal 红鲱鱼除名（决定性）**：全库仅 4 引用（04:001fbd@DispatcherInitializer）：4181 cctor 写 0、**419c @3daf 唯一真写入者**（ldloca v74→IntPtr::ToInt64→stsfld）+读×2。v74 写入者全为基址套件：StartLogger(4220)=Assembly::GetModules 转发壳、StoreDic(4221)=Marshal::GetHINSTANCE 转发壳、ProcessModule→OpenService。**baseline 复跑 467664896→476774400（跨 run 漂移）= 镜像基址低32位 ASLR 环境值**。p6"存常量"方案作废
+- **cctor 全库注入结构**：419c 被 4609 个 .cctor 首指令调用（06000002 样本：`call 419c; call 4192; call 4194; call 类型专用; ret`）；4194=6条指令反调试（Debugger.IsAttached→throw 'Debugger Detected'）；419c=37KB 平坦机调 40+ 转发壳（GetModules/GetHINSTANCE/ManifestModule/ReadInt32/UTF8/DecryptSimpleTransmitter）+ 419e/419f(RVA=0 运行时) + `ldftn 4198+newobj 425c(runtime .ctor)+callvirt 425d Invoke`——**425d Invoke @28bd 即回填驱动器调用点**（3×IntPtr(v3)+魔数0x0cea1d7d，try内 pop;leave；AGENTS"驱动器本体MISSING"之谜 Closure）
+- **v2 缺失类型定量（istat 差分）**：v2=4002 类型 vs baseline=4065，**63 类型 cctor 全灭**（rid 散布 60..1550 非连续），含 AG/ModelError/ModularRequest/TransferableAggregator/ExtendedProxy 等；DispatcherInitializer(rid1570, 4192宿主) 自己存活
+- **行为学推理闭环**：p1(pop结果,c=0)/p3(陷阱块br→ret) 在诚实文件上均为行为空操作（c 自然=0、陷阱块不可达、baseline 零 cctor 失败）→ v2≡baseline 行为却 63 炸 → **第二哨兵=纯字节校验**（按块抽验，谁抽中含补丁字节谁炸）
+- **第一哨兵原版块解码（4192 @04cb-04e5）**：`ldsfld m_ExtendedSchemaTemplate(RSA对象); ldloc v13(SHA1,@0ac3 创建); call 41ed; ldloc v23; ldloc v24; call 41ee VerifyDynamicStrategy; ldc.i4.0; ceq; stloc v12(c); br 0977`——**结果单次消费无 dup，池密钥派生假说死亡**；结构=RSA 签名校验（RSA+SHA1+期望签名 v23/v24）→ **新主攻 = A2 同构：替换 m_ExtendedSchemaTemplate 密钥（FromXmlString XML 常量，可同长填充）+ 自签补丁区哈希**
+- **待验证**：①p3+p5-only（去 p1）一 dispatch 分离 字节校验vs行为依赖（若仍63炸→纯字节校验实锤）；②m_ExtendedSchemaTemplate 初始化点（FromXmlString 41df 调用者/XML blob 位置）；③41ed 真身（(RSA,SHA1)→?）
+- 工具：step187_mnv.py(字段引用扫描)/step188-189(补丁面对齐判定)/step190-191(数据流+cctor注入)/mem5 il_index+flat.py 复用
