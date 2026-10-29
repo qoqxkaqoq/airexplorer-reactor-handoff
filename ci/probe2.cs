@@ -1479,7 +1479,13 @@ class Probe2 {
                     Array.Copy(buf, off + 16, snap, 0, need);
                     MT3_arAddr[MT3_nAr] = oa;
                     MT3_arKind[MT3_nAr] = alen == 32 ? 1 : (alen == 16 ? 2 : 3);
-                    if (MT3_arKind[MT3_nAr] == 3) MT4_saw356Addr = oa;
+                    if (MT3_arKind[MT3_nAr] == 3) {
+                        MT4_saw356Addr = oa;
+                        // res[0] CT/PT 头 8B 区分 (20efb9d7a4dc0500=CT, f5410006215b4000=PT)
+                        ulong h = BitConverter.ToUInt64(buf, off + 16);
+                        if (h == 0x0500dca4d7b9ef20UL) MT4_ctSeen = true;
+                        else if (h == 0x00405b21060041f5UL) MT4_ptSeen = true;
+                    }
                     MT3_nAr++;
                 }
             } else if (LooksLikeHeap(v)) {
@@ -1532,6 +1538,7 @@ class Probe2 {
     // → 冻结态内当轮全 MEM_PRIVATE 快照落盘(预算 768MB, 低址优先) + 后续 2 轮热窗 dump; 慢动作(thaw 1ms) 40 轮。
     // 本地离线对快照逐 8B 窗口暴力 AES 试解 — KEY 不限形态/位置, 在快照里即可恢复。
     static bool MT4_armed = true;
+    static volatile bool MT4_ctSeen = false, MT4_ptSeen = false;
     static int MT4_slowLeft = 0, MT4_dumpLeft = 0, MT4_nDumps = 0;
     static long MT4_saw356Addr = 0;
     static long MT4_budget = 768L << 20;
@@ -1688,7 +1695,7 @@ class Probe2 {
             }
             MT3_susp += hs.Count;
             // ---- 冻结态扫描: 动态锚点窗口 (LOH±32MB + loaderMT±16MB + 快区) ----
-            MT4_saw356Addr = 0;
+            MT4_saw356Addr = 0; MT4_ctSeen = false; MT4_ptSeen = false;
             if (lohAddr > 0) {
                 long lo = lohAddr - (32L << 20); if (lo < 0x10000) lo = 0x10000;
                 MT3_FrozenRange(buf, mbi, sz, lo, lohAddr + (32L << 20));
@@ -1698,14 +1705,22 @@ class Probe2 {
                 MT3_FrozenRange(buf, mbi, sz, lo2, mtAddr + (16L << 20));
             }
             MT3_FrozenRange(buf, mbi, sz, 0x2800000, 0x3800000);
-            // ---- 命中 BIG356K → 冻结态内当场快照 ----
-            if (MT4_saw356Addr != 0 && MT4_armed) {
+            // ---- CT (res[0] 密文) 首现 → 开闸: 连续 10 轮 DumpAll 覆盖解密全程 ----
+            if (MT4_ctSeen && MT4_armed) {
                 MT4_armed = false;
-                MT4_slowLeft = 40; MT4_dumpLeft = 2;
-                Log("[mtrack4] *** BIG356K FIRST SEEN @0x" + MT4_saw356Addr.ToString("X") + " cycle=" + MT3_cycles + " → SNAP NOW");
+                MT4_slowLeft = 60; MT4_dumpLeft = 10;
+                Log("[mtrack4] *** CT SEEN @0x" + MT4_saw356Addr.ToString("X") + " cycle=" + MT3_cycles
+                    + " pt=" + MT4_ptSeen + " → SNAP BURST (10)");
                 MT4_DumpAll(buf, MT3_cycles);
+                MT4_dumpLeft--;
             }
-            if (MT4_dumpLeft > 0) { MT4_dumpLeft--; MT4_DumpHot(buf, MT3_cycles, lohAddr, mtAddr); }
+            if (MT4_dumpLeft > 0) {
+                MT4_dumpLeft--;
+                Log("[mtrack4] burst snap cycle=" + MT3_cycles + " ct=" + MT4_ctSeen + " pt=" + MT4_ptSeen);
+                MT4_DumpAll(buf, MT3_cycles);
+            } else if (MT4_dumpLeft == 0 && !MT4_armed && MT4_ptSeen && MT4_slowLeft == 0) {
+                MT4_DumpHot(buf, MT3_cycles, lohAddr, mtAddr);
+            }
             // ---- resume ----
             for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
             // ---- 解冻段处理 ----
@@ -1717,7 +1732,7 @@ class Probe2 {
                 MT4_nSeg = 0;
             }
             MT3_ProcessHits();
-            Thread.Sleep(MT4_slowLeft > 0 ? 1 : 8);
+            Thread.Sleep(MT4_slowLeft > 0 ? 1 : 2);
             if (MT4_slowLeft > 0) MT4_slowLeft--;
         }
         if (lohPin.IsAllocated) lohPin.Free();
