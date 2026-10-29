@@ -1628,7 +1628,14 @@ class Probe2 {
         MT_InitCt();
         try { Directory.CreateDirectory(DumpDir); } catch {}
         Directory.SetCurrentDirectory(Path.GetDirectoryName(exe));
-        MT7_SelfArm();   // v8: LoadFrom 前武装 — 解密可能发生在 LoadFrom 内部 (.NET Reactor runtime 初始化)
+        // v9: 通知 freezer 进入 burst 快照模式并等其就绪 (解密发生在 LoadFrom 内部 0.7ms — 快照切片是唯一截断手段)
+        if (MT7_sc != IntPtr.Zero) {
+            MT7_preLoad = 1;
+            Log("[mtrack7] pre-load flag set, waiting for freezer burst...");
+            int spins = 0;
+            while (MT7_burstArmed == 0 && spins < 5000) { Thread.Sleep(1); spins++; }
+            Log("[mtrack7] burst armed=" + MT7_burstArmed + " spins=" + spins + " → LoadFrom");
+        }
         Log("[mtrack4] worker: loading (freezer cycling)...");
         var asm = Assembly.LoadFrom(exe);
         Log("[mtrack4] loaded " + asm.FullName);
@@ -1828,6 +1835,11 @@ class Probe2 {
     static byte[] MT7_cHdr = new byte[32];
     static byte[] MT7_hitBuf = new byte[80];     // [keyPtr 8][ivPtr 8][rip 8][this 8][key 32][iv 16] — 冻结态即时落盘防 failfast 丢失
     static int MT7_drVerify = 0;
+    // v9: pre-load burst — 解密发生在 LoadFrom 内部 0.7ms (native init), 用连续快照切片解密窗口
+    static volatile int MT7_preLoad = 0;     // worker LoadFrom 前置位
+    static volatile int MT7_burstArmed = 0;  // freezer 进入 burst 前置位 (worker 见 1 才 LoadFrom)
+    static int MT7_burstLeft = 0;
+    static int MT7_burstDone = 0;
     static long MT7_pendLo = 0, MT7_pendHi = 0;  // 本轮已消费命中区间 (解冻段转储用)
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -1939,6 +1951,19 @@ class Probe2 {
                 if (SuspendThread(h) != 0xFFFFFFFFu) { hs.Add(h); MT7_SetThreadDR(h); } else CloseHandle(h);
             }
             MT3_susp += hs.Count;
+            // v9: pre-load burst — worker 已挂起, 连续快照切片 LoadFrom 解密窗口 (每份 ~400ms, 10 份 = 窗口切 10 段)
+            if (MT7_preLoad == 1 && MT7_burstArmed == 0 && MT7_burstDone == 0) {
+                MT7_burstArmed = 1; MT7_burstLeft = 10; MT7_burstDone = 1;
+                Log("[mtrack7] *** BURST ARMED (10x full snapshot, decrypt window slicing)");
+            }
+            bool burst = MT7_burstArmed == 1 && MT7_burstLeft > 0;
+            if (burst) {
+                MT7_burstLeft--;
+                MT4_DumpAll(buf, MT3_cycles);
+                for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
+                MT3_ProcessHits();
+                if (MT7_burstLeft > 0) continue;   // 下一份快照立即开始 (worker resume 窗口 ~0ms)
+            }
             // ---- DR 命中消费 (冻结态; v7 shellcode 已 deref 拷贝 key/iv 内容进槽, 检测点 failfast 也不丢) ----
             MT7_pendLo = MT7_pendHi = 0;
             long cnt = Marshal.ReadInt64(MT7_cntAddr, 0);
