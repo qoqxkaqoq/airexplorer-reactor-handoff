@@ -914,6 +914,7 @@ class Probe2 {
     static ulong MT_mtRMCrypt = 0, MT_mtByteArr = 0;
     static byte[] MT_C1, MT_C2, MT_C3;
     static int MT_nKey = 0, MT_nTf = 0, MT_nIv = 0, MT_nB32 = 0;
+    static int MT_nI60 = 0, MT_nI8 = 0, MT_nI32 = 0, MT_nG4 = 0;
 
     static void RunMTrack(string exe) {
         MT_C1 = new byte[] {0x04,0x65,0xe8,0x5a,0xe8,0xab,0xba,0x16,0xf4,0xf9,0x0e,0x16,0xce,0x3b,0x3d,0xbf};
@@ -946,7 +947,7 @@ class Probe2 {
         Thread.Sleep(5000);              // 尾扫窗口
         MT_stop = true;
         Thread.Sleep(2500);
-        Log("[mtrack] rounds=" + MT_round + " tf=" + MT_nTf + " key=" + MT_nKey + " b32=" + MT_nB32 + " iv=" + MT_nIv);
+        Log("[mtrack] rounds=" + MT_round + " tf=" + MT_nTf + " key=" + MT_nKey + " b32=" + MT_nB32 + " iv=" + MT_nIv + " i60=" + MT_nI60 + " i8=" + MT_nI8 + " i32=" + MT_nI32 + " g4=" + MT_nG4);
         // 验证解密确实发生
         try {
             var mod2 = asm.GetModules()[0];
@@ -1023,6 +1024,7 @@ class Probe2 {
         var sz = (IntPtr)Marshal.SizeOf(typeof(MBI));
         var seenTf = new HashSet<long>();
         var seen32 = new HashSet<long>();
+        var seen60 = new HashSet<long>();
         while (!MT_stop) {
             MT_round++;
             int r = MT_round;
@@ -1053,7 +1055,6 @@ class Probe2 {
                                     if (!LooksLikeHeap(pv)) continue;
                                     var tgt = new byte[272];
                                     if (!SafeRead((IntPtr)(long)pv, tgt)) continue;
-                                    if (BitConverter.ToUInt64(tgt, 0) != MT_mtByteArr) continue;
                                     int tlen = BitConverter.ToInt32(tgt, 8);
                                     if (tlen == 60) {
                                         var ed = new byte[240];
@@ -1073,8 +1074,8 @@ class Probe2 {
                                         var iv = new byte[16];
                                         Array.Copy(tgt, 16, iv, 0, 16);
                                         MT_nIv++;
-                                        Log("[mtrack] r" + r + " IV4 @0x" + oa.ToString("X") + " tf@0x" + oa.ToString("X") + " f" + fo + " = " + MT_Hex(iv));
-                                        MT_Dump("mtrack_iv_0x" + oa.ToString("X") + "_f" + fo + "_r" + r + ".bin", iv);
+                                        Log("[mtrack] r" + r + " IV4 @0x" + pv.ToString("X") + " tf@0x" + oa.ToString("X") + " f" + fo + " = " + MT_Hex(iv));
+                                        MT_Dump("mtrack_iv_0x" + pv.ToString("X") + "_f" + fo + "_r" + r + ".bin", iv);
                                     }
                                 }
                             } else if (MT_mtByteArr != 0 && v == MT_mtByteArr) {
@@ -1094,6 +1095,54 @@ class Probe2 {
                                     Array.Copy(buf, off + 16, iv, 0, 16);
                                     MT_nIv++;
                                     MT_Dump("mtrack_b16_0x" + oa.ToString("X") + "_r" + r + ".bin", iv);
+                                }
+                            } else if (LooksLikeHeap(v)) {
+                                // 全局 int[]/uint[] 普查: KEY 组装形态 + 遗漏的 E 表 (MT 任意)
+                                int alen = BitConverter.ToInt32(buf, off + 8);
+                                long oa = src.ToInt64() + off;
+                                if (alen == 60 && MT_nI60 < 2500 && seen60.Add(oa)) {
+                                    MT_nI60++;
+                                    if (off + 16 + 240 <= take) {
+                                        var ed = new byte[240];
+                                        Array.Copy(buf, off + 16, ed, 0, 240);
+                                        var kE = new byte[32]; Array.Copy(ed, 0, kE, 0, 32);
+                                        MT_TryAndLog(kE, "g60_0x" + oa.ToString("X") + "_r" + r);
+                                        var kD = new byte[32];
+                                        Array.Copy(ed, 0, kD, 0, 16);
+                                        var mid2 = new byte[16]; Array.Copy(ed, 16, mid2, 0, 16);
+                                        var mc2 = MT_MixCols(mid2);
+                                        Array.Copy(mc2, 0, kD, 16, 16);
+                                        MT_TryAndLog(kD, "g60D_0x" + oa.ToString("X") + "_r" + r);
+                                        if (MT_nI60 <= 400) MT_Dump("mtrack_g60_0x" + oa.ToString("X") + "_r" + r + ".bin", ed);
+                                    }
+                                } else if (alen == 8 && MT_nI8 < 4000 && seen60.Add(oa)) {
+                                    MT_nI8++;
+                                    if (off + 16 + 32 <= take) {
+                                        // int[8]: 直接当 32B KEY (int LE 字节流)
+                                        var k = new byte[32];
+                                        Array.Copy(buf, off + 16, k, 0, 32);
+                                        MT_TryAndLog(k, "gi8_0x" + oa.ToString("X") + "_r" + r);
+                                    }
+                                } else if (alen == 32 && MT_nI32 < 4000 && seen60.Add(oa)) {
+                                    MT_nI32++;
+                                    if (off + 16 + 128 <= take) {
+                                        // int[32]: 每 int <=0xFF 时组装 32B KEY
+                                        var k = new byte[32];
+                                        bool ok = true;
+                                        for (int i = 0; i < 32 && ok; i++) {
+                                            int x = BitConverter.ToInt32(buf, off + 16 + 4*i);
+                                            if (x < 0 || x > 255) ok = false; else k[i] = (byte)x;
+                                        }
+                                        if (ok) MT_TryAndLog(k, "gi32_0x" + oa.ToString("X") + "_r" + r);
+                                    }
+                                } else if (alen == 4 && MT_nG4 < 2000 && seen60.Add(oa)) {
+                                    MT_nG4++;
+                                    if (off + 16 + 16 <= take) {
+                                        var iv = new byte[16];
+                                        Array.Copy(buf, off + 16, iv, 0, 16);
+                                        MT_nIv++;
+                                        if (MT_nG4 <= 400) MT_Dump("mtrack_g4_0x" + oa.ToString("X") + "_r" + r + ".bin", iv);
+                                    }
                                 }
                             }
                         }
