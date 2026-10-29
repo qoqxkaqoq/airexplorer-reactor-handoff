@@ -49,6 +49,58 @@ class Probe2 {
         wd.IsBackground = true;
         wd.Start();
 
+        // ---- mtrack7: VEH+DR0-3 硬件断点 hook 全部 managed AES 入口 (KEY/IV 零时差捕获) ----
+        if (mode == "mtrack7") {
+            // 1) 预 JIT 四个 hook 目标 (此时 DR 未设, 不触发)
+            IntPtr t0 = IntPtr.Zero, t1 = IntPtr.Zero, t2 = IntPtr.Zero, t3 = IntPtr.Zero;
+            try {
+                var rm = new RijndaelManaged(); rm.Mode = CipherMode.CBC;
+                var dec = rm.CreateDecryptor(new byte[32], new byte[16]);
+                var mi = typeof(RijndaelManaged).GetMethod("CreateDecryptor", new Type[] { typeof(byte[]), typeof(byte[]) });
+                t0 = mi.MethodHandle.GetFunctionPointer();
+                dec.Dispose();
+            } catch (Exception ex) { Log("[mtrack7] preJIT RMT fail " + ex.Message); }
+            try {
+                var m1 = typeof(AesCryptoServiceProvider).GetMethod("CreateDecryptor", new Type[] { typeof(byte[]), typeof(byte[]) });
+                if (m1 != null) t1 = m1.MethodHandle.GetFunctionPointer();
+            } catch (Exception ex) { Log("[mtrack7] preJIT ACSP fail " + ex.Message); }
+            try {
+                var m2 = typeof(AesManaged).GetMethod("CreateDecryptor", new Type[] { typeof(byte[]), typeof(byte[]) });
+                if (m2 != null) t2 = m2.MethodHandle.GetFunctionPointer();
+            } catch (Exception ex) { Log("[mtrack7] preJIT AesM fail " + ex.Message); }
+            try {
+                var ct3 = typeof(RijndaelManagedTransform).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, null, CallingConventions.Any, new Type[] { typeof(byte[]) }, null);
+                if (ct3 == null) {
+                    foreach (var c in typeof(RijndaelManagedTransform).GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance)) {
+                        var ps = c.GetParameters();
+                        if (ps.Length >= 1 && ps[0].ParameterType == typeof(byte[])) { ct3 = c; break; }
+                    }
+                }
+                if (ct3 != null) t3 = ct3.MethodHandle.GetFunctionPointer();
+            } catch (Exception ex) { Log("[mtrack7] preJIT RMTC fail " + ex.Message); }
+            MT7_targets[0] = t0; MT7_targets[1] = t1; MT7_targets[2] = t2; MT7_targets[3] = t3;
+            Log("[mtrack7] targets: " + t0.ToString("X") + " " + t1.ToString("X") + " " + t2.ToString("X") + " " + t3.ToString("X"));
+            // 2) VEH + 现有线程 DR0-3
+            try {
+                MT7_vehKeep = new MT7_VehDel(MT7_VehHandler);
+                IntPtr p = Marshal.GetFunctionPointerForDelegate(MT7_vehKeep);
+                MT7_vehHand = AddVectoredExceptionHandler(1, p);
+                Log("[mtrack7] VEH @ " + MT7_vehHand.ToString("X"));
+            } catch (Exception ex) { Log("[mtrack7] VEH FAIL " + ex.Message); }
+            MT7_SetAllThreadsDR();
+            // 3) worker + freezer
+            var w7 = new Thread(delegate() {
+                try { MT4_RunWorker(exe); }
+                catch (Exception ex) { Log("[mtrack7] worker FAIL " + ex.GetType().FullName + ": " + ex.Message); }
+            });
+            w7.SetApartmentState(ApartmentState.STA);
+            w7.Start();
+            MT7_FreezerLoop(w7);
+            w7.Join(20000);
+            Log("[probe2] mtrack7 DONE");
+            return 0;
+        }
+
         // ---- mtrack4: BIG356K 触发冻结态全内存快照 ----
         if (mode == "mtrack4") {
             var w4 = new Thread(delegate() {
@@ -1738,5 +1790,153 @@ class Probe2 {
         if (lohPin.IsAllocated) lohPin.Free();
         Log("[mtrack4] freezer exit cycles=" + MT3_cycles + " suspends=" + MT3_susp + " dumps=" + MT4_nDumps
             + " keyFound=" + MT_nKey + " uKeys=" + MT_uKeys + " uIvs=" + MT_uIvs);
+    }
+
+    // ==================== mtrack7: VEH + DR0-3 硬件断点 (零代码修改 hook) ====================
+    // x64 CONTEXT 关键偏移: Dr0=72 Dr1=80 Dr2=88 Dr3=96 Dr6=104 Dr7=112
+    //   Rax=120 Rcx=128 Rdx=136 Rbx=144 Rsp=152 Rbp=160 Rsi=168 Rdi=176 R8=184 ... Rip=248; EFlags=68
+    static IntPtr[] MT7_targets = new IntPtr[4];
+    static byte[][] MT7_keySlots = new byte[16][];
+    static byte[][] MT7_ivSlots = new byte[16][];
+    static long[] MT7_slotRip = new long[16];
+    static long MT7_cnt = 0, MT7_seen = 0;
+    static long MT7_nThreadDR = 0;
+    delegate int MT7_VehDel(IntPtr ptrs);
+    static MT7_VehDel MT7_vehKeep;
+    static IntPtr MT7_vehHand;
+
+    [DllImport("kernel32.dll")]
+    static extern IntPtr AddVectoredExceptionHandler(uint first, IntPtr handler);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetThreadContext(IntPtr h, byte[] ctx);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool SetThreadContext(IntPtr h, byte[] ctx);
+    const int MT7_CTXLEN = 1232;
+
+    static int MT7_VehHandler(IntPtr ptrs) {
+        try {
+            if (ptrs == IntPtr.Zero) return 1;
+            IntPtr ctx = Marshal.ReadIntPtr(ptrs, 8);
+            if (ctx == IntPtr.Zero) return 1;
+            long dr6 = Marshal.ReadInt64(ctx, 104);
+            if (dr6 == 0) return 1;
+            long rip = Marshal.ReadInt64(ctx, 248);
+            int slot = -1;
+            for (int i = 0; i < 4; i++) {
+                if ((dr6 & (1 << i)) != 0 && MT7_targets[i] != IntPtr.Zero && rip == MT7_targets[i].ToInt64()) { slot = i; break; }
+            }
+            int s = (int)(MT7_cnt & 15);
+            if (slot >= 0) {
+                long rdx = Marshal.ReadInt64(ctx, 136);
+                long r8 = Marshal.ReadInt64(ctx, 184);
+                if (MT7_keySlots[s] == null) { MT7_keySlots[s] = new byte[32]; MT7_ivSlots[s] = new byte[16]; }
+                if (rdx > 0x10000 && rdx < 0x7FFFFFFEFFFF) {
+                    try { Marshal.Copy(new IntPtr(rdx + 16), MT7_keySlots[s], 0, 32); } catch {}
+                }
+                if (r8 > 0x10000 && r8 < 0x7FFFFFFEFFFF) {
+                    try { Marshal.Copy(new IntPtr(r8 + 16), MT7_ivSlots[s], 0, 16); } catch {}
+                }
+                MT7_slotRip[s] = rip;
+                MT7_cnt++;
+            }
+            // 无论命中与否都清 DR6 + RF 放行 (防卡死)
+            Marshal.WriteInt64(ctx, 104, 0);
+            Marshal.WriteInt32(ctx, 68, (int)(Marshal.ReadInt32(ctx, 68) | 0x10000));
+            return 0; // EXCEPTION_CONTINUE_EXECUTION
+        } catch { return 1; }
+    }
+
+    static void MT7_SetThreadDR(IntPtr h) {
+        var ctx = new byte[MT7_CTXLEN];
+        try {
+            BitConverter.GetBytes(0x10013).CopyTo(ctx, 48);   // CONTROL|INTEGER|DEBUG_REGISTERS
+            if (!GetThreadContext(h, ctx)) return;
+            long dr7 = BitConverter.ToInt64(ctx, 112);
+            int need = 0;
+            for (int i = 0; i < 4; i++) {
+                if (MT7_targets[i] == IntPtr.Zero) continue;
+                long cur = BitConverter.ToInt64(ctx, 72 + 8 * i);
+                if (cur != MT7_targets[i].ToInt64()) { BitConverter.GetBytes(MT7_targets[i].ToInt64()).CopyTo(ctx, 72 + 8 * i); need = 1; }
+                dr7 |= (1L << (2 * i));
+            }
+            if (need == 1 || (dr7 & 0x55) != 0) {
+                BitConverter.GetBytes(dr7).CopyTo(ctx, 112);
+                if (SetThreadContext(h, ctx)) MT7_nThreadDR++;
+            }
+        } catch {}
+    }
+
+    static void MT7_SetAllThreadsDR() {
+        try {
+            uint myTid = GetCurrentThreadId();
+            var proc = Process.GetCurrentProcess();
+            foreach (ProcessThread pt in proc.Threads) {
+                if ((uint)pt.Id == myTid) continue;
+                IntPtr h = OpenThread(MT3_THREAD_SUSPEND_RESUME | 0x0008 /*THREAD_GET_CONTEXT*/ | 0x0010 /*THREAD_SET_CONTEXT*/, false, (uint)pt.Id);
+                if (h == IntPtr.Zero) continue;
+                MT7_SetThreadDR(h);
+                CloseHandle(h);
+            }
+        } catch {}
+    }
+
+    static void MT7_FreezerLoop(Thread w) {
+        MT_InitCt();
+        try { Directory.CreateDirectory(DumpDir); } catch {}
+        try {
+            var t0 = new RijndaelManaged().CreateDecryptor(new byte[32], new byte[16]);
+            MT_mtRMCrypt = (ulong)t0.GetType().TypeHandle.Value.ToInt64();
+        } catch (Exception ex) { Log("[mtrack7] calib FAIL " + ex.Message); }
+        try {
+            var ap = new byte[101]; var gh = GCHandle.Alloc(ap, GCHandleType.Pinned);
+            MT_mtByteArr = (ulong)Marshal.ReadIntPtr(new IntPtr(gh.AddrOfPinnedObject().ToInt64() - 16)).ToInt64(); gh.Free();
+        } catch (Exception ex) { Log("[mtrack7] arr calib FAIL " + ex.Message); }
+        for (int i = 0; i < MT3_MAXARR; i++) MT3_arSnap[i] = new byte[272];
+        Log("[mtrack7] freezer start RMCrypt=" + MT_mtRMCrypt.ToString("X") + " byteArr=" + MT_mtByteArr.ToString("X"));
+
+        var buf = new byte[4 << 20];
+        var mbi = new MBI();
+        var sz = (IntPtr)Marshal.SizeOf(typeof(MBI));
+        var hs = new List<IntPtr>(64);
+        uint myTid = GetCurrentThreadId();
+        var proc = Process.GetCurrentProcess();
+        int snapLeft = 3;
+        while (!MT3_stop && w.IsAlive) {
+            MT3_cycles++;
+            hs.Clear();
+            proc.Refresh();
+            foreach (ProcessThread pt in proc.Threads) {
+                if ((uint)pt.Id == myTid) continue;
+                if (hs.Count >= 60) break;
+                // GET_CONTEXT|SET_CONTEXT|SUSPEND_RESUME — 冻结态下补设 DR (新线程)
+                IntPtr h = OpenThread(MT3_THREAD_SUSPEND_RESUME | 0x0008 | 0x0010, false, (uint)pt.Id);
+                if (h == IntPtr.Zero) continue;
+                if (SuspendThread(h) != 0xFFFFFFFFu) { hs.Add(h); MT7_SetThreadDR(h); } else CloseHandle(h);
+            }
+            MT3_susp += hs.Count;
+            MT4_saw356Addr = 0; MT4_ctSeen = false; MT4_ptSeen = false;
+            if (MT3_cycles % 40 == 1) MT3_FrozenRange(buf, mbi, sz, 0x10000, 0x7FFFFFFEFFFF);
+            else {
+                MT3_FrozenRange(buf, mbi, sz, 0x2800000, 0x3800000);
+            }
+            for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
+            // ---- DR 命中处理 (解冻段) ----
+            if (MT7_cnt > MT7_seen) {
+                for (long k = MT7_seen; k < MT7_cnt; k++) {
+                    int s = (int)(k & 15);
+                    if (MT7_keySlots[s] == null) continue;
+                    string kh = MT_Hex(MT7_keySlots[s]);
+                    Log("[mtrack7] *** CREATEDECRYPTOR HIT#" + k + " key=" + kh + " iv=" + MT_Hex(MT7_ivSlots[s]) + " rip=" + MT7_slotRip[s].ToString("X"));
+                    MT_TryAndLog(MT7_keySlots[s], "mt7dr_" + k);
+                    MT_RegIv(MT7_ivSlots[s]);
+                }
+                MT7_seen = MT7_cnt;
+                if (MT7_cnt <= 3 && snapLeft > 0) { snapLeft--; MT4_DumpAll(buf, MT3_cycles); }
+            }
+            MT3_ProcessHits();
+            Thread.Sleep(2);
+        }
+        Log("[mtrack7] freezer exit cycles=" + MT3_cycles + " suspends=" + MT3_susp + " drHits=" + MT7_cnt
+            + " threadsDR=" + MT7_nThreadDR + " dumps=" + MT4_nDumps + " keyFound=" + MT_nKey + " uKeys=" + MT_uKeys);
     }
 }
