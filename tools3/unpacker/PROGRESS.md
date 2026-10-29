@@ -2006,3 +2006,20 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **mtrack 模式（step205，本步新增）**：probe2 并发抓取——**Assembly.LoadFrom 之前启动 AboveNormal 扫描线程**，30-200ms/轮全堆扫：①RMCrypt MT 命中 → dump 512B + chase f8..f100 → int[60] E 表头 32B=KEY 明文直读、D 表头+MixCols 还原、**m_IV int[4] 直读=IV**；②byte[32] 数组 → 在线 TryKeyNet（CBC 链 D(C2)^C1/D(C3)^C2 双块 score≥20）→ KEYFOUND 即 log+dump；③byte[16] 收集 600 个备 IV 配对；oracle 常量 = baseline res[0] C1/C2/C3（skip=8）硬编码
   - mono mcs 编译通过 + 本地冒烟（扫描线程 try-catch 保护，Windows API 失败优雅退出）
   - **判定预期**：KEYFOUND 行出现 → KEY+IV 到手 → build_a19.py 出包
+
+### step206-213（2026-10-29 续XXVIII）：mtrack 六轮迭代 → KEY 不在已捕获表中 → mtrack3 冻结世界扫描
+- **mtrack CI 六轮（runs 40862296902/40863421263/40865085842/40866451797/40870505074/40871378050）**：
+  - v1→v2：chase 二次读 GC 竞态修复（对象在快照与 chase 之间被 GC 搬家）→ **buf 内 Array.Copy 零二次读**；chase 只追 byte[] MT 漏掉 int[60] → **any-MT by-length**
+  - mtrack2：cctor 后清 DispatcherInitializer 静态集合（Hashtable/IDictionary/IList/Array）+ invoke 0600419C 强制重解密 + HOT 窗（快区 0x2800000-0x3800000，轮 ~10ms）；**bust 只再生字符串池 transform（res[5] 路径），res[0] 解密缓存于原生 JIT-hook 层不再重放**
+  - **方法论已证实**：mtk6 tbl 转储中一个 E 表头 32B == res5_aes_key_iv.txt 的 KEY（d8f47a25…b810e）**精确匹配** —— 抓活体→E 表头直读→KEY 的链路全通
+  - **res[0] transform 从未见过活体**：LoadFrom/cctor 期间（解密发生点）扫描线程还处于全堆 200ms 轮次；HOT 窗时 res[0] 已缓存。全部 transform 到手时已 Dispose（E 表已清空）
+- **step210（stelem.i1 三元组提取）**：arr4(KEY) 31 slot（7 确定+24 冲突）/arr33(IV) 15 slot（3+12）——decoy 冲突过多，静态不可解
+- **step211（确定性 dispatch 链模拟）**：3 谓词字段 8 组合全部 v4=0/v33=0（链从未到达填充块）；CreateDecryptor 调用点 0x817A-0x818F（case 354：call 06004225 工厂→set_Mode→ldloc v53,v87→call 06004227）
+- **step212（g60 全变体预言机）**：2508 个 int[60] 转储（E头直读/D头+MixCols/E尾反推/D尾反推 × IV{0,data[:16],data[:8]+0} × 全 skip）→ **502 唯一 KEY，0 命中** → res[0] KEY 不在任何已捕获表中
+- **step213（本轮，probe2 v133）**：
+  - **资源重提取定案**：baseline 6 资源 = res[0] 356328B（头 8B `20efb9d7a4dc0500`+密文，C1/C2/C3 与既有硬编码一致）/ res[1] 256B **== res5_cipher.bin（skip=0 无头，KEY/IV 已知）**/ res[2] 47915B / res[3] 26128B / res[4] 2337031B / res[5] 398794B → `step194/res_ext/`
+  - **预言机升级**：旧 skip=8 单框定（数学上恰等价于 skip=24+IV=头8B 的假设）→ **8 块 ECB 全框定**：P_j=D_j^B[j-1]（IV 无关），相邻对 (P_j,P_{j+1}) 覆盖 skip∈{8,24,40,56,72}；双打分器 = 零值分（IL/二进制）≥20/20 **或** 文本分（ASCII/XML）≥14/14；mono 自测 PASS（res5 已知 KEY 文本分支命中 t=16/16、合成零值向量 z=25/21 命中、负例无误报）
+  - **全量 KEY/IV 落盘**：唯一 32B → dump/keys32.txt、唯一 16B → dump/ivs16.txt（内容去重，本地可用任意框定/打分重测）——在线预言机漏杀的安全网
+  - **mtrack3 冻结世界扫描（新 mode）**：worker 线程跑 LoadFrom/cctor/bust+invoke×3；主线程循环 `SuspendThread(其他全部线程)→冻结态零分配扫描→ResumeThread→处理命中→thaw 3ms`；**thaw(3ms)<res[0] 解密时长(~5-7ms) ⇒ 解密必被冻结截断 ⇒ transform 活体必捕获**（其线程被挂起则不可能走到 Dispose，E 表必完整）；冻结路径仅 syscall+memcpy+预分配池写（无堆分配/GC/Log，防 GC 锁死锁）；快区每轮 + 全堆每 40 轮；RMCrypt 活体计数、b32/b16/g60/big356K 四类池化
+  - C#5（mcs -langversion:5）编译零警告
+- **判定预期**：mt3E_/mt3D_/mt3b32_ tag KEYFOUND → KEY 到手 → build_a19.py；若 keyFound=0，keys32.txt 本地全框定重测兜底
