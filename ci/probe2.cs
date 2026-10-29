@@ -1034,6 +1034,8 @@ class Probe2 {
                 long rsz = mbi.RegionSize.ToInt64();
                 IntPtr next = (IntPtr)(mbi.BaseAddress.ToInt64() + rsz);
                 if (rsz <= 0) break;
+                bool inFast = mbi.BaseAddress.ToInt64() >= 0x2800000 && mbi.BaseAddress.ToInt64() < 0x3800000;
+                if (r == 1 && !inFast) { if (next.ToInt64() <= (long)addr) break; addr = next; continue; }
                 if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && (mbi.Protect & 0xFF) != 0x01) {
                     long done = 0;
                     while (done < rsz && !MT_stop) {
@@ -1093,7 +1095,7 @@ class Probe2 {
                                     long oa = src.ToInt64() + off;
                                     if (!seen32.Add(oa)) continue;
                                     MT_nB32++;
-                                    if (MT_nB32 <= 4000) {
+                                    if (MT_nB32 <= 12000) {
                                         var k = new byte[32];
                                         Array.Copy(buf, off + 16, k, 0, 32);
                                         MT_TryAndLog(k, "b32_r" + r + "_0x" + oa.ToString("X"));
@@ -1124,7 +1126,7 @@ class Probe2 {
                                         MT_TryAndLog(kD, "g60D_0x" + oa.ToString("X") + "_r" + r);
                                         if (MT_nI60 <= 2500) MT_Dump("mtrack_g60_0x" + oa.ToString("X") + "_r" + r + ".bin", ed);
                                     }
-                                } else if (alen == 8 && MT_nI8 < 4000 && seen60.Add(oa)) {
+                                } else if (alen == 8 && MT_nI8 < 12000 && seen60.Add(oa)) {
                                     MT_nI8++;
                                     if (off + 16 + 32 <= take) {
                                         // int[8]: 直接当 32B KEY (int LE 字节流)
@@ -1132,7 +1134,7 @@ class Probe2 {
                                         Array.Copy(buf, off + 16, k, 0, 32);
                                         MT_TryAndLog(k, "gi8_0x" + oa.ToString("X") + "_r" + r);
                                     }
-                                } else if (alen == 32 && MT_nI32 < 4000 && seen60.Add(oa)) {
+                                } else if (alen == 32 && MT_nI32 < 12000 && seen60.Add(oa)) {
                                     MT_nI32++;
                                     if (off + 16 + 128 <= take) {
                                         // int[32]: 每 int <=0xFF 时组装 32B KEY
@@ -1144,7 +1146,7 @@ class Probe2 {
                                         }
                                         if (ok) MT_TryAndLog(k, "gi32_0x" + oa.ToString("X") + "_r" + r);
                                     }
-                                } else if (alen == 4 && MT_nG4 < 2000 && seen60.Add(oa)) {
+                                } else if (alen == 4 && MT_nG4 < 8000 && seen60.Add(oa)) {
                                     MT_nG4++;
                                     if (off + 16 + 16 <= take) {
                                         var iv = new byte[16];
