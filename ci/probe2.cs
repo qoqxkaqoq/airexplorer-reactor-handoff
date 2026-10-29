@@ -1888,8 +1888,9 @@ class Probe2 {
     static volatile int MT7_invReq = 0;      // v18: worker 请求追加快照批 (invoke#1/#2 前)
     static volatile int MT7_floodMode = 0;   // v24: PrepareMethod 洪泛期间 freezer 暂停 freeze (worker 持 CLR JIT 锁时被 SuspendThread = 死锁, v23 20min 挂死根因)
     static int MT7_invBatch = 0;             // v18: 批次号 (落盘命名 inv_snap_{batch*10+i})
-    static byte[][] MT7_snapBufs = null;     // 内存快照 (无 IO, freeze 态 RPM 收集)
+    static byte[][] MT7_snapBufs = null;     // (v25 弃用: 改 native MT7_snapNat)
     static int[] MT7_snapLen = new int[30];
+    static IntPtr[] MT7_snapNat = new IntPtr[30];   // v25: native 快照缓冲 (AllocHGlobal, 地址固定可跳过)
     static long MT7_pendLo = 0, MT7_pendHi = 0;  // 本轮已消费命中区间 (解冻段转储用)
     // v13: S-box 数据断点 — native AES 必查 AES S-box (MEM_PRIVATE exec), DR0-3=表地址 RW 断点,
     //   解密首次查表即 VEH → KEY 尚在参数寄存器 RCX/RDX/R8/R9 → shellcode deref 捕获 (实时, 零窗口损失)
@@ -2001,6 +2002,8 @@ class Probe2 {
     static extern bool SetThreadContext(IntPtr h, byte[] ctx);
     [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "SetThreadContext")]
     static extern bool SetThreadContextI(IntPtr h, IntPtr ctx);
+    [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "ReadProcessMemory")]
+    static extern bool ReadProcessMemoryI(IntPtr h, IntPtr baseAddr, IntPtr buffer, IntPtr size, out IntPtr read);
     [DllImport("kernel32.dll")]
     static extern IntPtr GetCurrentThread();
     const int MT7_CTXLEN = 1232;
@@ -2074,8 +2077,8 @@ class Probe2 {
     }
 
     // freeze 态内存快照: 全 MEM_PRIVATE commit → dst (预算 dst.Length), 返回实际字节数 (无 IO)
-    static int MT7_SnapMem(byte[] dst, byte[] chunk) {
-        long budget = dst.Length;
+    static int MT7_SnapMem(IntPtr dst, int dstCap, byte[] chunk) {
+        long budget = dstCap;
         IntPtr addr = new IntPtr(0x10000);
         MBI mbi = new MBI();
         IntPtr sz = (IntPtr)Marshal.SizeOf(typeof(MBI));
@@ -2086,16 +2089,23 @@ class Probe2 {
             IntPtr next = new IntPtr(mbi.BaseAddress.ToInt64() + rsz);
             if (rsz <= 0) break;
             if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && (mbi.Protect & 0xFF) != 0x01 && mbi.Type == 0x20000) {
-                long a = mbi.BaseAddress.ToInt64(), hi = a + rsz;
-                while (a < hi && budget > 0) {
-                    int take = (int)Math.Min((long)chunk.Length, Math.Min(hi - a, budget));
-                    if (take <= 0) break;
-                    IntPtr got;
-                    if (ReadProcessMemory(GetCurrentProcess(), new IntPtr(a), chunk, (IntPtr)take, out got) && got.ToInt64() == take) {
-                        Array.Copy(chunk, 0, dst, off, take);
-                        off += take; budget -= take;
+                // v25: 跳过自家 native 快照缓冲 (v23 教训: managed 2.4GB LOH 挤出密文堆, 快照拍到自己)
+                bool self = false;
+                for (int si = 0; si < 30; si++) {
+                    long lo = MT7_snapNat[si].ToInt64();
+                    if (lo != 0 && mbi.BaseAddress.ToInt64() >= lo && mbi.BaseAddress.ToInt64() + rsz <= lo + (80L << 20)) { self = true; break; }
+                }
+                if (!self) {
+                    long a = mbi.BaseAddress.ToInt64(), hi = a + rsz;
+                    while (a < hi && budget > 0) {
+                        int take = (int)Math.Min((long)chunk.Length, Math.Min(hi - a, budget));
+                        if (take <= 0) break;
+                        IntPtr got;
+                        if (ReadProcessMemoryI(GetCurrentProcess(), new IntPtr(a), new IntPtr(dst.ToInt64() + off), (IntPtr)take, out got) && got.ToInt64() == take) {
+                            off += take; budget -= take;
+                        }
+                        a += take;
                     }
-                    a += take;
                 }
             }
             if (next.ToInt64() <= (long)addr) break;
@@ -2155,7 +2165,7 @@ class Probe2 {
             bool invBurst = MT7_invArmed == 1 && MT7_invLeft > 0;
             if (invBurst) {
                 int idx = 30 - MT7_invLeft;
-                int nSnap = MT7_SnapMem(MT7_snapBufs[idx], buf);
+                int nSnap = MT7_SnapMem(MT7_snapNat[idx], 80 << 20, buf);
                 MT7_snapLen[idx] = nSnap;
                 MT7_invLeft--;
                 for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
@@ -2163,13 +2173,14 @@ class Probe2 {
                 Log("[mtrack7] inv snap[" + idx + "] bytes=" + nSnap + " cycle=" + MT3_cycles);
                 if (MT7_invLeft > 0) continue;
                 Log("[mtrack7] invoke burst done, flushing in-mem snapshots...");
+                var snapTmp = new byte[80 << 20];   // 解冻态一次性分配, 30 份复用
                 for (int i = 0; i < 30; i++) {
-                    if (MT7_snapBufs[i] != null && MT7_snapLen[i] > 0) {
+                    if (MT7_snapNat[i] != IntPtr.Zero && MT7_snapLen[i] > 0) {
                         try {
+                            Marshal.Copy(MT7_snapNat[i], snapTmp, 0, MT7_snapLen[i]);
                             var fs = new FileStream("dump\\inv_snap_" + (MT7_invBatch * 10 + i) + ".bin", FileMode.Create);
-                            fs.Write(MT7_snapBufs[i], 0, MT7_snapLen[i]);
+                            fs.Write(snapTmp, 0, MT7_snapLen[i]);
                             fs.Close();
-                            MT7_snapBufs[i] = null;
                         } catch (Exception ex) { Log("[mtrack7] inv snap write FAIL " + i + " " + ex.Message); }
                     }
                 }
@@ -2268,20 +2279,16 @@ class Probe2 {
             // arm 前置: S-box 扫描必须完成 (武装在 armed 后的首轮 freeze; nSbox=0 仍 arm — 快照兜底)
             if (MT7_preInvoke == 1 && MT7_invArmed == 0 && MT7_invDone == 0 && MT7_snapBufs == null) {   // v22: 与 sboxScanned 解耦 — 相位对齐不依赖扫描速度 (S-box 拦截=并行赠品)
                 try {
-                    var bufs = new byte[30][];
-                    for (int i = 0; i < 30; i++) bufs[i] = new byte[80 << 20];
-                    MT7_snapBufs = bufs;          // 先挂引用再置 armed (volatile 写序保证)
+                    // v25: native 缓冲 (AllocHGlobal 地址固定 → SnapMem 跳过自家区间)
+                    for (int i = 0; i < 30; i++) if (MT7_snapNat[i] == IntPtr.Zero) MT7_snapNat[i] = Marshal.AllocHGlobal(80 << 20);
                     MT7_invArmed = 1; MT7_invLeft = 30; MT7_invDone = 1;
-                    Log("[mtrack7] *** INVOKE BURST ARMED (30x in-mem snapshot, 2.4GB)");
+                    Log("[mtrack7] *** INVOKE BURST ARMED (30x80MB native snapshot, 2.4GB)");
                 } catch (Exception ex) { Log("[mtrack7] snap buf alloc FAIL " + ex.Message); MT7_invDone = 1; }
             }
             // v18: worker 请求追加快照批 (invoke#1/#2 期 419C IL 执行重建 KEY → 托管堆快照)
-            if (MT7_invReq == 1 && MT7_invArmed == 0 && MT7_invLeft == 0 && MT7_snapBufs != null) {
-                try {
-                    for (int i = 0; i < 30; i++) if (MT7_snapBufs[i] == null) MT7_snapBufs[i] = new byte[80 << 20];
-                    MT7_invArmed = 1; MT7_invLeft = 30; MT7_invReq = 0;
-                    Log("[mtrack7] *** SNAP BATCH#" + MT7_invBatch + " ARMED (retrigger, 30x)");
-                } catch (Exception ex) { Log("[mtrack7] snap rebuf alloc FAIL " + ex.Message); MT7_invReq = 0; }
+            if (MT7_invReq == 1 && MT7_invArmed == 0 && MT7_invLeft == 0 && MT7_snapNat[0] != IntPtr.Zero) {
+                MT7_invArmed = 1; MT7_invLeft = 30; MT7_invReq = 0;   // v25: native 缓冲复用, 无需重分配
+                Log("[mtrack7] *** SNAP BATCH#" + MT7_invBatch + " ARMED (retrigger, 30x native)");
             }
             // ---- 解冻段: 命中转储/登记 (分配/Log 安全) + 首命中全快照 ----
             for (long k = MT7_pendLo; k < MT7_pendHi; k++) {
