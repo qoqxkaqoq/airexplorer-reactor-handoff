@@ -1640,8 +1640,8 @@ class Probe2 {
             MT7_preInvoke = 1;
             Log("[mtrack7] pre-invoke flag set, waiting for freezer in-mem burst...");
             int spins2 = 0;
-            // v21: 上限 3s (扫描 ulong 优化后 ~300ms, 余量充足)
-            while (MT7_invArmed == 0 && spins2 < 15000000) { Thread.SpinWait(200); spins2++; }
+            // v22: Sleep(1) 让出核 (v21 SpinWait 与 freezer 扫描抢 CPU 恶性竞争); 相位由 Sleep(3)+快拍模式保证
+            while (MT7_invArmed == 0 && spins2 < 5000) { Thread.Sleep(1); spins2++; }
             // v19: 延迟 3ms 再 bust+ResolveMethod — 解密窗推到快照序列 (#0@+0.3ms, 间隔~0.7ms, 30份) 正中 #3-#6
             Thread.Sleep(3);
             Log("[mtrack7] invoke burst armed=" + MT7_invArmed + " spins=" + spins2 + " → bust+invoke");
@@ -1924,11 +1924,12 @@ class Probe2 {
 
     // freeze/解冻皆可: 扫 MEM_PRIVATE 可执行区找 AES S-box (16B 特征 100% 特异; 托管 clr 表在 MEM_IMAGE 自动排除)
     static void MT7_ScanSbox() {
+        var swScan = System.Diagnostics.Stopwatch.StartNew();   // v22: 1.5s 预算上限
         var buf = MT7_scanBuf;
         IntPtr addr = new IntPtr(0x10000);
         MBI mbi = new MBI();
         IntPtr sz = (IntPtr)Marshal.SizeOf(typeof(MBI));
-        while ((long)addr < 0x7FFFFFFEFFFF && MT7_nSbox < 4) {
+        while ((long)addr < 0x7FFFFFFEFFFF && MT7_nSbox < 4 && swScan.ElapsedMilliseconds < 1500) {
             if (VirtualQuery(addr, ref mbi, sz) == IntPtr.Zero) break;
             long rsz = mbi.RegionSize.ToInt64();
             IntPtr next = new IntPtr(mbi.BaseAddress.ToInt64() + rsz);
@@ -2261,7 +2262,7 @@ class Probe2 {
             if (MT7_preInvoke == 1 && MT7_sboxScanned == 0 && MT7_scanBuf != null) MT7_ScanSbox();
             // ---- 解冻段: 分配 10x80MB 快照缓冲 + arm burst (v11 教训: 冻结态分配 → GC 死锁) ----
             // arm 前置: S-box 扫描必须完成 (武装在 armed 后的首轮 freeze; nSbox=0 仍 arm — 快照兜底)
-            if (MT7_preInvoke == 1 && MT7_sboxScanned == 1 && MT7_invArmed == 0 && MT7_invDone == 0 && MT7_snapBufs == null) {
+            if (MT7_preInvoke == 1 && MT7_invArmed == 0 && MT7_invDone == 0 && MT7_snapBufs == null) {   // v22: 与 sboxScanned 解耦 — 相位对齐不依赖扫描速度 (S-box 拦截=并行赠品)
                 try {
                     var bufs = new byte[30][];
                     for (int i = 0; i < 30; i++) bufs[i] = new byte[80 << 20];
