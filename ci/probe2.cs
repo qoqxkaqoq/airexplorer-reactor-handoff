@@ -2094,7 +2094,8 @@ class Probe2 {
                 bool self = false;
                 for (int si = 0; si < 30; si++) {
                     long lo = MT7_snapNat[si].ToInt64();
-                    if (lo != 0 && mbi.BaseAddress.ToInt64() >= lo && mbi.BaseAddress.ToInt64() + rsz <= lo + (80L << 20)) { self = true; break; }
+                    // v27: 重叠即跳 (30 槽同在一个 LOH segment, region 2.4GB 超单槽界 — v26 恰未跳过又挤占预算)
+                    if (lo != 0 && mbi.BaseAddress.ToInt64() < lo + (80L << 20) && mbi.BaseAddress.ToInt64() + rsz > lo) { self = true; break; }
                 }
                 if (!self) {
                     long a = mbi.BaseAddress.ToInt64(), hi = a + rsz;
