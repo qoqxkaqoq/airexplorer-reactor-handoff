@@ -2126,3 +2126,11 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **v19-v21（ae9d8914/e7ed30f9/0d573f05）**：快拍模式（armed 后去 Sleep(1) → 快照间隔 0.65→0.3ms）；SpinWait 等待 40ms/400ms/3s 全超时（freezer 首扫 MEM_PRIVATE >3s + SpinWait 抢核恶性竞争）；ScanSbox 8B ulong 匹配 8x 加速
 - **v22（96782a62）决定性修正**：**ARM 与 sboxScanned 解耦**（相位对齐绝不依赖扫描速度）+ worker Sleep(1) 让核 + 扫描 1.5s 预算 → **armed=1 spins=32 时序首次全对齐**（SBOX#0-2 preInvoke 期扫到 nSbox=3 → ARMED → worker 32ms 唤醒 → Sleep(3) → invoke#0）
 - **v22 残余相位差**：snap[0]@armed+3.9ms（分配+循环开销）vs 解密窗 armed+2.1-2.5 → 差 1.4ms → **v23：worker Sleep(3)→Sleep(6)，解密窗推到 armed+6~7.4 = snap #2-#5**
+
+### step243-247（2026-10-29 续XLI）：v23-v27 — 挂死/挤出/相位 三连修，快照首次拍到密文堆
+- **v23（a7f92fea）worker Sleep(3)→6ms**：相位右移但 **20min job 超时挂死**；日志止于 flood 中途（probe2.log）→ **SuspendThread 死锁：worker 持 CLR JIT 锁（PrepareMethod）时被 freezer 冻结**（v22 未挂=相位运气）
+- **v24（3943e428）floodMode 门**：freezer 在 flood 期 Sleep(20) 不 freeze → **挂死根治（job 30s ✓）**；armed=1 spins=26
+- **v25（43291613）native AllocHGlobal 缓冲**：**snap[20] 处进程 exit 1（flood 中无异常日志=native failfast，死因未定位）**；20 份快照未及 flush 丢失（教训：分批落盘）
+- **v26（e4bd3e48）pinned managed 缓冲**（GCHandle.Pinned 回退 v24 验证过的分配路径）：job 成功 ✓ 30 份 batch0 落盘；**但 res0head=NO —— self 精确包含判断未命中（30 槽同在一个 2.4GB LOH segment，region 超单槽界）→ 预算仍被 LOH 挤占**
+- **v27（cd0a0d94）重叠即跳**：**res0head@0x3656280 首次出现在快照 ✓（真实进程内存+密文堆）**；50 份落盘暴破中
+- **机制现状**：ARM 与扫描解耦（spins 16-32ms 唤醒）+ 快拍间隔 ~0.3-0.7ms + 30 份/批 × 3 批 + Sleep(6) 相位（解密窗 armed+6~7.4 落 snap#2-#5）+ flood 死锁防护 + 自家缓冲跳过 —— 全链就绪，等待暴破判决
