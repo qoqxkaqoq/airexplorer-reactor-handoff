@@ -1890,7 +1890,8 @@ class Probe2 {
     static int MT7_invBatch = 0;             // v18: 批次号 (落盘命名 inv_snap_{batch*10+i})
     static byte[][] MT7_snapBufs = null;     // (v25 弃用: 改 native MT7_snapNat)
     static int[] MT7_snapLen = new int[30];
-    static IntPtr[] MT7_snapNat = new IntPtr[30];   // v25: native 快照缓冲 (AllocHGlobal, 地址固定可跳过)
+    static IntPtr[] MT7_snapNat = new IntPtr[30];   // v26: pinned 缓冲地址 (固定, SnapMem 跳过自家)
+    static System.Runtime.InteropServices.GCHandle[] MT7_snapPin = new System.Runtime.InteropServices.GCHandle[30];
     static long MT7_pendLo = 0, MT7_pendHi = 0;  // 本轮已消费命中区间 (解冻段转储用)
     // v13: S-box 数据断点 — native AES 必查 AES S-box (MEM_PRIVATE exec), DR0-3=表地址 RW 断点,
     //   解密首次查表即 VEH → KEY 尚在参数寄存器 RCX/RDX/R8/R9 → shellcode deref 捕获 (实时, 零窗口损失)
@@ -2279,10 +2280,15 @@ class Probe2 {
             // arm 前置: S-box 扫描必须完成 (武装在 armed 后的首轮 freeze; nSbox=0 仍 arm — 快照兜底)
             if (MT7_preInvoke == 1 && MT7_invArmed == 0 && MT7_invDone == 0 && MT7_snapBufs == null) {   // v22: 与 sboxScanned 解耦 — 相位对齐不依赖扫描速度 (S-box 拦截=并行赠品)
                 try {
-                    // v25: native 缓冲 (AllocHGlobal 地址固定 → SnapMem 跳过自家区间)
-                    for (int i = 0; i < 30; i++) if (MT7_snapNat[i] == IntPtr.Zero) MT7_snapNat[i] = Marshal.AllocHGlobal(80 << 20);
+                    // v26: managed 缓冲 + GCHandle.Pinned (地址固定 → SnapMem 跳过自家区间; v25 的 AllocHGlobal 触发未知 failfast, 回退 v24 验证过的分配路径)
+                    MT7_snapBufs = new byte[30][];
+                    for (int i = 0; i < 30; i++) {
+                        MT7_snapBufs[i] = new byte[80 << 20];
+                        MT7_snapPin[i] = System.Runtime.InteropServices.GCHandle.Alloc(MT7_snapBufs[i], System.Runtime.InteropServices.GCHandleType.Pinned);
+                        MT7_snapNat[i] = Marshal.UnsafeAddrOfPinnedArrayElement(MT7_snapBufs[i], 0);
+                    }
                     MT7_invArmed = 1; MT7_invLeft = 30; MT7_invDone = 1;
-                    Log("[mtrack7] *** INVOKE BURST ARMED (30x80MB native snapshot, 2.4GB)");
+                    Log("[mtrack7] *** INVOKE BURST ARMED (30x80MB pinned snapshot, 2.4GB)");
                 } catch (Exception ex) { Log("[mtrack7] snap buf alloc FAIL " + ex.Message); MT7_invDone = 1; }
             }
             // v18: worker 请求追加快照批 (invoke#1/#2 期 419C IL 执行重建 KEY → 托管堆快照)
