@@ -1,0 +1,418 @@
+﻿2026-10-29T01:28:47.9397777Z ##[group]Run $ErrorActionPreference = "Continue"
+2026-10-29T01:28:47.9398267Z [36;1m$ErrorActionPreference = "Continue"[0m
+2026-10-29T01:28:47.9398598Z [36;1m$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"[0m
+2026-10-29T01:28:47.9399046Z [36;1m& $csc /nologo /target:exe /out:probe2.exe /r:System.dll ci\probe2.cs 2>&1 | Out-String | Write-Host[0m
+2026-10-29T01:28:47.9399446Z [36;1m$cand = "exes\AirExplorer_a16v7_p3p5.exe"[0m
+2026-10-29T01:28:47.9399753Z [36;1mif (-not (Test-Path $cand)) { Write-Host "MISSING $cand"; exit 1 }[0m
+2026-10-29T01:28:47.9400699Z [36;1mWrite-Host ("md5 = " + (Get-FileHash $cand -Algorithm MD5).Hash)[0m
+2026-10-29T01:28:47.9401039Z [36;1mNew-Item -ItemType Directory -Force -Path app | Out-Null[0m
+2026-10-29T01:28:47.9401314Z [36;1mCopy-Item $cand app\AirExplorer.exe[0m
+2026-10-29T01:28:47.9401540Z [36;1mSet-Location app[0m
+2026-10-29T01:28:47.9401758Z [36;1m$out = & ..\probe2.exe AirExplorer.exe "trap" 300 2>&1[0m
+2026-10-29T01:28:47.9402109Z [36;1m$out | Tee-Object -FilePath "..\s5probe.a16v7_p3p5.log" | Write-Host[0m
+2026-10-29T01:28:48.0046478Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-29T01:28:48.0047010Z ##[endgroup]
+2026-10-29T01:28:50.1026316Z 
+2026-10-29T01:28:50.1674616Z md5 = FBE88457184D573E36D11D1966A1C5DC
+2026-10-29T01:28:51.9735063Z [probe2] exe=D:\a\airexplorer-reactor-handoff\airexplorer-reactor-handoff\app\AirExplorer.exe md5=FBE88457184D573E36D11D1966A1C5DC
+2026-10-29T01:28:51.9739031Z [probe2] mode=trap timeout=300s clr=4.0.30319.42000
+2026-10-29T01:28:51.9743364Z [probe2] loaded AirExplorer, Version=5.11.0.0, Culture=neutral, PublicKeyToken=null
+2026-10-29T01:28:51.9746830Z [probe2] module cctor OK
+2026-10-29T01:28:51.9751192Z [trap] GetTypes partial: 4883/4907 loaderEx=24
+2026-10-29T01:28:51.9755365Z [trap] #0 <>f__AnonymousType0`2
+2026-10-29T01:28:51.9759794Z [trap] #1 <>f__AnonymousType1`6
+2026-10-29T01:28:51.9764468Z [trap] #2 <>f__AnonymousType2`2
+2026-10-29T01:28:51.9768732Z [trap] #3 <>f__AnonymousType3`3
+2026-10-29T01:28:51.9773528Z [trap] #4 <>f__AnonymousType4`5
+2026-10-29T01:28:51.9777791Z [trap] #5 <>f__AnonymousType5`9
+2026-10-29T01:28:51.9782323Z [trap] #6 <>f__AnonymousType6`2
+2026-10-29T01:28:51.9786823Z [trap] #7 <>f__AnonymousType7`2
+2026-10-29T01:28:51.9790767Z [trap] #8 XamlGeneratedNamespace.GeneratedInternalTypeHelper
+2026-10-29T01:28:51.9796746Z [trap] #9 AirExplorer.Execution.CommandSystem
+2026-10-29T01:28:51.9800808Z [trap] #10 AirExplorer.Networking.DetachedRequest
+2026-10-29T01:28:51.9805256Z [trap] #11 AirExplorer.Networking.DetachedRequest+CredUIReturnCodes
+2026-10-29T01:28:51.9809481Z [trap] #12 AirExplorer.Networking.DetachedRequest+CredentialsDialogOptions
+2026-10-29T01:28:51.9813979Z [trap] #13 AirExplorer.Networking.DetachedRequest+WindowsCredentialsDialogOptions
+2026-10-29T01:28:51.9818130Z [trap] #14 AirExplorer.Networking.DetachedRequest+ResponsiveAuthorizerCommand
+2026-10-29T01:28:51.9822735Z [trap] #15 AirExplorer.Networking.DetachedRequest+TemplateListener
+2026-10-29T01:28:51.9827344Z [trap] #16 AirExplorer.Networking.DetachedRequest+TemplateListener+ReadableSchemaAggregator
+2026-10-29T01:28:51.9831706Z [trap] #17 AirExplorer.Networking.DetachedRequest+TemplateListener+ReadableSchemaAggregator+<>c
+2026-10-29T01:28:51.9835908Z [trap] #18 AirExplorer.Networking.DetachedRequest+AccessTypes
+2026-10-29T01:28:51.9840282Z [trap] #19 AirExplorer.Networking.DetachedRequest+PrivilegeAttributes
+2026-10-29T01:28:51.9845260Z [trap] #20 AirExplorer.Networking.DetachedRequest+SECURITY_IMPERSONATION_LEVEL
+2026-10-29T01:28:51.9849718Z [trap] #21 AirExplorer.Networking.DetachedRequest+TOKEN_ELEVATION_TYPE
+2026-10-29T01:28:51.9854065Z [trap] #22 AirExplorer.Networking.DetachedRequest+TOKEN_INFORMATION_CLASS
+2026-10-29T01:28:51.9857694Z [trap] #23 AirExplorer.Networking.DetachedRequest+TokenType
+2026-10-29T01:28:51.9861619Z [trap] #24 AirExplorer.Networking.DetachedRequest+IsolatedStrategyValue
+2026-10-29T01:28:51.9866349Z [trap] #25 AirExplorer.Networking.DetachedRequest+OrderedStubRequest
+2026-10-29T01:28:51.9869598Z [trap] #26 AirExplorer.Networking.DetachedRequest+RemoteMonitorCommand
+2026-10-29T01:28:51.9873066Z [trap] #27 AirExplorer.Networking.DetachedRequest+StaticAuditorAggregator
+2026-10-29T01:28:51.9876735Z [trap] #28 AirExplorer.Networking.DetachedRequest+AdvancedCollectionReg
+2026-10-29T01:28:51.9880097Z [trap] #29 AirExplorer.Networking.DetachedRequest+ProxySpec
+2026-10-29T01:28:51.9883308Z [trap] #30 AirExplorer.Networking.DetachedRequest+AggregatorVerifierContainer
+2026-10-29T01:28:51.9886845Z [trap] #31 AirExplorer.Networking.DetachedRequest+TemplateAuthenticator
+2026-10-29T01:28:51.9890275Z [trap] #32 AirExplorer.Networking.DetachedRequest+ServerTypes
+2026-10-29T01:28:51.9893538Z [trap] #33 AirExplorer.Networking.DetachedRequest+ServerPlatform
+2026-10-29T01:28:51.9896831Z [trap] #34 AirExplorer.Networking.DetachedRequest+MonitorDecryptor
+2026-10-29T01:28:51.9899969Z [trap] #35 AirExplorer.Networking.DetachedRequest+SorterProxy
+2026-10-29T01:28:51.9903419Z [trap] #36 AirExplorer.Networking.DetachedRequest+TagGenerator
+2026-10-29T01:28:51.9907617Z [trap] #37 AirExplorer.Networking.DetachedRequest+ValueEventCommand
+2026-10-29T01:28:51.9911906Z [trap] #38 AirExplorer.Networking.DetachedRequest+DS_NAME_ERROR
+2026-10-29T01:28:51.9915842Z [trap] #39 AirExplorer.Networking.DetachedRequest+DS_NAME_FLAGS
+2026-10-29T01:28:51.9920005Z [trap] #40 AirExplorer.Networking.DetachedRequest+DS_NAME_FORMAT
+2026-10-29T01:28:51.9924485Z [trap] #41 AirExplorer.Networking.DetachedRequest+StaticGeneratorProxy
+2026-10-29T01:28:51.9928432Z [trap] #42 AirExplorer.Networking.DetachedRequest+AggregatorContainerRunner
+2026-10-29T01:28:51.9932386Z [trap] #43 AirExplorer.Networking.DetachedRequest+BasicStreamRequester
+2026-10-29T01:28:51.9936252Z [trap] #44 AirExplorer.Networking.DetachedRequest+DividedInterpreterMonitor
+2026-10-29T01:28:51.9940564Z [trap] #45 AirExplorer.Networking.DetachedRequest+<>c
+2026-10-29T01:28:51.9944837Z [trap] #46 AirExplorer.Execution.CommandToken
+2026-10-29T01:28:51.9948942Z [trap] #47 AirExplorer.Execution.CommandToken+ModelEngine
+2026-10-29T01:28:51.9952774Z [trap] #48 CloudClient.Networking.CalculatorClient
+2026-10-29T01:28:51.9956633Z [trap] #49 Microsoft.Win32.TaskScheduler.TaskActionType
+2026-10-29T01:28:51.9960471Z [trap] #50 AirExplorer.Networking.IRequestEncryptor
+2026-10-29T01:28:51.9964909Z [trap] #51 AirExplorer.Processing.AggregatorError
+2026-10-29T01:28:51.9968929Z [trap] #52 CloudClient.DataStructures.AccessibleTree
+2026-10-29T01:28:51.9972863Z [trap] #53 AirExplorer.Networking.RequestChecker
+2026-10-29T01:28:51.9976954Z [trap] #54 AirExplorer.Networking.RequestChecker+<>c
+2026-10-29T01:28:51.9981008Z [trap] #55 CloudClient.Networking.InternalClient
+2026-10-29T01:28:51.9984857Z [trap] #56 CloudClient.Registry.FieldReg
+2026-10-29T01:28:51.9989065Z [trap] #57 Microsoft.Win32.TaskScheduler.PowerShellActionPlatformOption
+2026-10-29T01:28:51.9992676Z [trap] #58 CloudClient.Proxies.ExtendedProxy
+2026-10-29T01:28:51.9996805Z [trap] FCE#1 msg=[AirExplorer ] len=12
+2026-10-29T01:28:52.0001782Z [trap] FCE stack:    at CloudClient.Templating.TemplateArgument.TemplateThread.DefineSetSet(HandlerPublisher var1)
+2026-10-29T01:28:52.0005295Z [trap] FCE#2 msg=[AirExplorer ] len=12
+2026-10-29T01:28:52.0008865Z [trap] FCE stack:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.0012071Z [trap] FAIL CloudClient.Proxies.ExtendedProxy
+2026-10-29T01:28:52.0015365Z   [trap] inner0 System.Exception: AirExplorer 
+2026-10-29T01:28:52.0019106Z   [trap] stack0:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.0022652Z    at CloudClient.Templating.TemplateArgument.TemplateThread.PlanRunner()
+2026-10-29T01:28:52.0026822Z    at CloudClient.Templating.TemplateArgument.InstantiateStatelessUser[T](Int32 reference_length, Object[] map, Object serv, T& counter2)
+2026-10-29T01:28:52.0030241Z    at CloudClient.Templating.TemplateArgument.InstantiateAccessibleProcessor(Int32 initY, Object[] token, Object proc)
+2026-10-29T01:28:52.0033794Z    at CloudClient.Templating.DispatcherInitializer.SearchStrategy(Stream config, Int32 connection)
+2026-10-29T01:28:52.0037019Z    at CloudClient.Templating.DispatcherInitializer.Instan
+2026-10-29T01:28:52.0040817Z [trap] #59 CloudClient.Proxies.ExtendedProxy+<>c
+2026-10-29T01:28:52.0044514Z [trap] #60 CloudClient.Proxies.ExtendedProxy+<>c__DisplayClass41_0
+2026-10-29T01:28:52.0048053Z [trap] #61 CloudClient.Proxies.ExtendedProxy+<>c__DisplayClass48_0
+2026-10-29T01:28:52.0051369Z [trap] #62 CloudClient.Proxies.ExtendedProxy+<>c__DisplayClass49_0
+2026-10-29T01:28:52.0055164Z [trap] #63 CloudClient.Proxies.ExtendedProxy+<>c__DisplayClass65_0
+2026-10-29T01:28:52.0058475Z [trap] #64 CloudClient.Proxies.ExtendedProxy+<>c__DisplayClass66_0
+2026-10-29T01:28:52.0062027Z [trap] #65 CloudClient.Templating.CommonTemplate
+2026-10-29T01:28:52.0065801Z [trap] #66 AirExplorer.Values.InterruptibleValue
+2026-10-29T01:28:52.0069003Z [trap] #67 CloudClient.DataStructures.RegSolver
+2026-10-29T01:28:52.0072316Z [trap] #68 AirExplorer.Execution.MonoCommand
+2026-10-29T01:28:52.0075492Z [trap] #69 AirExplorer.Execution.MonoCommand+<>c
+2026-10-29T01:28:52.0078945Z [trap] #70 AirExplorer.Execution.MonoCommand+<>c__DisplayClass27_0
+2026-10-29T01:28:52.0082705Z [trap] #71 AirExplorer.Execution.MonoCommand+<>c__DisplayClass34_0
+2026-10-29T01:28:52.0086330Z [trap] #72 AirExplorer.Execution.MonoCommand+<>c__DisplayClass36_0
+2026-10-29T01:28:52.0090357Z [trap] #73 AirExplorer.Execution.MonoCommand+<System-Collections-Generic-IEnumerable<System-Collections-Generic-KeyValuePair<System-String\,System-String>>-GetEnumerator>d__52
+2026-10-29T01:28:52.0093442Z [trap] #74 CloudClient.Templating.ScheduledTemplate
+2026-10-29T01:28:52.0096808Z [trap] #75 AirExplorer.Networking.IsolatedRequest
+2026-10-29T01:28:52.0100256Z [trap] #76 CloudClient.Monitoring.ControllableMonitor
+2026-10-29T01:28:52.0103683Z [trap] #77 CloudClient.Proxies.ProxyProgram
+2026-10-29T01:28:52.0107035Z [trap] #78 CloudClient.API.Requester.RequesterSystem
+2026-10-29T01:28:52.0110556Z [trap] #79 Microsoft.Win32.TaskScheduler.TaskCompatibility
+2026-10-29T01:28:52.0165656Z [trap] #80 Microsoft.Win32.TaskScheduler.TaskCreation
+2026-10-29T01:28:52.0166367Z [trap] #81 Microsoft.Win32.TaskScheduler.TaskInstancesPolicy
+2026-10-29T01:28:52.0166856Z [trap] #82 Microsoft.Win32.TaskScheduler.TaskLogonType
+2026-10-29T01:28:52.0167313Z [trap] #83 Microsoft.Win32.TaskScheduler.TaskPrincipalPrivilege
+2026-10-29T01:28:52.0167840Z [trap] #84 Microsoft.Win32.TaskScheduler.TaskProcessTokenSidType
+2026-10-29T01:28:52.0168250Z [trap] #85 Microsoft.Win32.TaskScheduler.TaskRunFlags
+2026-10-29T01:28:52.0168668Z [trap] #86 Microsoft.Win32.TaskScheduler.TaskRunLevel
+2026-10-29T01:28:52.0169098Z [trap] #87 Microsoft.Win32.TaskScheduler.TaskSessionStateChangeType
+2026-10-29T01:28:52.0169645Z [trap] #88 Microsoft.Win32.TaskScheduler.TaskSetSecurityOptions
+2026-10-29T01:28:52.0170099Z [trap] #89 Microsoft.Win32.TaskScheduler.TaskState
+2026-10-29T01:28:52.0170508Z [trap] #90 AirExplorer.Processing.ExtendedAggregator
+2026-10-29T01:28:52.0170915Z [trap] #91 AirExplorer.Processing.SelectorService
+2026-10-29T01:28:52.0171282Z [trap] #92 AirExplorer.Networking.ActiveRequest
+2026-10-29T01:28:52.0171640Z [trap] #93 AirExplorer.Networking.PassiveRequest
+2026-10-29T01:28:52.0172041Z [trap] #94 CloudClient.API.Requester.ActiveRequester
+2026-10-29T01:28:52.0174140Z [trap] #95 AirExplorer.Processing.ConcreteAggregator
+2026-10-29T01:28:52.0178233Z [trap] FCE#3 msg=[AirExplorer ] len=12
+2026-10-29T01:28:52.0182629Z [trap] FCE stack:    at CloudClient.Templating.TemplateArgument.TemplateThread.DefineSetSet(HandlerPublisher var1)
+2026-10-29T01:28:52.0185809Z [trap] FCE#4 msg=[AirExplorer ] len=12
+2026-10-29T01:28:52.0189482Z [trap] FCE stack:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.0192638Z [trap] FAIL AirExplorer.Processing.ConcreteAggregator
+2026-10-29T01:28:52.0196673Z   [trap] inner0 System.TypeInitializationException: The type initializer for 'CloudClient.DataStructures.ConcreteTree' threw an exception.
+2026-10-29T01:28:52.0199906Z   [trap] stack0:    at CloudClient.DataStructures.ConcreteTree.MatchController()
+2026-10-29T01:28:52.0203477Z    at AirExplorer.Processing.ConcreteAggregator.CollectRandomWriter()
+2026-10-29T01:28:52.0206926Z    at AirExplorer.Processing.ConcreteAggregator..cctor()
+2026-10-29T01:28:52.0210504Z   [trap] inner1 System.Exception: AirExplorer 
+2026-10-29T01:28:52.0214355Z   [trap] stack1:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.0218020Z    at CloudClient.Templating.TemplateArgument.TemplateThread.PlanRunner()
+2026-10-29T01:28:52.0222180Z    at CloudClient.Templating.TemplateArgument.InstantiateStatelessUser[T](Int32 reference_length, Object[] map, Object serv, T& counter2)
+2026-10-29T01:28:52.0225816Z    at CloudClient.Templating.TemplateArgument.InstantiateAccessibleProcessor(Int32 initY, Object[] token, Object proc)
+2026-10-29T01:28:52.0229191Z    at CloudClient.Templating.DispatcherInitializer.SearchStrategy(Stream config, Int32 connection)
+2026-10-29T01:28:52.0232419Z    at CloudClient.Templating.DispatcherInitializer.Instan
+2026-10-29T01:28:52.0236081Z [trap] #96 AirExplorer.Processing.ConcreteAggregator+RequesterDictionary
+2026-10-29T01:28:52.0239359Z [trap] #97 CloudClient.DataStructures.TreeInitializer
+2026-10-29T01:28:52.0242885Z [trap] #98 AirExplorer.Values.IterableValue
+2026-10-29T01:28:52.0246268Z [trap] #99 AirExplorer.Values.IterableValue+<>c
+2026-10-29T01:28:52.0249592Z [trap] #100 AirExplorer.Execution.OperationalCommand
+2026-10-29T01:28:52.0253074Z [trap] #101 AirExplorer.Execution.OperationalCommand+<>c__DisplayClass34_0
+2026-10-29T01:28:52.0256336Z [trap] #102 CloudClient.API.Requester.ConfigurableRequester
+2026-10-29T01:28:52.0260294Z [trap] #103 CloudClient.API.Requester.ConfigurableRequester+RequesterEncryptor
+2026-10-29T01:28:52.0263585Z [trap] #104 CloudClient.DataStructures.ExecutorTree
+2026-10-29T01:28:52.0267086Z [trap] #105 AirExplorer.Processing.ResponsiveAggregator
+2026-10-29T01:28:52.0270426Z [trap] #106 AirExplorer.Values.SeparatedValue
+2026-10-29T01:28:52.0273990Z [trap] #107 AirExplorer.Processing.GeneralAggregator
+2026-10-29T01:28:52.0277817Z [trap] #108 CloudClient.Networking.TransformerClient
+2026-10-29T01:28:52.0281417Z [trap] #109 CloudClient.Networking.TransformerClient+DetachedDecryptorCommand
+2026-10-29T01:28:52.0284843Z [trap] #110 CloudClient.Networking.TransformerClient+ScalableLoggerValue
+2026-10-29T01:28:52.0288460Z [trap] #111 CloudClient.Networking.TransformerClient+ScalableLoggerValue+<>c__DisplayClass1_0
+2026-10-29T01:28:52.0291543Z [trap] #112 CloudClient.Templating.CommandTemplate
+2026-10-29T01:28:52.0294926Z [trap] #113 CloudClient.Templating.CommandTemplate+OrderedModelProxy
+2026-10-29T01:28:52.0298391Z [trap] #114 Microsoft.Win32.TaskScheduler.StandardTaskEventId
+2026-10-29T01:28:52.0301575Z [trap] #115 AirExplorer.Values.ResponsiveValue
+2026-10-29T01:28:52.0305172Z [trap] #116 AirExplorer.Values.ResponsiveValue+EfficientWatcherTemplate
+2026-10-29T01:28:52.0308451Z [trap] #117 AirExplorer.Processing.AggregatorFinalizer
+2026-10-29T01:28:52.0312056Z [trap] #118 CloudClient.Registry.RegParameter
+2026-10-29T01:28:52.0315443Z [trap] #119 CloudClient.Registry.RegParameter+<>c
+2026-10-29T01:28:52.0319231Z [trap] #120 AirExplorer.Values.LogicalValue
+2026-10-29T01:28:52.0322566Z [trap] #121 CloudClient.Networking.ClientClient
+2026-10-29T01:28:52.0326062Z [trap] #122 CloudClient.Networking.ClientClient+LogicalFieldClient
+2026-10-29T01:28:52.0329405Z [trap] #123 CloudClient.Networking.DetachedClient
+2026-10-29T01:28:52.0333057Z [trap] #124 CloudClient.Networking.DetachedClient+<EnumerateFolderTasks>d__48
+2026-10-29T01:28:52.0336482Z [trap] #125 CloudClient.Networking.DetachedClient+<EnumerateFolders>d__31
+2026-10-29T01:28:52.0340046Z [trap] #126 AirExplorer.Execution.BasicCommand
+2026-10-29T01:28:52.0343415Z [trap] #127 AirExplorer.Execution.IRandomCommand
+2026-10-29T01:28:52.0346955Z [trap] #128 AirExplorer.Processing.IAttachedAggregator
+2026-10-29T01:28:52.0350227Z [trap] #129 Microsoft.Win32.TaskScheduler.TaskRights
+2026-10-29T01:28:52.0353932Z [trap] #130 CloudClient.API.Requester.SegmentedRequester
+2026-10-29T01:28:52.0357688Z [trap] #131 CloudClient.Models.MixedModel
+2026-10-29T01:28:52.0361151Z [trap] #132 CloudClient.Templating.HandlerTemplate
+2026-10-29T01:28:52.0364572Z [trap] #133 Microsoft.Win32.TaskScheduler.QuickTriggerType
+2026-10-29T01:28:52.0368050Z [trap] #134 CloudClient.DataStructures.ConcreteTree
+2026-10-29T01:28:52.0371518Z [trap] FAIL CloudClient.DataStructures.ConcreteTree
+2026-10-29T01:28:52.0374901Z   [trap] inner0 System.Exception: AirExplorer 
+2026-10-29T01:28:52.0378854Z   [trap] stack0:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.0381818Z    at CloudClient.Templating.TemplateArgument.TemplateThread.PlanRunner()
+2026-10-29T01:28:52.0385201Z    at CloudClient.Templating.TemplateArgument.InstantiateStatelessUser[T](Int32 reference_length, Object[] map, Object serv, T& counter2)
+2026-10-29T01:28:52.0388535Z    at CloudClient.Templating.TemplateArgument.InstantiateAccessibleProcessor(Int32 initY, Object[] token, Object proc)
+2026-10-29T01:28:52.0391537Z    at CloudClient.Templating.DispatcherInitializer.SearchStrategy(Stream config, Int32 connection)
+2026-10-29T01:28:52.0394543Z    at CloudClient.Templating.DispatcherInitializer.Instan
+2026-10-29T01:28:52.0398420Z [trap] #135 CloudClient.DataStructures.ConcreteTree+ExternalResolverReg
+2026-10-29T01:28:52.0402131Z [trap] #136 CloudClient.DataStructures.ConcreteTree+ControllableRequesterCommand
+2026-10-29T01:28:52.0405739Z [trap] #137 CloudClient.DataStructures.ConcreteTree+ControllableRequesterCommand+TreeModel
+2026-10-29T01:28:52.0409225Z [trap] #138 CloudClient.DataStructures.ConcreteTree+ControllableRequesterCommand+<>c__DisplayClass6_0
+2026-10-29T01:28:52.0412528Z [trap] #139 CloudClient.DataStructures.ConcreteTree+RequesterService
+2026-10-29T01:28:52.0416024Z [trap] #140 CloudClient.DataStructures.ConcreteTree+<>c
+2026-10-29T01:28:52.0420065Z [trap] #141 CloudClient.Proxies.ResponsiveProxy
+2026-10-29T01:28:52.0423509Z [trap] FCE#5 msg=[AirExplorer ] len=12
+2026-10-29T01:28:52.0427339Z [trap] FCE stack:    at CloudClient.Templating.TemplateArgument.TemplateThread.DefineSetSet(HandlerPublisher var1)
+2026-10-29T01:28:52.0430273Z [trap] FCE#6 msg=[AirExplorer ] len=12
+2026-10-29T01:28:52.0433980Z [trap] FCE stack:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.0437439Z [trap] FAIL CloudClient.Proxies.ResponsiveProxy
+2026-10-29T01:28:52.0440749Z   [trap] inner0 System.Exception: AirExplorer 
+2026-10-29T01:28:52.0444715Z   [trap] stack0:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.0447918Z    at CloudClient.Templating.TemplateArgument.TemplateThread.PlanRunner()
+2026-10-29T01:28:52.0451422Z    at CloudClient.Templating.TemplateArgument.InstantiateStatelessUser[T](Int32 reference_length, Object[] map, Object serv, T& counter2)
+2026-10-29T01:28:52.0455744Z    at CloudClient.Templating.TemplateArgument.InstantiateAccessibleProcessor(Int32 initY, Object[] token, Object proc)
+2026-10-29T01:28:52.0458984Z    at CloudClient.Templating.DispatcherInitializer.SearchStrategy(Stream config, Int32 connection)
+2026-10-29T01:28:52.0462301Z    at CloudClient.Templating.DispatcherInitializer.Instan
+2026-10-29T01:28:52.0465894Z [trap] #142 CloudClient.Proxies.ResponsiveProxy+PredictorSynchronizer
+2026-10-29T01:28:52.0469349Z [trap] #143 CloudClient.Proxies.ResponsiveProxy+PredictorSynchronizer+CronFieldType
+2026-10-29T01:28:52.0472795Z [trap] #144 CloudClient.Proxies.ResponsiveProxy+PredictorSynchronizer+MonitorTransmitterRole
+2026-10-29T01:28:52.0476638Z [trap] #145 CloudClient.Proxies.ResponsiveProxy+PredictorSynchronizer+MonitorTransmitterRole+<>c
+2026-10-29T01:28:52.0480016Z [trap] #146 CloudClient.Proxies.ResponsiveProxy+PredictorSynchronizer+<>c
+2026-10-29T01:28:52.0483572Z [trap] #147 Microsoft.Win32.TaskScheduler.TaskServiceEngine
+2026-10-29T01:28:52.0486868Z [trap] #148 AirExplorer.Execution.ConnectedCommand
+2026-10-29T01:28:52.0490394Z [trap] #149 AirExplorer.Execution.ConnectedCommand+TemplateAnnotation
+2026-10-29T01:28:52.0493724Z [trap] #150 AirExplorer.Execution.ConnectedCommand+<>c__DisplayClass3_0`1
+2026-10-29T01:28:52.0497696Z [trap] #151 Microsoft.Win32.TaskScheduler.DaysOfTheWeek
+2026-10-29T01:28:52.0500769Z [trap] #152 Microsoft.Win32.TaskScheduler.MonthsOfTheYear
+2026-10-29T01:28:52.0504175Z [trap] #153 Microsoft.Win32.TaskScheduler.TaskTriggerType
+2026-10-29T01:28:52.0507387Z [trap] #154 Microsoft.Win32.TaskScheduler.WhichWeek
+2026-10-29T01:28:52.0510958Z [trap] #155 AirExplorer.Networking.IGeneralRequest
+2026-10-29T01:28:52.0514207Z [trap] #156 AirExplorer.Execution.ITemplateConsumer
+2026-10-29T01:28:52.0518074Z [trap] #157 CloudClient.Proxies.IDefinitionProxy
+2026-10-29T01:28:52.0521355Z [trap] #158 CloudClient.API.Requester.OrderedRequester
+2026-10-29T01:28:52.0524827Z [trap] #159 CloudClient.Registry.RegSharer
+2026-10-29T01:28:52.0528218Z [trap] #160 AirExplorer.Networking.RequestStub
+2026-10-29T01:28:52.0531497Z [trap] #161 AirExplorer.Networking.RequestStub+RequesterWatcher
+2026-10-29T01:28:52.0535110Z [trap] #162 AirExplorer.Networking.RequestStub+MixedDistributorTemplate
+2026-10-29T01:28:52.0538627Z [trap] #163 CloudClient.Models.LocatorFilter
+2026-10-29T01:28:52.0541920Z [trap] #164 CloudClient.Models.HiddenModel
+2026-10-29T01:28:52.0545510Z [trap] #165 AirExplorer.Values.JoinedValue
+2026-10-29T01:28:52.0549033Z [trap] #166 AirExplorer.Values.ChooserValue
+2026-10-29T01:28:52.0552494Z [trap] #167 CloudClient.Templating.SeparatedTemplate
+2026-10-29T01:28:52.0556319Z [trap] #168 CloudClient.DataStructures.PassiveTree
+2026-10-29T01:28:52.0559635Z [trap] #169 CloudClient.DataStructures.PassiveTree+<>c
+2026-10-29T01:28:52.0563194Z [trap] #170 AirExplorer.Execution.CommonCommand
+2026-10-29T01:28:52.0566459Z [trap] #171 CloudClient.Monitoring.MonitorLogger
+2026-10-29T01:28:52.0569930Z [trap] #172 CloudClient.Proxies.ProxyLogger
+2026-10-29T01:28:52.0573316Z [trap] #173 AirExplorer.Processing.VisibleAggregator
+2026-10-29T01:28:52.0577007Z [trap] #174 AirExplorer.Networking.RequestWrapper
+2026-10-29T01:28:52.0580633Z [trap] #175 CloudClient.Templating.ModelWrapper
+2026-10-29T01:28:52.0584133Z [trap] #176 AirExplorer.Networking.RequestAnalyzer
+2026-10-29T01:28:52.0587543Z [trap] #177 AirExplorer.Networking.RequestAnalyzer+ProxyParameter
+2026-10-29T01:28:52.0590998Z [trap] #178 AirExplorer.Networking.RequestAnalyzer+<>c__DisplayClass30_0
+2026-10-29T01:28:52.0594848Z [trap] #179 AirExplorer.Networking.RequestAnalyzer+<>c__DisplayClass31_0
+2026-10-29T01:28:52.0597741Z [trap] #180 AirExplorer.Networking.RequestAnalyzer+<>c__DisplayClass46_0
+2026-10-29T01:28:52.0601284Z [trap] #181 AirExplorer.Networking.RequestAnalyzer+<>c__DisplayClass47_0
+2026-10-29T01:28:52.0604667Z [trap] #182 AirExplorer.Networking.ReadableRequest
+2026-10-29T01:28:52.0608109Z [trap] #183 AirExplorer.Networking.ReadableRequest+<CastImpl>d__1`1
+2026-10-29T01:28:52.0611751Z [trap] #184 AirExplorer.Networking.ReadableRequest+<OfTypeImpl>d__3`1
+2026-10-29T01:28:52.0615335Z [trap] #185 CloudClient.DataStructures.IAdjustableTree
+2026-10-29T01:28:52.0618857Z [trap] #186 CloudClient.DataStructures.LiteralTree
+2026-10-29T01:28:52.0622126Z [trap] #187 CloudClient.DataStructures.LiteralTree+SizeMode
+2026-10-29T01:28:52.0625446Z [trap] #188 CloudClient.DataStructures.LiteralTree+GripAlignMode
+2026-10-29T01:28:52.0628673Z [trap] #189 CloudClient.DataStructures.LiteralTree+PopupResizeMode
+2026-10-29T01:28:52.0632207Z [trap] #190 CloudClient.DataStructures.LiteralTree+ActiveAnalyzerRequest
+2026-10-29T01:28:52.0636191Z [trap] #191 CloudClient.DataStructures.LiteralTree+MonoSummarizerAggregator
+2026-10-29T01:28:52.0639717Z [trap] #192 CloudClient.DataStructures.LiteralTree+DetailedConverterClient
+2026-10-29T01:28:52.0643415Z [trap] #193 CloudClient.DataStructures.LiteralTree+DetailedConverterClient+ClientTokenFormatter
+2026-10-29T01:28:52.0646692Z [trap] #194 CloudClient.Registry.TransformableReg
+2026-10-29T01:28:52.0650180Z [trap] #195 CloudClient.Registry.TransformableReg+<>c
+2026-10-29T01:28:52.0653372Z [trap] #196 CloudClient.Registry.TransformableReg+<>c__40`1
+2026-10-29T01:28:52.0657826Z [trap] #197 AirExplorer.Processing.AggregatorRole
+2026-10-29T01:28:52.0661237Z [trap] #198 CloudClient.Models.ScalableModel
+2026-10-29T01:28:52.0664819Z [trap] #199 Microsoft.Win32.TaskScheduler.FullDateTimePickerTimeFormat
+2026-10-29T01:28:52.0668272Z [trap] #200 CloudClient.Monitoring.AdjustableMonitor
+2026-10-29T01:28:52.0671695Z [trap] #201 CloudClient.Monitoring.AdjustableMonitor+FieldConversionUtcCheckBehavior
+2026-10-29T01:28:52.0674906Z [trap] #202 AirExplorer.Execution.ExternalCommand
+2026-10-29T01:28:52.0678818Z [trap] #203 AirExplorer.Execution.ExternalCommand+TaskTriggerDisplayType
+2026-10-29T01:28:52.0682018Z [trap] #204 CloudClient.Registry.ScheduledReg`1
+2026-10-29T01:28:52.0685590Z [trap] #205 CloudClient.API.Requester.RequesterSynchronizer
+2026-10-29T01:28:52.0688989Z [trap] #206 AirExplorer.Networking.StaticRequest
+2026-10-29T01:28:52.0692525Z [trap] #207 CloudClient.API.Requester.ObserverFinder
+2026-10-29T01:28:52.0696200Z [trap] #208 CloudClient.API.Requester.ObserverFinder+ConverterError
+2026-10-29T01:28:52.0699556Z [trap] #209 Microsoft.Win32.TaskScheduler.V2Interop.TaskEnumFlags
+2026-10-29T01:28:52.0702955Z [trap] #210 AirExplorer.Execution.IListenerTracer
+2026-10-29T01:28:52.0706475Z [trap] #211 CloudClient.Templating.IExpandableTemplate
+2026-10-29T01:28:52.0709794Z [trap] #212 CloudClient.Proxies.ISimpleProxy
+2026-10-29T01:28:52.0713332Z [trap] #213 CloudClient.API.Requester.IRequesterValidator
+2026-10-29T01:28:52.0716641Z [trap] #214 AirExplorer.Processing.IReceiverAggregator
+2026-10-29T01:28:52.0719907Z [trap] #215 AirExplorer.Values.IValueConfiguration
+2026-10-29T01:28:52.0723112Z [trap] #216 AirExplorer.Execution.ICustomCommand
+2026-10-29T01:28:52.0726423Z [trap] #217 AirExplorer.Values.IGroupedValue
+2026-10-29T01:28:52.0729628Z [trap] #218 AirExplorer.Networking.ICentralRequest
+2026-10-29T01:28:52.0733204Z [trap] #219 CloudClient.API.Requester.IRequesterRole
+2026-10-29T01:28:52.0736973Z [trap] #220 AirExplorer.Processing.IAggregatorRecommender
+2026-10-29T01:28:52.0740466Z [trap] #221 CloudClient.Registry.IJoinedReg
+2026-10-29T01:28:52.0743815Z [trap] #222 AirExplorer.Networking.IStateServer
+2026-10-29T01:28:52.0747340Z [trap] #223 CloudClient.DataStructures.ITransmitterSingleton
+2026-10-29T01:28:52.0750743Z [trap] #224 CloudClient.Registry.IExtendedReg
+2026-10-29T01:28:52.0755060Z [trap] #225 AirExplorer.Networking.IFunctionRequest
+2026-10-29T01:28:52.0758535Z [trap] #226 CloudClient.Models.ISymbolicModel
+2026-10-29T01:28:52.0761816Z [trap] #227 AirExplorer.Processing.IWrapperExecutor
+2026-10-29T01:28:52.0765156Z [trap] #228 AirExplorer.Values.ICacheDictionary
+2026-10-29T01:28:52.0768528Z [trap] #229 AirExplorer.Values.INotifierValue
+2026-10-29T01:28:52.0771872Z [trap] #230 AirExplorer.Execution.ICommandFinder
+2026-10-29T01:28:52.0775456Z [trap] #231 CloudClient.API.Requester.IConnectedRequester
+2026-10-29T01:28:52.0778855Z [trap] #232 CloudClient.Monitoring.IStackMonitor
+2026-10-29T01:28:52.0782245Z [trap] #233 AirExplorer.Networking.IAllocatorRequest
+2026-10-29T01:28:52.0785668Z [trap] #234 CloudClient.Models.IIntegratedModel
+2026-10-29T01:28:52.0788972Z [trap] #235 AirExplorer.Processing.IAggregatorRecord
+2026-10-29T01:28:52.0792473Z [trap] #236 CloudClient.Proxies.IProxyDictionary
+2026-10-29T01:28:52.0796482Z [trap] #237 CloudClient.Proxies.IVirtualProxy
+2026-10-29T01:28:52.0800051Z [trap] #238 AirExplorer.Execution.ITransformerFormatter
+2026-10-29T01:28:52.0803450Z [trap] #239 AirExplorer.Processing.IBasicAggregator
+2026-10-29T01:28:52.0806978Z [trap] #240 CloudClient.API.Requester.IFunctionRequester
+2026-10-29T01:28:52.0810370Z [trap] #241 CloudClient.Monitoring.MonitorExtractor
+2026-10-29T01:28:52.0813838Z [trap] #242 CloudClient.Templating.IAlphabeticTemplate
+2026-10-29T01:28:52.0817531Z [trap] #243 AirExplorer.Values.ITransferableValue
+2026-10-29T01:28:52.0820857Z [trap] #244 AirExplorer.Execution.IExtendedCommand
+2026-10-29T01:28:52.0824274Z [trap] #245 CloudClient.API.Requester.IScheduledRequester
+2026-10-29T01:28:52.0827698Z [trap] #246 CloudClient.Networking.IIntegratedClient
+2026-10-29T01:28:52.0831222Z [trap] #247 CloudClient.Proxies.ISetProxy
+2026-10-29T01:28:52.0835152Z [trap] #248 CloudClient.Templating.IInternalTemplate
+2026-10-29T01:28:52.0838586Z [trap] #249 CloudClient.API.Requester.IAutomatableRequester
+2026-10-29T01:28:52.0841799Z [trap] #250 CloudClient.Monitoring.IMonitorTransformer
+2026-10-29T01:28:52.0845094Z [trap] #251 AirExplorer.Networking.AdaptableRequest
+2026-10-29T01:28:52.0848663Z [trap] #252 Microsoft.Win32.TaskScheduler.V1Interop.TaskFlags
+2026-10-29T01:28:52.0852258Z [trap] #253 Microsoft.Win32.TaskScheduler.V1Interop.TaskStatus
+2026-10-29T01:28:52.0855785Z [trap] #254 Microsoft.Win32.TaskScheduler.V1Interop.TaskTriggerType
+2026-10-29T01:28:52.0859120Z [trap] #255 Microsoft.Win32.TaskScheduler.V1Interop.TaskTriggerFlags
+2026-10-29T01:28:52.0862478Z [trap] #256 AirExplorer.Execution.ConvertibleCommand
+2026-10-29T01:28:52.0865956Z [trap] #257 CloudClient.Monitoring.ScheduledMonitor
+2026-10-29T01:28:52.0869373Z [trap] #258 CloudClient.API.Requester.ResponsiveRequester
+2026-10-29T01:28:52.0872784Z [trap] #259 AirExplorer.Processing.ServiceArgument
+2026-10-29T01:28:52.0876162Z [trap] #260 AirExplorer.Values.CommonValue
+2026-10-29T01:28:52.0879604Z [trap] #261 AirExplorer.Execution.IsolatedCommand
+2026-10-29T01:28:52.0882823Z [trap] #262 AirExplorer.Execution.ILocalCommand
+2026-10-29T01:28:52.0886376Z [trap] #263 CloudClient.Templating.ILogicalTemplate
+2026-10-29T01:28:52.0889791Z [trap] #264 AirExplorer.Processing.IAggregatorBuffer
+2026-10-29T01:28:52.0893563Z [trap] #265 AirExplorer.Networking.IRequestTracker
+2026-10-29T01:28:52.0897578Z [trap] #266 AirExplorer.Values.ValueProfiler
+2026-10-29T01:28:52.0901882Z [trap] #267 AirExplorer.Processing.AggregatorConsumer
+2026-10-29T01:28:52.1031905Z [trap] #268 CloudClient.Registry.ControllableReg
+2026-10-29T01:28:52.1035413Z [trap] #269 AirExplorer.Processing.AggregatorIterator
+2026-10-29T01:28:52.1039583Z [trap] #270 AirExplorer.Networking.AlphabeticRequest
+2026-10-29T01:28:52.1043625Z [trap] #271 CloudClient.Templating.ServiceTemplate
+2026-10-29T01:28:52.1048071Z [trap] #272 CloudClient.Templating.ISetTemplate
+2026-10-29T01:28:52.1051358Z [trap] #273 AirExplorer.Values.ValueBuilder
+2026-10-29T01:28:52.1055287Z [trap] #274 AirExplorer.Values.AllocatorConnection
+2026-10-29T01:28:52.1058889Z [trap] #275 CloudClient.Monitoring.MonitorDispatcher
+2026-10-29T01:28:52.1062279Z [trap] #276 AirExplorer.Execution.CommandSummarizer
+2026-10-29T01:28:52.1065559Z [trap] #277 CloudClient.Registry.PoolReg
+2026-10-29T01:28:52.1069860Z [trap] #278 CloudClient.DataStructures.TransformableTree
+2026-10-29T01:28:52.1073082Z [trap] #279 AirExplorer.Processing.AggregatorInspector
+2026-10-29T01:28:52.1076458Z [trap] #280 AirExplorer.Execution.CommandStream
+2026-10-29T01:28:52.1079901Z [trap] #281 AirExplorer.Values.CacheValue
+2026-10-29T01:28:52.1083109Z [trap] #282 AirExplorer.Execution.CommandProgram
+2026-10-29T01:28:52.1086544Z [trap] #283 CloudClient.Monitoring.MonitorProgram
+2026-10-29T01:28:52.1089866Z [trap] #284 AirExplorer.Processing.CustomizableAggregator
+2026-10-29T01:28:52.1093418Z [trap] #285 AirExplorer.Processing.CustomizableAggregator+CentralStackRequester
+2026-10-29T01:28:52.1096840Z [trap] #286 AirExplorer.Processing.CustomizableAggregator+ValueGeneratorQueue
+2026-10-29T01:28:52.1100181Z [trap] #287 AirExplorer.Processing.CustomizableAggregator+CreatorReg
+2026-10-29T01:28:52.1103239Z [trap] #288 AirExplorer.Values.ConverterReporter
+2026-10-29T01:28:52.1106598Z [trap] #289 AirExplorer.Values.ConverterReporter+AggregatorVisitorTransaction
+2026-10-29T01:28:52.1110144Z [trap] #290 AirExplorer.Values.ConverterReporter+MonoWorkerClient
+2026-10-29T01:28:52.1113607Z [trap] #291 AirExplorer.Values.ConverterReporter+IPassiveSolverReg
+2026-10-29T01:28:52.1117193Z [trap] #292 AirExplorer.Values.ConverterReporter+GenericCollectionRequester
+2026-10-29T01:28:52.1120586Z [trap] #293 AirExplorer.Values.ConverterReporter+ResolverClient
+2026-10-29T01:28:52.1123794Z [trap] #294 AirExplorer.Processing.AggregatorSelector
+2026-10-29T01:28:52.1127209Z [trap] #295 AirExplorer.Values.SetValue
+2026-10-29T01:28:52.1130576Z [trap] #296 AirExplorer.Execution.IVisibleCommand
+2026-10-29T01:28:52.1134265Z [trap] #297 AirExplorer.Execution.ISetInitializer
+2026-10-29T01:28:52.1137702Z [trap] #298 AirExplorer.Processing.AggregatorWrapper
+2026-10-29T01:28:52.1141985Z [trap] #299 CloudClient.Templating.ExternalTemplate
+2026-10-29T01:28:52.1145560Z [trap] #300 CloudClient.Templating.ExternalTemplate+<>c
+2026-10-29T01:28:52.1149833Z [trap] #301 CloudClient.Templating.ExternalTemplate+<>c__DisplayClass10_0
+2026-10-29T01:28:52.1153404Z [trap] #302 CloudClient.Templating.ExternalTemplate+<>c__DisplayClass12_0
+2026-10-29T01:28:52.1157510Z [trap] #303 CloudClient.Templating.ExternalTemplate+<>c__DisplayClass14_0
+2026-10-29T01:28:52.1161381Z [trap] #304 CloudClient.Templating.ExternalTemplate+<>c__DisplayClass5_0
+2026-10-29T01:28:52.1164960Z [trap] #305 CloudClient.Templating.ExternalTemplate+<>c__DisplayClass9_0
+2026-10-29T01:28:52.1168516Z [trap] #306 CloudClient.Monitoring.CentralMonitor
+2026-10-29T01:28:52.1172356Z [trap] #307 AirExplorer.Execution.AdvancedCommand
+2026-10-29T01:28:52.1175917Z [trap] #308 AirExplorer.Values.ValueAllocator
+2026-10-29T01:28:52.1179832Z [trap] #309 AirExplorer.Networking.IRequestState
+2026-10-29T01:28:52.1183870Z [trap] #310 CloudClient.API.Requester.IOperationalRequester
+2026-10-29T01:28:52.1187563Z [trap] #311 CloudClient.Proxies.IProxyExtractor
+2026-10-29T01:28:52.1191641Z [trap] #312 CloudClient.Proxies.IProcessorConfiguration
+2026-10-29T01:28:52.1195686Z [trap] #313 AirExplorer.Processing.ConnectedAggregator
+2026-10-29T01:28:52.1199228Z [trap] #314 CloudClient.Proxies.IScopeProxy
+2026-10-29T01:28:52.1203333Z [trap] #315 AirExplorer.Execution.IOrderedCommand
+2026-10-29T01:28:52.1206891Z [trap] #316 CloudClient.API.Requester.IRequesterProvider
+2026-10-29T01:28:52.1210927Z [trap] #317 CloudClient.Registry.IRegAggregator
+2026-10-29T01:28:52.1214756Z [trap] #318 CloudClient.Models.CustomizableModel
+2026-10-29T01:28:52.1218618Z [trap] #319 AirExplorer.Networking.RequestList
+2026-10-29T01:28:52.1222699Z [trap] #320 AirExplorer.Networking.RequestList+<>c
+2026-10-29T01:28:52.1226523Z [trap] #321 AirExplorer.Networking.RequestList+<>c__DisplayClass2_0
+2026-10-29T01:28:52.1231304Z [trap] #322 AirExplorer.Networking.RequestList+<>c__DisplayClass2_1
+2026-10-29T01:28:52.1235027Z [trap] #323 AirExplorer.Networking.RequestList+<>c__DisplayClass4_0
+2026-10-29T01:28:52.1238861Z [trap] #324 CloudClient.Models.SequentialModel
+2026-10-29T01:28:52.1242774Z [trap] #325 AirExplorer.Execution.ExpandableCommand
+2026-10-29T01:28:52.1247022Z [trap] #326 AirExplorer.Execution.ExpandableCommand+<AssertValidLicense>d__8
+2026-10-29T01:28:52.1250326Z [trap] #327 CloudClient.DataStructures.StaticTree
+2026-10-29T01:28:52.1254361Z [trap] FAIL CloudClient.DataStructures.StaticTree
+2026-10-29T01:28:52.1259122Z   [trap] inner0 System.IO.FileNotFoundException: Could not load file or assembly 'BouncyCastle.Crypto, Version=1.7.4114.6375, Culture=neutral, PublicKeyToken=0e99375e54769942' or one of its dependencies. The system cannot find the file specified.
+2026-10-29T01:28:52.1262408Z   [trap] stack0:    at CloudClient.DataStructures.StaticTree..cctor()
+2026-10-29T01:28:52.1266120Z [trap] #328 WPFTagControl.MaxWidthMultiConverter
+2026-10-29T01:28:52.1270460Z [trap] #329 AirExplorer.Networking.RequestCreator
+2026-10-29T01:28:52.1274454Z [trap] #330 CloudClient.Registry.RegPredicate
+2026-10-29T01:28:52.1278393Z [trap] FCE#7 msg=[AirExplorer ] len=12
+2026-10-29T01:28:52.1282842Z [trap] FCE stack:    at CloudClient.Templating.TemplateArgument.TemplateThread.DefineSetSet(HandlerPublisher var1)
+2026-10-29T01:28:52.1286504Z [trap] FCE#8 msg=[AirExplorer ] len=12
+2026-10-29T01:28:52.1291102Z [trap] FCE stack:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.1295075Z [trap] FAIL CloudClient.Registry.RegPredicate
+2026-10-29T01:28:52.1298933Z   [trap] inner0 System.Exception: AirExplorer 
+2026-10-29T01:28:52.1303344Z   [trap] stack0:    at CloudClient.Templating.TemplateArgument.TemplateThread.GenerateAdaptableExtractor(Boolean& reference)
+2026-10-29T01:28:52.1307425Z    at CloudClient.Templating.TemplateArgument.TemplateThread.PlanRunner()
+2026-10-29T01:28:52.1311358Z    at CloudClient.Templating.TemplateArgument.InstantiateStatelessUser[T](Int32 reference_length, Object[] map, Object serv, T& counter2)
+2026-10-29T01:28:52.1315532Z    at CloudClient.Templating.TemplateArgument.InstantiateAccessibleProcessor(Int32 initY, Object[] token, Object proc)
+2026-10-29T01:28:52.1318962Z    at CloudClient.Templating.DispatcherInitializer.SearchStrategy(Stream config, Int32 connection)
+2026-10-29T01:28:52.1322681Z    at CloudClient.Templating.DispatcherInitializer.Instan
+2026-10-29T01:28:52.1326199Z [trap] stop after 6 failures
+2026-10-29T01:28:52.1330738Z [trap] SUMMARY ok=325 fail=6 total=4907
+2026-10-29T01:28:52.1334786Z [probe2] DONE

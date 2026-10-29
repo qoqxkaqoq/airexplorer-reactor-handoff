@@ -1957,3 +1957,21 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **第一哨兵原版块解码（4192 @04cb-04e5）**：`ldsfld m_ExtendedSchemaTemplate(RSA对象); ldloc v13(SHA1,@0ac3 创建); call 41ed; ldloc v23; ldloc v24; call 41ee VerifyDynamicStrategy; ldc.i4.0; ceq; stloc v12(c); br 0977`——**结果单次消费无 dup，池密钥派生假说死亡**；结构=RSA 签名校验（RSA+SHA1+期望签名 v23/v24）→ **新主攻 = A2 同构：替换 m_ExtendedSchemaTemplate 密钥（FromXmlString XML 常量，可同长填充）+ 自签补丁区哈希**
 - **待验证**：①p3+p5-only（去 p1）一 dispatch 分离 字节校验vs行为依赖（若仍63炸→纯字节校验实锤）；②m_ExtendedSchemaTemplate 初始化点（FromXmlString 41df 调用者/XML blob 位置）；③41ed 真身（(RSA,SHA1)→?）
 - 工具：step187_mnv.py(字段引用扫描)/step188-189(补丁面对齐判定)/step190-191(数据流+cctor注入)/mem5 il_index+flat.py 复用
+
+### a17 v7 分离实验闭环 + 第一哨兵全解（step192-193, runs 40800647187/40801354773）——纯字节校验铁证，A2 路线定案
+- **v7 = p3+p5 无 p1**（`exes/AirExplorer_a16v7_p3p5.exe` md5=FBE88457184D573E36D11D1966A1C5DC，commit 16dcecd5）trap 判定（run 40800647187）：module cctor OK、GetTypes 4883/4907 loaderEx=24、ok=325 fail=6（6-stop）：**4×"AirExplorer "**（ExtendedProxy/ConcreteAggregator/ResponsiveProxy/RegPredicate）+ 2×BouncyCastle 缺 DLL
+- **baseline trap 对照**（run 40801354773，mode=trap）：**ok=4878 fail=5 全缺 DLL（BouncyCastle×1 + GongSolutions 系×4），0 次 "AirExplorer "** → v7 与 baseline 行为学等价（p3/p5 诚实文件惰性）却仅差 13 字节补丁（p3 8B + p5 5B）就 4 次守卫炸 → **第一哨兵 = 纯字节校验铁证闭环**
+- **与 step137 联动闭环**：commit 0a55fd28 早已确认"4192 = exe self-hash sentinel (PE parse → SHA1 → RSA verify, res5 = RSA pubkey XML)" → 哨兵本质 = **对 exe 自身字节 SHA1 的 RSA 签名校验**（哈希输入=exe 字节/PE 区域，公钥=运行时解密的 RSA XML，期望签名 v23/v24）。任何字节改动 → SHA1 变 → VerifyHash 失败 → c=1 → 陷阱 → "AirExplorer "
+- **step192 关键解剖**：
+  - `m_ExtendedSchemaTemplate`(04:001fcd, RSA 字段) 全库 5 引用，写入者 2：4181 cctor@0043（写 null/初值）+ **4192 @22a9 `newobj RSACryptoServiceProvider` → @22ae stsfld**
+  - 41df(FromXmlString 转发壳) **唯一调用者 = 4192 @2250**；41ed = `HashAlgorithm::get_Hash` 转发壳（3 条）；41ee = `RSACryptoServiceProvider::VerifyHash(byte[] hash, string oid, byte[] sig)` 转发壳（6 条）——oid 来自 41cf MapNameToOID(SHA1)
+- **step193 XML 来源定案**：4192 @21ff-2261 = **内嵌解密区**（CryptoStream 链：41d6→41d7(SymmetricAlgorithm::set_Mode)→41d8(CreateDecryptor)→41d9→`newobj CryptoStream`→41da(Stream::Write)→41db(FlushFinalBlock)→…→@2250 FromXmlString）→ **公钥 XML = 运行时 AES 解密产物，非静态 ldstr**（全库 ldstr 无 RSA XML）
+- **r5 资产三件套已固化**（`work/s5/mem5/r5/`）：`res5_cipher.bin`(256B 密文) + `res5_aes_key_iv.txt`(解密密钥已知) + **`res5_plain.xml`(243B = 原厂 RSA 公钥 XML 明文)**；另有 5 个资源池 bin（GlobalValidator_FactoryValidator 398794B 等）
+- **A2 公钥替换路线定案（下一步施工图）**：
+  1. 生成 1024-bit 新 RSA 密钥对，产出同长 XML（243B 对齐，`<Modulus>` 空白填充均可）
+  2. 用已知 AES key/iv 加密新 XML → 回写密文 blob（**待定位：密文 blob 的静态存放点**——FieldRVA 数据或资源池，数据区改动是否触发哈希哨兵=关键实验）
+  3. 用新私钥对**最终 exe 的 SHA1** 自签 → 得新签名 128B → 替换期望签名 v23/v24 的存放点（**待定位**：v23/v24 初始化源）
+  4. **鸡生蛋风险**：签名写入 exe 又改 SHA1 → 需确认哨兵哈希覆盖范围（step137: PE parse self-hash——具体哈希哪些字节区间是头号待查项；若覆盖全文件则需迭代/固定点方案，或哨兵哈希只覆盖部分区段）
+  5. 判定链：A2 落地后 trap 期望 ok≈4878（=baseline）→ ag 期望 fields=6201
+- 资产上传：v7/baseline trap 日志归档 `work/s5/logs/`；交接提示词 `HANDOFF_PROMPT.md`（仓库根）
+
