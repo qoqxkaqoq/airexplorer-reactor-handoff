@@ -986,13 +986,20 @@ class Probe2 {
             foreach (var f in diT.GetFields(flags)) {
                 object v = null;
                 try { v = f.GetValue(null); } catch {}
-                string desc = v == null ? "NULL" : (v is string s2 ? ("str len=" + s2.Length) : v.GetType().Name);
+                string desc = "NULL";
+                if (v == null) desc = "NULL";
+                else if (v is string) desc = "str len=" + ((string)v).Length;
+                else desc = v.GetType().Name;
                 Log("[mtrack2]   ." + f.Name + " = " + desc);
-                if (v is System.Collections.Hashtable ht) { int n = ht.Count; ht.Clear(); Log("[mtrack2]   CLEARED Hashtable " + f.Name + " (was " + n + ")"); }
-                else if (v is System.Collections.IDictionary dc && !(v is string)) { int n = dc.Count; dc.Clear(); Log("[mtrack2]   CLEARED IDictionary " + f.Name + " (was " + n + ")"); }
-                else if (v is System.Collections.IList il2) { int n = il2.Count; il2.Clear(); Log("[mtrack2]   CLEARED IList " + f.Name + " (was " + n + ")"); }
-                else if (v is Array a2 && !(v is byte[]) && a2.Length > 0 && a2.Length <= 4096) {
-                    // 对象引用数组: 清引用 (byte[] 谨慎保留)
+                System.Collections.Hashtable ht = v as System.Collections.Hashtable;
+                if (ht != null) { int n = ht.Count; ht.Clear(); Log("[mtrack2]   CLEARED Hashtable " + f.Name + " (was " + n + ")"); continue; }
+                if (v is string) continue;
+                System.Collections.IDictionary dc = v as System.Collections.IDictionary;
+                if (dc != null) { int n = dc.Count; dc.Clear(); Log("[mtrack2]   CLEARED IDictionary " + f.Name + " (was " + n + ")"); continue; }
+                System.Collections.IList il2 = v as System.Collections.IList;
+                if (il2 != null) { int n = il2.Count; il2.Clear(); Log("[mtrack2]   CLEARED IList " + f.Name + " (was " + n + ")"); continue; }
+                Array a2 = v as Array;
+                if (a2 != null && !(v is byte[]) && a2.Length > 0 && a2.Length <= 4096) {
                     try { Array.Clear(a2, 0, a2.Length); Log("[mtrack2]   CLEARED Array " + f.Name + " len=" + a2.Length); } catch {}
                 }
             }
