@@ -87,7 +87,8 @@ class Probe2 {
                 MT7_vehHand = AddVectoredExceptionHandler(1, p);
                 Log("[mtrack7] VEH @ " + MT7_vehHand.ToString("X"));
             } catch (Exception ex) { Log("[mtrack7] VEH FAIL " + ex.Message); }
-            MT7_SetAllThreadsDR();
+            // 注意: 不在启动期对运行线程 SetThreadContext (与执行竞态会写坏 RIP → AV)。
+            // DR 设置全部由 freezer 的 freeze 态完成 (线程已挂起), cycle1 即覆盖 worker。
             // 3) worker + freezer
             var w7 = new Thread(delegate() {
                 try { MT4_RunWorker(exe); }
