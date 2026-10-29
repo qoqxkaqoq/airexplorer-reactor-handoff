@@ -1046,15 +1046,24 @@ class Probe2 {
                                 long oa = src.ToInt64() + off;
                                 if (!seenTf.Add(oa)) continue;
                                 MT_nTf++;
+                                if (take - off < 512) continue;   // 跨 buf 尾: 等下一轮覆盖
                                 var obj = new byte[512];
-                                if (!SafeRead((IntPtr)oa, obj)) continue;
+                                Array.Copy(buf, off, obj, 0, 512);   // buf 内快照, 零二次读
                                 Log("[mtrack] r" + r + " RMCrypt @0x" + oa.ToString("X"));
                                 MT_Dump("mtrack_tf_0x" + oa.ToString("X") + "_r" + r + ".bin", obj);
                                 for (int fo = 8; fo < 0x100; fo += 8) {
                                     ulong pv = BitConverter.ToUInt64(obj, fo);
                                     if (!LooksLikeHeap(pv)) continue;
-                                    var tgt = new byte[272];
-                                    if (!SafeRead((IntPtr)(long)pv, tgt)) continue;
+                                    // 优先 buf 内读 (同一 RPM 快照, 免 GC 竞争)
+                                    long rel = (long)pv - src.ToInt64();
+                                    byte[] tgt;
+                                    if (rel >= 0 && rel + 272 <= take) {
+                                        tgt = new byte[272];
+                                        Array.Copy(buf, (int)rel, tgt, 0, 272);
+                                    } else {
+                                        tgt = new byte[272];
+                                        if (!SafeRead((IntPtr)(long)pv, tgt)) continue;
+                                    }
                                     int tlen = BitConverter.ToInt32(tgt, 8);
                                     if (tlen == 60) {
                                         var ed = new byte[240];
@@ -1113,7 +1122,7 @@ class Probe2 {
                                         var mc2 = MT_MixCols(mid2);
                                         Array.Copy(mc2, 0, kD, 16, 16);
                                         MT_TryAndLog(kD, "g60D_0x" + oa.ToString("X") + "_r" + r);
-                                        if (MT_nI60 <= 400) MT_Dump("mtrack_g60_0x" + oa.ToString("X") + "_r" + r + ".bin", ed);
+                                        if (MT_nI60 <= 2500) MT_Dump("mtrack_g60_0x" + oa.ToString("X") + "_r" + r + ".bin", ed);
                                     }
                                 } else if (alen == 8 && MT_nI8 < 4000 && seen60.Add(oa)) {
                                     MT_nI8++;
