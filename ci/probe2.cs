@@ -1978,7 +1978,8 @@ class Probe2 {
         var hs = new List<IntPtr>(64);
         uint myTid = GetCurrentThreadId();
         var proc = Process.GetCurrentProcess();
-        while (!MT3_stop && w.IsAlive) {
+        var swLoop = System.Diagnostics.Stopwatch.StartNew();   // wall-clock 保险 (v11 20min 挂死教训)
+        while (!MT3_stop && w.IsAlive && swLoop.ElapsedMilliseconds < 300000) {
             MT3_cycles++;
             hs.Clear();
             proc.Refresh();
@@ -1992,24 +1993,16 @@ class Probe2 {
             }
             MT3_susp += hs.Count;
             // v10: invoke burst — worker 挂起中, 内存快照切片按需解密窗口 (RPM only ~10ms/份, 免写盘)
-            if (MT7_preInvoke == 1 && MT7_invArmed == 0 && MT7_invDone == 0 && MT7_snapBufs == null) {
-                MT7_snapBufs = new byte[10][];
-                try {
-                    for (int i = 0; i < 10; i++) MT7_snapBufs[i] = new byte[80 << 20];
-                    MT7_invArmed = 1; MT7_invLeft = 10; MT7_invDone = 1;
-                    Log("[mtrack7] *** INVOKE BURST ARMED (10x in-mem snapshot)");
-                } catch (Exception ex) {
-                    Log("[mtrack7] snap buf alloc FAIL " + ex.Message);
-                    MT7_invDone = 1;
-                }
-            }
+            // 注意: 缓冲分配绝不能在冻结态做 (GC 死锁 — v11 的 20min 假死教训), 分配在解冻段完成
             bool invBurst = MT7_invArmed == 1 && MT7_invLeft > 0;
             if (invBurst) {
                 int idx = 10 - MT7_invLeft;
-                MT7_snapLen[idx] = MT7_SnapMem(MT7_snapBufs[idx], buf);
+                int nSnap = MT7_SnapMem(MT7_snapBufs[idx], buf);
+                MT7_snapLen[idx] = nSnap;
                 MT7_invLeft--;
-                Log("[mtrack7] inv snap[" + idx + "] bytes=" + MT7_snapLen[idx] + " cycle=" + MT3_cycles);
                 for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
+                // Log 必须在解冻后 (冻结态字符串分配 → GC 死锁风险, v11 教训)
+                Log("[mtrack7] inv snap[" + idx + "] bytes=" + nSnap + " cycle=" + MT3_cycles);
                 if (MT7_invLeft > 0) continue;
                 Log("[mtrack7] invoke burst done, flushing in-mem snapshots...");
                 for (int i = 0; i < 10; i++) {
@@ -2023,6 +2016,7 @@ class Probe2 {
                     }
                 }
                 Log("[mtrack7] invoke burst snapshots flushed");
+                MT3_stop = true;   // 任务完成即收工, 防后续空转/挂起
             }
             // ---- DR 命中消费 (冻结态; v7 shellcode 已 deref 拷贝 key/iv 内容进槽, 检测点 failfast 也不丢) ----
             MT7_pendLo = MT7_pendHi = 0;
@@ -2080,6 +2074,16 @@ class Probe2 {
                 MT3_FrozenRange(buf, mbi, sz, 0x2800000, 0x3800000);
             }
             for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
+            // ---- 解冻段: 分配 10x80MB 快照缓冲 + arm burst (v11 教训: 冻结态分配 → GC 死锁) ----
+            if (MT7_preInvoke == 1 && MT7_invArmed == 0 && MT7_invDone == 0 && MT7_snapBufs == null) {
+                try {
+                    var bufs = new byte[10][];
+                    for (int i = 0; i < 10; i++) bufs[i] = new byte[80 << 20];
+                    MT7_snapBufs = bufs;          // 先挂引用再置 armed (volatile 写序保证)
+                    MT7_invArmed = 1; MT7_invLeft = 10; MT7_invDone = 1;
+                    Log("[mtrack7] *** INVOKE BURST ARMED (10x in-mem snapshot, 800MB)");
+                } catch (Exception ex) { Log("[mtrack7] snap buf alloc FAIL " + ex.Message); MT7_invDone = 1; }
+            }
             // ---- 解冻段: 命中转储/登记 (分配/Log 安全) + 首命中全快照 ----
             for (long k = MT7_pendLo; k < MT7_pendHi; k++) {
                 int slot = (int)(k & 7);
