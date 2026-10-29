@@ -1640,8 +1640,8 @@ class Probe2 {
             MT7_preInvoke = 1;
             Log("[mtrack7] pre-invoke flag set, waiting for freezer in-mem burst...");
             int spins2 = 0;
-            // v19: SpinWait 化 (Sleep(1) 粒度 ~1ms 会吃掉快照起点余量)
-            while (MT7_invArmed == 0 && spins2 < 200000) { Thread.SpinWait(200); spins2++; }
+            // v20: 上限 400ms (freezer 首扫 MEM_PRIVATE ~400ms — v19 的 40ms 超时导致 armed 晚于 invoke#0)
+            while (MT7_invArmed == 0 && spins2 < 2000000) { Thread.SpinWait(200); spins2++; }
             // v19: 延迟 3ms 再 bust+ResolveMethod — 解密窗推到快照序列 (#0@+0.3ms, 间隔~0.7ms, 30份) 正中 #3-#6
             Thread.Sleep(3);
             Log("[mtrack7] invoke burst armed=" + MT7_invArmed + " spins=" + spins2 + " → bust+invoke");
