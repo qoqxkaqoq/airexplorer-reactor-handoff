@@ -1926,3 +1926,12 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **积极信号**：陷阱块 nop 死区不再可达（br 生效方向对）；异常从 ' is tampered.' 变 InvalidProgram 证明 trap 路径已被截断，只差 1 字节落点
 - **step173 a13d**：动态定位出口——`@22f2 add; @22f3 stloc.0; @22f7 brtrue 12; @22fc br bdf; @2301 ldnull; @2302 stloc.s 1a; @2304 br fb; @2309 ret` → **ret@2309 实锤**，delta = 0x2309 - 0x0a7a = **0x188F**；`exes/AirExplorer_a13d_trapbr2.exe` md5=EF5472793091D6A812B11970D50D8703
 - 判定计划：s5probe mode=trap → 期望 InvalidProgram 消失、回归 ' is tampered.'（br 修正后 trap 路径落 ret → 4192 静默返回）或 ok 大幅回升
+
+### a13d trap 判定（run 40790957858）+ 陷阱路由全贯通（step175-179）
+- **a13d（c=1+br 修正）结果**：module cctor **OK**（InvalidProgram 消失，br 落点修正生效）；trap 模式 ok=325 fail=6（与 a13 持平），但异常消息从 "AirExplorer is tampered." 变 **"AirExplorer "**（尾巴消失）且调用链变短（InstantiateStatelessUser→PlanRunner→GenerateAdaptableExtractor，无 SearchStrategy/42AD/42AC 帧）→ 陷阱块确实被 neuter，"AirExplorer " = 下游检测到 init 被跳过的新守卫（构造方未定位，4523 无 ldstr）
+- **step175-177 检查函数族全裸**：41cd=String::get_Length、41ce=SHA1::Create、41cf=MapNameToOID、41d0=File::Exists、41d7=SymmetricAlgorithm::set_Mode、41d8=CreateDecryptor、41da=Stream::Write、41db=FlushFinalBlock、41df=AsymmetricAlgorithm::FromXmlString、41e0=Stream::Close、41e1=→4269 DecryptConvertibleMatcher、41e9=Math::Min —— 全是 BCL 转发壳；@21ff-2261 = 内嵌密文 AES(Write 模式)+RSA 解密区（WritePool 同款）
+- **4192 是双状态变量平坦机**：loc0（累加器）+ loc1f（switch 选择子=loc0+K）；**flat.py 的 br op=绝对目标，但 switch 偏移=十进制 rel**（step177 两种语义混用导致漏扫）；flat.py 对 @22f7 解析异常（op=12），raw 字节为准
+- **陷阱唯一入口实锤（raw 字节扫描）**：`@00d3 ldloc.s c; ...; @00f1 brfalse 12 (39 1cffffff); @00f6 br a72 (38 77090000)` —— **c!=0 → 陷阱**；c 写入者 = ①@04e0 第一哨兵 `c=(VerifyDynamicStrategy(17,18)==0)`（41ee=比较转发，41ed=get_Hash@04d2 唯一调用点在此块）②@2289 catch（大 try[0be0+16a3) 异常 → c=1）
+- **教训修正**：①step171-173 把 a14 的 `26 17 13 0C 00`(c=1) 误当 a13（真 a13=`26 16 13 0C 00` c=0，step127/142 为准）——a13b/c/d 全带错值但被 JIT 错误/挂死掩盖；②step178 初版 a15 曾误补 @22f7（其 brtrue 实际目标=0x12 调度器，非陷阱；0x22fc−0x230A=负数，此前 16 进制心算错误）；③NOP brtrue 会留栈底值致栈失衡，改分支须保持弹栈语义
+- **step179 a15 终版三补丁**：①a13 c=0 @3f96bc ②**@3f92cd `39`→`38`（brfalse→br，1 字节）——c!=0 也走正常调度器，陷阱入口变死码，同时中和 catch c=1 路由** ③陷阱块改写 br ret@2309（保险网）。`exes/AirExplorer_a15_combo.exe` md5=86A477B2A7471271B9C08CA52A9977D8
+- 判定计划：s5probe mode=trap → 期望 ok>>325（5 个 'AirExplorer ' fail 消失，StaticTree 仍因 BouncyCastle 失败）；ag 模式 → fields=6201
