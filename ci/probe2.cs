@@ -1672,6 +1672,7 @@ class Probe2 {
                 if (MT7_nSbox > 0) {
                     MT7_SelfArmSbox();
                     // v18: 全域 PrepareMethod 洪泛 — 任何未 JIT 的 res[0] 域方法 JIT = 解密 = S-box 访问 = VEH
+                    MT7_floodMode = 1;   // v24: freezer 暂停 freeze (防 JIT 锁死锁)
                     Log("[mtrack7] global PrepareMethod flood 0x06000001-0x0600FFFF (DR armed)...");
                     int jitN = 0, exN = 0;
                     for (int tok = 0x06000001; tok <= 0x0600FFFF; tok++) {
@@ -1684,6 +1685,7 @@ class Probe2 {
                             Log("[mtrack7] flood @ " + tok.ToString("X") + " jit=" + jitN + " ex=" + exN + " cnt=" + Marshal.ReadInt64(MT7_cntAddr, 0));
                         if (Marshal.ReadInt64(MT7_cntAddr, 0) > 0) { Log("[mtrack7] *** flood HIT @ " + tok.ToString("X") + " — stop early"); break; }
                     }
+                    MT7_floodMode = 0;
                     Log("[mtrack7] flood done jit=" + jitN + " ex=" + exN + " cnt=" + Marshal.ReadInt64(MT7_cntAddr, 0));
                     Thread.Sleep(400);   // freezer 消费命中 (判据验证+落盘)
                 } else {
@@ -1884,6 +1886,7 @@ class Probe2 {
     static int MT7_invLeft = 0;
     static int MT7_invDone = 0;
     static volatile int MT7_invReq = 0;      // v18: worker 请求追加快照批 (invoke#1/#2 前)
+    static volatile int MT7_floodMode = 0;   // v24: PrepareMethod 洪泛期间 freezer 暂停 freeze (worker 持 CLR JIT 锁时被 SuspendThread = 死锁, v23 20min 挂死根因)
     static int MT7_invBatch = 0;             // v18: 批次号 (落盘命名 inv_snap_{batch*10+i})
     static byte[][] MT7_snapBufs = null;     // 内存快照 (无 IO, freeze 态 RPM 收集)
     static int[] MT7_snapLen = new int[30];
@@ -2124,6 +2127,7 @@ class Probe2 {
         var proc = Process.GetCurrentProcess();
         var swLoop = System.Diagnostics.Stopwatch.StartNew();   // wall-clock 保险 (v11 20min 挂死教训)
         while (!MT3_stop && w.IsAlive && swLoop.ElapsedMilliseconds < 300000) {
+            if (MT7_floodMode == 1) { Thread.Sleep(20); continue; }   // v24: 洪泛期不 freeze (JIT 锁死锁防护)
             MT3_cycles++;
             hs.Clear();
             proc.Refresh();
