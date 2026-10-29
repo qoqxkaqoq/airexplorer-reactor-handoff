@@ -1935,3 +1935,13 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **教训修正**：①step171-173 把 a14 的 `26 17 13 0C 00`(c=1) 误当 a13（真 a13=`26 16 13 0C 00` c=0，step127/142 为准）——a13b/c/d 全带错值但被 JIT 错误/挂死掩盖；②step178 初版 a15 曾误补 @22f7（其 brtrue 实际目标=0x12 调度器，非陷阱；0x22fc−0x230A=负数，此前 16 进制心算错误）；③NOP brtrue 会留栈底值致栈失衡，改分支须保持弹栈语义
 - **step179 a15 终版三补丁**：①a13 c=0 @3f96bc ②**@3f92cd `39`→`38`（brfalse→br，1 字节）——c!=0 也走正常调度器，陷阱入口变死码，同时中和 catch c=1 路由** ③陷阱块改写 br ret@2309（保险网）。`exes/AirExplorer_a15_combo.exe` md5=86A477B2A7471271B9C08CA52A9977D8
 - 判定计划：s5probe mode=trap → 期望 ok>>325（5 个 'AirExplorer ' fail 消失，StaticTree 仍因 BouncyCastle 失败）；ag 模式 → fields=6201
+
+### a15 隔离判定（run 40793099588 matrix）——p2 = JIT 杀手实锤；'AirExplorer ' 守卫未破
+- **a15 三补丁组合 probe2 trap = module cctor FAIL（InvalidProgram，ok=11）**：与 a13d 唯一差异仅 2 字节（39→38@IL0+0x00f1=0x3F92CD；17→16@IL0+0x04e1 已在 a13d 验证合法）→ 凶手锁定 p2（brfalse→br @00f1）
+- **step180 三变体一 dispatch 三 job 隔离实锤**：v2=p1+p3（`26 16 13 0C 00`@04e0 + 陷阱块 br ret@2309）ok=325 fail=6 合法；v4=a13d+p2 **InvalidProgram（p2 单独即杀）**；v5=p1+p3+p5（@00f6 `38 77090000`→`38 17ffffff` br a72→br 12 调度器）ok=325 fail=6 合法。`exes/AirExplorer_a15v2_p1p3.exe` md5=BF96F3C63965076BB1CD0E2A7BD1F8E7 / `a15v4_a13dp2` 0B5E3F34C2D43E5778E315C24AF8B7A2 / `a15v5_p1p3p5` C3F3438C947779A424860F14896F0F49
+- 机制注：p2 同目标同弹栈理论中性，实测 JIT 拒绝编译整个 4192——对死码/不可达块的验证同样生效，放弃 p2；p5 为合法替代路由（陷阱入口变死码，c!=0 也走正常调度器）
+- **v5 fail 构成 = 5×`System.Exception: AirExplorer `（尾空格、无续行）+ 1×BouncyCastle FileNotFoundException**；栈 InstantiateStatelessUser→PlanRunner(4521)→GenerateAdaptableExtractor(4523)，比 a13 链短（无 SearchStrategy/42AD/42AC 帧）——陷阱 neuter 后的**次生守卫**（检测 init 被跳过/不完整），**c 路由修复不解决它**
+- **step181 msgscan 全库收网**：仅 4192 有 ' is tampered.'；**全库 ldstr ' '（含 'AirExplorer ' 前缀）总数 = 0**——"AirExplorer " 非明文 ldstr 构造（候选：Concat(char 32)/char[]/解密串/get_Name 类运行时拼接；构造方在 4523 try 区被调方深处）
+- 注：probe2 trap fail 上限 = 6 即停，真实 fail 数可能 >6；ok=325 与 a13 持平
+- 结论：**当前有效组合 = v2（p1+p3）或 v5（+p5）**，最终取舍在守卫破后重测
+- 下一步：①全库扫 newobj Exception 构造点定位 'AirExplorer ' 消息源（重点 4523 try 区被调方 4527/4566/457f/46ac/457e/4526/4524/4525/4546）；②守卫破后最终组合 → trap ok≫325 → ag fields=6201；③交付单 exe + BouncyCastle.Crypto.dll（deps.zip 已固化）
