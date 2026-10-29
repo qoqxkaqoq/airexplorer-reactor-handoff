@@ -2023,3 +2023,88 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
   - **mtrack3 冻结世界扫描（新 mode）**：worker 线程跑 LoadFrom/cctor/bust+invoke×3；主线程循环 `SuspendThread(其他全部线程)→冻结态零分配扫描→ResumeThread→处理命中→thaw 3ms`；**thaw(3ms)<res[0] 解密时长(~5-7ms) ⇒ 解密必被冻结截断 ⇒ transform 活体必捕获**（其线程被挂起则不可能走到 Dispose，E 表必完整）；冻结路径仅 syscall+memcpy+预分配池写（无堆分配/GC/Log，防 GC 锁死锁）；快区每轮 + 全堆每 40 轮；RMCrypt 活体计数、b32/b16/g60/big356K 四类池化
   - C#5（mcs -langversion:5）编译零警告
 - **判定预期**：mt3E_/mt3D_/mt3b32_ tag KEYFOUND → KEY 到手 → build_a19.py；若 keyFound=0，keys32.txt 本地全框定重测兜底
+
+### step214-219（2026-10-29 续XXIX）：mtrack3 判定 → 快照离线暴破 → KEY 解密后被清 → mtrack6 连发快照
+- **mtrack3 判定（run 40880238942）**：冻结世界扫描运行成功（718 cycles/7898 suspends/tfLive=3352），**BIG356K @0x147A92A0 仅在 cycle41 全堆轮命中一次**（=快区外的 loader 堆）；890 唯一 KEY × 全框定本地重测 **0 命中**；**res5 已知 KEY 不在 keys32.txt** → 管线盲区：KEY 非 GC 堆 byte[32] 或存活期 <thaw 3ms；res[0] 解密不重放（bust+invoke 无效）
+- **mtrack4 固定窗失败（run 40882852307）**：0x147 硬编码窗被 ASLR 打空（dumps=0, uKeys=10）→ **动态锚点改造**：pin byte[1MB] 得 LOH 实时地址 + byte[] MT 地址得 loader 堆实时地址
+- **mtrack4 动态锚点成功（run 40883839715）**：**cycle3 即命中**——CT@0x13C4B060（head 20efb9d7）+ PT@0x13CA2080（head f5410006）；**冻结态全 MEM_PRIVATE 快照 40MB/67 段落盘**（budget 768MB 仅用 40MB = **probe 进程全部私有内存**）；res5 KEY 不在快照 = 抓在 res[0] 解密后、res[5] 解密前的极近时刻
+- **快照离线暴破（step216-218）全负**：
+  - 8B/1B 步进 32B 窗口 × CBC/ECB × skip{8,24,40} × 输出起点{PT[0],PT[8]} × 块{1,2,3} 双块精确判据 → 0；AES-128 → 0
+  - **PT 结构定案**：head64 前 4B LE = **0x060041F5 = MethodDef token** → PT = [token][...][IL] 方法体表（`1e027b1300000a2a` = tiny-header `ldarg.0; ldfld; ret`）；266 个 il_all body 在 PT 区命中；il_all(4MB) ⊃ PT(356KB) = res[0] 只含方法子集
+  - **CT/PT 完整数组定位**（尾部 32B 特征）：CT@0x1fc0070 alen=356328、PT@0x2017090 alen=356328，**紧邻（相距 356384B，同 LOH 顺序分配）**→ 解密同长输出 356328（此前 0x1bd060/0x1bd188 处是 272B 头部副本数组，曾致 P2 错位 8B）
+- **结论（step219）**：单 KEY（32B 连续/CBC/ECB/AES-128）不在解密完成后的任何私有内存 → **KEY 解密完成后即被清零/覆写**（driver 主动清）→ 唯一出路 = **解密进行中的快照**
+- **mtrack6（run 40892748119）**：CT 首现（head 20ef 判别）触发 **10 轮连续 DumpAll**（每轮 ~40MB，thaw 1ms 慢动作 60 轮）——解密（0.3-7ms）必被多个 freeze 截断 → 至少一份快照为解密中途态（KEY 活跃 + PT 部分填充）；ct/pt 状态逐轮记日志；常态 thaw 降 2ms
+
+### step220-225（2026-10-29 续XXX）：mtrack7 VEH+DR0 硬件断点零时差捕获 —— 机制证实，两轮崩溃根因定位
+- **step220-221（mtrack7 首版, run 40901193601）**：预 JIT 4 hook 目标（RM.CreateDecryptor/ACSP/AesM/RMTC ctor 经 `MethodHandle.GetFunctionPointer()`）→ 原生 shellcode VEH（managed delegate 在异常派发上下文必 CLR failfast）+ DR0-3 执行断点（SetThreadContext 仅在冻结态，运行线程改 CONTEXT 会写坏 RIP）→ **HIT#0 成功：key=D8F47A25…810E iv=FC7AE2E6…0B78 与 res5 已知值逐字节一致 —— 零时差捕获机制全链证实**；但 42ms 后进程死
+- **step222-224（pointer-only 改造, run 40905548587）**：崩溃根因初判 = handler 内 movdqu 解引用 caller RDX/R8 可 AV → 递归 VEH → 死。改为**指针-only shellcode**（keystone 124B：仅记录 RDX/R8 裸指针到 8 槽环形 buf，counter++，清 Dr6，置 RF，不解引用）；freezer 侧重写为**冻结态消费**（全线程挂起 → GC 停 → 数组不移动；SafeRead(RPM) 解引用 + byte[] 头 len 校验(32/16) + 内容拷入预分配缓冲；Log/TryAndLog 延到解冻段；首命中触发 MT4_DumpAll 冻结态全快照）。**结果：更早死**（loaded 后 280ms，零 HIT，exit 1）
+- **step225（本轮，根因定案）**：逐字节反汇编审查发现**判据错误** —— shellcode 用 `Dr6 != 0` 识别调试异常，但 **x64 DR6 复位值 = 0xFFFF0FF0（bit16-31 恒 1，Intel SDM）**：新建线程从未发生 debug 事件时 Dr6 即非零 → cctor 期第一个普通异常（AV/资源探测 FileNotFoundException）派发时被误判为"调试命中" → 走吞异常路径（清 Dr6+RF+CONTINUE_EXECUTION）→ 异常指令无限重执行 → 进程死。**上轮 42ms 死亡同源**（HIT#0 清过 Dr6 后短暂安全，下一个 AV 再触发）。同时检查出 freezer 消费侧仍按旧内容拷贝约定读环形槽（读到的是指针+垃圾）—— 本轮一并修复
+- **修复（v3, commit ccd3a8db）**：①判据改 `ExceptionRecord.ExceptionCode == 0x80000004 (STATUS_SINGLE_STEP)`（DR 执行断点命中异常码；AV/CLR 内部异常全部 CONTINUE_SEARCH 放行）；②DR 只使能 DR0=target0（mtk7c 证实 RM.CreateDecryptor 即解密入口，DR1-3 不再武装）；③freezer 冻结态消费 + 解冻段转储（见上）；shellcode 126B keystone 生成 + objdump 逐条反汇编核验（jne 落点/占位符 offsets[15,34,55,89] 与 patch 代码一致）
+- **判定预期**：CREATEDECRYPTOR HIT 若干条（res5 已知 KEY 必现=自校验）→ **res[0] 的 KEY/IV 在其中**（cctor 解密 356KB 方法体表时零时差捕获）→ MT_TryAndLog KEYFOUND → build_a19.py <KEY> <IV> 出包
+
+### step226（2026-10-29 续XXXI）：v3 判定 → 零命中+AV → v4 防御性组合修复
+- **v3 判定（run 40908077306）**：不再无声死亡 —— **worker 在 `DispatcherInitializer.VerifyConnectedWorker`（解密链核心）内 AV**（TypeInitializationException→AccessViolationException，FW4 corrupted-state exception 不可捕获 → 进程 exit 1）；**但零 DR 命中**（无 DumpAll 快照文件、无 HIT 日志 → cnt==0 确凿）
+- **矛盾分析**：DR0 未命中 → hook 理应对 worker 透明；而 mtrack4（同 freezer 无 VEH/DR）cctor 曾 OK。变量锁定 = ①ExceptionCode 判据 shellcode ②DR 武装 4→1 ③DumpAll 移冻结段。纯推理无法定因果 → **防御性组合 + 全链诊断一次派发（v4, commit a263ee69）**：
+  1. **恢复 v1 已证的 4-DR 武装**（DR0-3 = t0-t3，DR1-3 命中由 swallow 路径处理）
+  2. **shellcode v4（141B）**：加 swallow 计数（Rip≠target0 的 single-step 计数，P5 patch @106）——区分"命中了但判据没进"与"根本没命中"
+  3. **命中即时落盘**：冻结态消费后立即 CreateFileW 写 `dump/mt7_hit_N.bin`（[keyPtr][ivPtr][key32][iv16] 64B）——即使 worker failfast 秒杀进程，KEY 也在 artifact 里
+  4. **DumpAll 挪回解冻段**（v1 成功顺序：HIT 日志 → SNAP 日志都打出过）
+  5. **cycle5 读回挂起线程 DR 寄存器**（dr0/dr6/dr7 日志）——一锤定音"武装 vs 判据"
+  6. freezer 状态行每 200 轮（hits/swallowed/seen/uKeys）+ sleep 1ms
+- **判定树**：dr verify 行 dr7.L0=1 → 武装 OK；swallowed 大量 → 有 single-step 流量（判据层问题）；hits>0 → KEY 已落盘 mt7_hit_N.bin；hits=0+swallowed=0 → DR 从未命中（需换方向）
+
+### step227（2026-10-29 续XXXII）：三连死规律归纳 → 反调试假设 + 被吞命中的发现 → v5
+- **v4 判定（run 40912819190）**：死得更早（loaded 后即死，dr verify@cycle5 都没到、无异常打印、无 HIT）——artifact 零快照零 mt7_hit
+- **三连死规律**：v1（HIT#0=res[1] 哨兵 KEY ✓ → 42ms 死）/ v3（零命中 → 104ms AV at VerifyConnectedWorker）/ v4（零命中 → <50ms 无打印死）——**全部死于 cctor 中段（res[1] 哨兵解密后的 RSA/CNG native 边界附近）；v3/v4 零命中也死 → 死亡与命中无关，与 DR 武装的存在相关**；而同 freezer 无 DR 的 mtrack3/4/6 从不死
+- **反调试假设（高置信）**：.NET Reactor 8 runtime 在 native 边界 GetThreadContext 自查 DR0-3/DR7（标准硬件断点反调试）→ 检测到武装 → 破坏性死亡（v1/v3/v4 的三种死法 = 同一机制的路径差异）
+- **被吞命中的发现（重要）**：v1-v4 的 DR1-3（ACSP.CreateDecryptor/AesManaged/RijndaelManagedTransform ctor）命中全部走 swallow 路径被静默吞掉（v1/v3: 无记录；v4: swallow 计数没来得及打印）——**res[0] 若走 ACSP（CNG 路径）而非 RM，命中一直在发生只是没记录**！证据旁证：res[0] 的 KEY 从未在托管堆 byte[32] 捕获过
+- **v5（commit a0489706）**：
+  1. **shellcode 262B**：4 target 全记录（Rip==t0/t1/t2/t3 任一 → 记录 keyPtr/ivPtr/rip/this 到槽 → cnt++）+ **命中后清 CONTEXT.Dr0-3/Dr6/Dr7**（异常返回即硬件 DR 全零 → 后续反调试检测看到干净寄存器；KEY 已记录落盘不受影响）
+  2. freezer 每轮 freeze 重武装 DR（覆盖清零后的下一命中窗口，命中→清→重武装循环）
+  3. **probe2.exe.config 加 legacyCorruptedStateExceptionsPolicy=true**（workflow 生成）→ cctor 的 TypeInitializationException(AV) 可被既有 catch 捕获 → **worker 存活继续 bust/invoke → freezer 继续收命中**
+  4. 槽布局扩为 4 指针（+0 keyPtr/+8 ivPtr/+16 rip/+24 this），mt7_hit_N.bin 80B 落盘（含 rip/this 供判别调用点），dr verify 提前 cycle2
+- **判定树**：HIT 带 rip≈t1 → res[0] 走 ACSP 实锤 → KEY 直接到手；HIT 全 t0 + dr verify 正常 + 不死 → 检测点在更后；dr verify dr7=0 → 武装本身失败（另查）
+
+### step228（2026-10-29 续XXXIII）：v5 判定 → DR 武装实证 OK 但零命中 → v7 混合判据 + handler 内 deref
+- **v5 判定（run 40916071931）**：**dr verify 成功（dr0=target0, dr7=0x55 全使能, dr6=0）—— SetThreadContext 武装 100% 生效**；但 48ms 静默死（exit 1 无打印无 HIT），config 已生成（raw log 确认 Out-File 执行）但 cctor catch 未触发日志
+- **五 run 证据链综合**：v1（Dr6 判据+1target+deref）抓到唯一真命中（res[1] KEY 逐字节正确）→ 寿命 ~142ms；v3（ExcCode 判据+1target）104ms AV 打印；v4/v5（ExcCode+4target）48ms 静默。**结论修正：v1 的失败不在 deref（HIT#0 数据正确），在检测点；1-DR 与 4-DR 死亡时间差（48 vs 100+ms）提示检测点分级**；v4/v5 若有 DR1-3 命中，数据因等 freezer 消费而随进程死亡丢失
+- **v7（commit aa47bbc3；注意 953cda19 为编译失败版勿用）**：
+  1. **混合判据**：ExceptionCode==0x80000004 **或** CONTEXT.Dr6!=0（v1 的 Dr6 判据是唯一抓到过真命中的；两个判据都过才进 4-target 比对）
+  2. **handler 内 deref**：RDX/R8 经 null/0x10000 下限/数组头 len(32/16) 三重校验后 movdqu 拷贝 key32/iv16 进 128B 槽（[keyPtr][ivPtr][rip][this][key32@32][iv16@64]）——**命中数据即时入 buf，检测点 failfast 后 freezer 只需把 buf 镜像落盘即可恢复**
+  3. cnt>0 时立即 File.WriteAllBytes(dump/mt7_buf_N.bin, 1024B 原始镜像) + mt7_hit_N.bin 80B
+  4. 解冻段 HIT 日志带 rip/this（低 12 位区分 t0/t1/t2/t3 调用点）
+  5. 命中后清 CONTEXT.Dr0-3/Dr6/Dr7（反调试自清）+ freezer 每轮重武装
+- **字节级验证**：keystone 370B 生成，objdump 控制流核验（je/jne 落点、movdqu、len 校验），CS 数组与 keystone 输出逐字节 MATCH
+- **判定预期**：mt7_buf_N.bin 出现 → 有命中（KEY 在镜像槽内，本地可解）；HIT 日志 rip≈t1 → res[0] 走 ACSP；仍零命中 → res[0] 解密不走任何托管 CreateDecryptor（native 定论，转向 native 层手段）
+
+### step229（2026-10-29 续XXXIV）：v7 里程碑判定 —— 进程首次全程存活 + 时序真相
+- **v7 判定（run 40918995111，✓ 31s）**：**进程第一次完整跑通**（module cctor OK + invoke#0/1/2 OK + BIG356K @0x138B9160（res[0] CT 头 20EFB9D7 seen）+ worker done + freezer exit 正常）——config(legacyCSE) 与/或 命中清 DR 使反调试惩罚失效/消失；**但 drHits=0**（241 cycles / threadsDR=1322）
+- **raw log 时间戳重建（决定性）**：VEH 注册 25.338 → freezer start 25.3403 → loaded 25.3409（**LoadFrom 仅 0.7ms**）→ dr verify 25.3415 → cctor OK 25.3422（仅 1.3ms）→ invoke#0 OK 25.3441 → BIG356K 25.3477 → invoke#2 OK 25.3549 → worker done 25.3633 —— **worker 全部活动仅 25ms，且 res[0] 密文/解密发生在 LoadFrom 的 0.7ms 内（.NET Reactor runtime 初始化在 assembly load 时）—— freezer cycle1/2 的 DR 武装（loaded+0.7~1.5ms）恰好错过解密窗口**
+- **v7 零命中重定性**：非"不走托管 CreateDecryptor"，而是"武装晚于解密"。v1 当年命中 res[1]（哨兵 AES）的原因：其命中点在 cctor（1.3ms 窗）内，v1 的 freezer cycle1 恰好赶在 cctor 前（线程调度运气）；v7 的 cctor 前 DR 未及装上
+- **v8（commit 7a818924）**：**worker 线程 LoadFrom 之前自武装** —— `MT7_SelfArm()` 用 `SetThreadContext(GetCurrentThread())` 写 Dr0-3=targets[0..3] + Dr7|=0x55，ContextFlags=0x10013 含 DEBUG_REGISTERS 但**写回时 RIP/段/控制寄存器由 GetThreadContext 原值回填，无运行线程 RIP 竞态**（之前"运行线程 SetContext 写坏 RIP"的教训针对的是 freezer 对他线程全上下文写）；freezer 继续每轮对其他线程补装。混合判据/deref/清DR/落盘 全保留
+- **判定预期**：self-arm done 日志出现后，若 LoadFrom 内解密走 t0-t3 任一入口 → 命中 → mt7_buf/mt7_hit 落盘 → **res[0] KEY 到手**；仍零命中 → 定论 native，转 native 层
+
+### step230（2026-10-29 续XXXV）：v8 判定 → 检测点定位 LoadFrom 内 → v9 pre-load burst 快照
+- **v8 判定（run 40920298243）**：self-arm done（LoadFrom 前武装成功）→ loaded 后即死（无 cctor OK/无 HIT/无打印）——**与 v7（武装在 loaded 后 0.6ms → 全程存活）对比 → 检测点定位于 LoadFrom 内部（.NET Reactor native runtime init），GetThreadContext 查 DR → v8 武装在前被检出杀死，v7 武装在后躲过**
+- **v1 raw log 时间戳对齐（颠覆性）**：VEH@33.3869 → freezer start@33.3882 → loaded@33.3887 → **HIT#0@33.3892（loaded 后 0.5ms，cctor 期间——哨兵 AES=RM.CreateDecryptor=res[1] 已知 KEY）** → SNAP@33.3899 → +42ms 死。v7 的 cycle1 freeze@loaded+0.5ms（全堆扫描 12ms 期间 worker 挂起）→ cctor 前半（含哨兵 AES）在 freeze 前的 thaw 窗口跑完 → DR 武装后 cctor 只剩尾部 → 零命中 = **纯时序运气差异**
+- **最终图景**：①LoadFrom 0.7ms 内 = 检测点（查 DR）+ 大部分解密（native AES，不走托管 CreateDecryptor）；②cctor 1.3ms = 哨兵验证（托管 RM.CreateDecryptor）；③res[0] KEY 只在 LoadFrom 内的解密窗口中活跃（native 堆）
+- **v9（commit ddf185c2）——pre-load burst 快照**：worker 置 preLoad=1 并**自旋等 freezer 置 burstArmed**（防错过）→ LoadFrom；freezer 见信号后连续 10 轮 freeze→MT4_DumpAll(40MB)→resume（resume 窗口 ~1ms、解密 0.7ms → **每份快照 ~70% 概率截在解密进行中**）→ KEY（native 形态）必在 ≥1 份快照 → 离线 32B 窗口暴破器（step215）恢复；SelfArm 移除（触发检测）；DR 武装/命中清 DR/消费逻辑全保留（哨兵命中仍可收）
+- **风险与对冲**：native init 有无看门狗未知（快照拉长 LoadFrom 至 ~4s）——无证据有，接受；KEY 形态未知（原始 32B/展开 int[60]）——两种暴破器都有
+
+### step230b（2026-10-29 续XXXVI）：v9 判定 → 快照全空 → 时序再修正 → v10 invoke burst
+- **v9 判定（run 40921959439）**：burst 机制全链工作（armed → spins=2 → 10 份快照落盘 31-32MB 段数 56→66 递增 + HIT#0=res[1] 哨兵 KEY 再次自校验 rip=t0 ✓）；**但 10 份快照自证全 NO（res5 KEY/res0 CT 头均不在）→ LoadFrom 内无解密**；进程死于 cycle30（cctor 中段检测点——burst 拖延了 cctor，武装在哨兵 AES 前就位 → 被检出）
+- **时序再修正（结合 v7 BIG356K@invoke#0+3.6ms）**：①LoadFrom 0.7ms = 仅基础 init 无解密；②cctor 1.3ms = 哨兵 AES（t0 托管，v1/v9 HIT#0）→ **检测点**（查 DR，哨兵 AES 之后）→ 验签；③**res[0] 解密 = invoke 阶段按需 JIT-hook（ResolveMethod→解密 IL），native AES**（v7 全程武装零命中+BIG356K seen 的定论）；④KEY 解密后即清（native 层）
+- **v10（commit c1a9b257）——invoke burst 内存快照**：worker 在 bust+invoke 循环前置 preInvoke=1 并等 invArmed；freezer 预分配 **10×80MB 内存缓冲**（免写盘），burst 轮 freeze→MT7_SnapMem(RPM 全 MEM_PRIVATE ~10ms/份)→resume，**~1ms resume 窗 × 解密窗口几 ms → 每份 ~45% 截获概率**；burst 完成后 thaw 态逐份写盘 inv_snap_N.bin；preLoad burst 退役（v9 实证无效）
+
+### step230c（2026-10-29 续XXXVII）：v10 判定 → 检测点统一模型 → v11 no-DR 定案
+- **v10 判定（run 40924881471）**：loaded 后死（pre-invoke 标志都未置——死于 cctor）——burst 快照机制本身未及运行
+- **五轮 run 的武装时刻 vs 存活统一模型**：哨兵 AES（cctor 早期，t0 托管）后紧跟检测点（查 DR）——武装早于哨兵 AES → 命中（res[1] KEY）+ 检测杀（v1 +42ms/v8/v9 cycle30/v10）；武装晚于哨兵 AES → 不命中+检测已过 → 活（v7 全程）——**v7 活是时序运气**
+- **决定性简化**：burst 快照根本不需要 DR/VEH → **v11（commit 8446ea5a）：no-DR no-VEH 纯 freezer + invoke burst**——无武装则检测永远通过 → 进程必活；invoke 解密窗口（native KEY 活跃）由 10×80MB 内存快照切片（~10ms/份 + ~1ms resume 窗）
+- **预期**：cctor OK + invoke burst 10 份 inv_snap_N.bin 全落盘 → 离线 32B 窗口暴破（step231 适配 inv_snap 命名）→ res[0] native KEY
+
+### step231（2026-10-29 续XXXVIII）：v9 快照离线暴破全 NO → step232 适配 + v11 判定 → v12 修复
+- **step231_burst_oracle.py**：8B 步进 32B AES-256 窗口 + 16B AES-128 窗口，CBC 双块判据（p2=D(C2)^C1 / p3=D(C3)^C2，res[0] CT 头 20EFB9D7 前 48B），自校验（res5 KEY + res0 CT 头入样即过）——对 v9 的 10 份 snap_all_*.bin 全部 NO（复证 LoadFrom 无解密），暴破器逻辑本身经自校验验证可靠
+- **v11 判定（run 40925535875，20min GitHub 超时取消）**：800MB 快照缓冲分配写在 freezer 冻结态 → GC 死锁（SuspendThread 全挂 + GC 需要全线程 safepoint）→ watchdog 同被挂 → 进程永挂；**教训定案：冻结态零分配（buf/Log 字符串皆算），分配/Log 全部挪解冻段**
+- **v12（commit d2b9a948）三修**：①10×80MB 分配移至解冻段（先挂 snapBufs 引用再置 volatile invArmed，写序保证）；②invBurst 冻结态 Log 移到 resume 后（v10 该路径从未实际执行过——死于反调试先于 invoke，v12 首跑必须合规）；③flush 完成即 MT3_stop 收工 + freezer 300s wall-clock 保险
+- **MT7_sc 链路确认**：no-DR 模式下 shellcode 仍 AllocHGlobal（VEH 注册行注释但分配无条件）→ `MT7_sc != IntPtr.Zero` 恒真 → worker preInvoke 链完整
+- **派发（run 40930635005，mode=mtrack7）**：预期 cctor OK + INVOKE BURST ARMED + 10 份 inv_snap_N.bin 落盘 → 下载后跑 step232_inv_oracle.py（目录 /root/work/step231/snaps，glob inv_snap_*.bin）暴破 res[0] native KEY → 得手即 build_a19.py <KEY> <IV>
