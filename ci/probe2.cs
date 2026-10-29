@@ -1628,14 +1628,6 @@ class Probe2 {
         MT_InitCt();
         try { Directory.CreateDirectory(DumpDir); } catch {}
         Directory.SetCurrentDirectory(Path.GetDirectoryName(exe));
-        // v9: 通知 freezer 进入 burst 快照模式并等其就绪 (解密发生在 LoadFrom 内部 0.7ms — 快照切片是唯一截断手段)
-        if (MT7_sc != IntPtr.Zero) {
-            MT7_preLoad = 1;
-            Log("[mtrack7] pre-load flag set, waiting for freezer burst...");
-            int spins = 0;
-            while (MT7_burstArmed == 0 && spins < 5000) { Thread.Sleep(1); spins++; }
-            Log("[mtrack7] burst armed=" + MT7_burstArmed + " spins=" + spins + " → LoadFrom");
-        }
         Log("[mtrack4] worker: loading (freezer cycling)...");
         var asm = Assembly.LoadFrom(exe);
         Log("[mtrack4] loaded " + asm.FullName);
@@ -1644,6 +1636,14 @@ class Probe2 {
             catch (Exception ex) { Log("[mtrack4] module cctor FAIL: " + Chain(ex)); }
         }
         var mod2 = asm.GetModules()[0];
+        // v10: 通知 freezer 进入 invoke burst (内存快照切片 res[0] 按需解密窗口; v9 已证 LoadFrom 内无解密)
+        if (MT7_sc != IntPtr.Zero) {
+            MT7_preInvoke = 1;
+            Log("[mtrack7] pre-invoke flag set, waiting for freezer in-mem burst...");
+            int spins2 = 0;
+            while (MT7_invArmed == 0 && spins2 < 5000) { Thread.Sleep(1); spins2++; }
+            Log("[mtrack7] invoke burst armed=" + MT7_invArmed + " spins=" + spins2 + " → bust+invoke");
+        }
         for (int it = 0; it < 3; it++) {
             MT3_Bust(asm);
             try {
@@ -1840,6 +1840,13 @@ class Probe2 {
     static volatile int MT7_burstArmed = 0;  // freezer 进入 burst 前置位 (worker 见 1 才 LoadFrom)
     static int MT7_burstLeft = 0;
     static int MT7_burstDone = 0;
+    // v10: invoke burst — res[0] 按需解密在 invoke 阶段 (BIG356K@invoke 后), 内存快照切片 (免写盘, ~10ms/份)
+    static volatile int MT7_preInvoke = 0;
+    static volatile int MT7_invArmed = 0;
+    static int MT7_invLeft = 0;
+    static int MT7_invDone = 0;
+    static byte[][] MT7_snapBufs = null;     // 内存快照 (无 IO, freeze 态 RPM 收集)
+    static int[] MT7_snapLen = new int[10];
     static long MT7_pendLo = 0, MT7_pendHi = 0;  // 本轮已消费命中区间 (解冻段转储用)
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -1917,6 +1924,37 @@ class Probe2 {
         } catch {}
     }
 
+    // freeze 态内存快照: 全 MEM_PRIVATE commit → dst (预算 dst.Length), 返回实际字节数 (无 IO)
+    static int MT7_SnapMem(byte[] dst, byte[] chunk) {
+        long budget = dst.Length;
+        IntPtr addr = new IntPtr(0x10000);
+        MBI mbi = new MBI();
+        IntPtr sz = (IntPtr)Marshal.SizeOf(typeof(MBI));
+        int off = 0;
+        while ((long)addr < 0x7FFFFFFEFFFF && budget > 0) {
+            if (VirtualQuery(addr, ref mbi, sz) == IntPtr.Zero) break;
+            long rsz = mbi.RegionSize.ToInt64();
+            IntPtr next = new IntPtr(mbi.BaseAddress.ToInt64() + rsz);
+            if (rsz <= 0) break;
+            if (mbi.State == 0x1000 && (mbi.Protect & 0x100) == 0 && (mbi.Protect & 0xFF) != 0x01 && mbi.Type == 0x20000) {
+                long a = mbi.BaseAddress.ToInt64(), hi = a + rsz;
+                while (a < hi && budget > 0) {
+                    int take = (int)Math.Min((long)chunk.Length, Math.Min(hi - a, budget));
+                    if (take <= 0) break;
+                    IntPtr got;
+                    if (ReadProcessMemory(GetCurrentProcess(), new IntPtr(a), chunk, (IntPtr)take, out got) && got.ToInt64() == take) {
+                        Array.Copy(chunk, 0, dst, off, take);
+                        off += take; budget -= take;
+                    }
+                    a += take;
+                }
+            }
+            if (next.ToInt64() <= (long)addr) break;
+            addr = next;
+        }
+        return off;
+    }
+
     static void MT7_FreezerLoop(Thread w) {
         MT_InitCt();
         try { Directory.CreateDirectory(DumpDir); } catch {}
@@ -1951,18 +1989,38 @@ class Probe2 {
                 if (SuspendThread(h) != 0xFFFFFFFFu) { hs.Add(h); MT7_SetThreadDR(h); } else CloseHandle(h);
             }
             MT3_susp += hs.Count;
-            // v9: pre-load burst — worker 已挂起, 连续快照切片 LoadFrom 解密窗口 (每份 ~400ms, 10 份 = 窗口切 10 段)
-            if (MT7_preLoad == 1 && MT7_burstArmed == 0 && MT7_burstDone == 0) {
-                MT7_burstArmed = 1; MT7_burstLeft = 10; MT7_burstDone = 1;
-                Log("[mtrack7] *** BURST ARMED (10x full snapshot, decrypt window slicing)");
+            // v10: invoke burst — worker 挂起中, 内存快照切片按需解密窗口 (RPM only ~10ms/份, 免写盘)
+            if (MT7_preInvoke == 1 && MT7_invArmed == 0 && MT7_invDone == 0 && MT7_snapBufs == null) {
+                MT7_snapBufs = new byte[10][];
+                try {
+                    for (int i = 0; i < 10; i++) MT7_snapBufs[i] = new byte[80 << 20];
+                    MT7_invArmed = 1; MT7_invLeft = 10; MT7_invDone = 1;
+                    Log("[mtrack7] *** INVOKE BURST ARMED (10x in-mem snapshot)");
+                } catch (Exception ex) {
+                    Log("[mtrack7] snap buf alloc FAIL " + ex.Message);
+                    MT7_invDone = 1;
+                }
             }
-            bool burst = MT7_burstArmed == 1 && MT7_burstLeft > 0;
-            if (burst) {
-                MT7_burstLeft--;
-                MT4_DumpAll(buf, MT3_cycles);
+            bool invBurst = MT7_invArmed == 1 && MT7_invLeft > 0;
+            if (invBurst) {
+                int idx = 10 - MT7_invLeft;
+                MT7_snapLen[idx] = MT7_SnapMem(MT7_snapBufs[idx], buf);
+                MT7_invLeft--;
+                Log("[mtrack7] inv snap[" + idx + "] bytes=" + MT7_snapLen[idx] + " cycle=" + MT3_cycles);
                 for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
-                MT3_ProcessHits();
-                if (MT7_burstLeft > 0) continue;   // 下一份快照立即开始 (worker resume 窗口 ~0ms)
+                if (MT7_invLeft > 0) continue;
+                Log("[mtrack7] invoke burst done, flushing in-mem snapshots...");
+                for (int i = 0; i < 10; i++) {
+                    if (MT7_snapBufs[i] != null && MT7_snapLen[i] > 0) {
+                        try {
+                            var fs = new FileStream("dump\\inv_snap_" + i + ".bin", FileMode.Create);
+                            fs.Write(MT7_snapBufs[i], 0, MT7_snapLen[i]);
+                            fs.Close();
+                            MT7_snapBufs[i] = null;
+                        } catch (Exception ex) { Log("[mtrack7] inv snap write FAIL " + i + " " + ex.Message); }
+                    }
+                }
+                Log("[mtrack7] invoke burst snapshots flushed");
             }
             // ---- DR 命中消费 (冻结态; v7 shellcode 已 deref 拷贝 key/iv 内容进槽, 检测点 failfast 也不丢) ----
             MT7_pendLo = MT7_pendHi = 0;
