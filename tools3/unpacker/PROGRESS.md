@@ -2115,3 +2115,14 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **v12 快照 vs 解密矛盾定案**：freeze 拍照时 worker 停止 vs 解密需 worker 运行 → 快照只能拍到解密后残留，KEY 无残留 → **快照路径命中率受限于相位且 KEY 清除极快，不可靠**
 - **v13（commit 25320fa2）S-box 数据断点方案**：native AES 必查 S-box（16B 特征 63 7C 77 7B F2 6B 6F C5 30 01 67 2B FE D7 AB 76，100% 特异；限定 MEM_PRIVATE exec 自动排除托管 clr 表）→ **DR0-3=S-box 表地址 RW=11 数据断点（Dr7=0x33330055）→ 解密首次查表即 VEH → KEY 仍在参数寄存器 RCX/RDX/R8/R9 → 实时捕获零窗口损失**；武装时机=preInvoke（cctor OK 后检测点已过，v7 后半程武装存活同款铁证）；shellcode v8（331B keystone）：ExcCode==0x80000004 且 Dr6&0xF!=0 判别（排除单步/复位值）+ 4 指针 deref（RCX/RDX 32B guard/R8 16B/R9 存指针）+ 清 DR + RF；**MT7_AesJudge 实时判据**（res0 B0/B1/B2 硬编码 CBC 双块）命中即日志 KEY FOUND + dump；命中后清 DR 防海量重触发；burst 快照机制保留兜底
 - **派发（run 40938006346）**：预期 SBOX#n 扫描日志 → DR armed → invoke 期 VEH 命中 → KEY FOUND（判据自证）→ build_a19.py <KEY> <IV>
+
+### step234-242（2026-10-29 续XL）：v13-v22 迭代 — S-box 断点链路全通 + 快照相位对齐
+- **v13（25320fa2）S-box 方案全链**：shellcode v8（Dr6&0xF 判别+4指针捕获+清DR+RF）/ ScanSbox（MEM_PRIVATE+16B 特征）/ freeze 态武装（Dr7=0x33330055 RW=11）/ 消费段 MT7_AesJudge 实时判据。**判据先离线实锤**：res1_256+已知KEY/IV→解出 RSA-XML ✓（资源=裸CBC+独立IV）；res0 长度数学（356328-8=16×22270 整除）锁 8B 头布局 → step232 判据正确；res0 与 res1 不共用 KEY（4 布局全随机）
+- **v12 判定**：burst 全链 ✓（snap[0] 恰在 invoke#0 内）但 10 份全 NO；20 份（v18）全 NO；res0head 在快照（密文驻留）而哨兵 KEY 不在 → **解密完即清实锤**
+- **v12 熵分析/B 区发现**：快照双 356KB 高熵区 = 资源原件 A + 解密器工作缓冲 B（B 起点=密文 0xCB0，10 份快照纹丝不动 → **解密不在快照窗口内**）；全域 PrepareMethod 洪泛（jit=28988）零 S-box 访问 → **res[0] 加密域只有 419C（已 JIT），重解密路线封死**
+- **v14/v15（48820977/31c259d9）**：post-invoke#0 重扫 + SelfArmSbox + retrigger 兄弟方法；v15 修扫描过滤（S-box 在 .data RW 页非 exec——v14 nSbox=0 根因）→ **SBOX#0-3 扫到**；selfarm GTC fail（CONTEXT 16B 对齐——byte[] 不保证）
+- **v16-v17（abfe670a/d96666f2）**：AllocHGlobal 对齐 ctx+IntPtr P/Invoke → selfarm done dr7=0x33330055 ✓；ResolveMethod 洪泛零命中（**仅元数据解析不触发 JIT**）→ PrepareMethod 洪泛 jit=378 仍零（域不对）
+- **v18（59c885f4）**：全域洪泛 jit=28988 cnt=0（res0 域只有 419C）；SNAP BATCH 重触发机制（invReq/invBatch）+ batch 复位竞态（batch2 spins=0 误判 armed=1 残留）
+- **v19-v21（ae9d8914/e7ed30f9/0d573f05）**：快拍模式（armed 后去 Sleep(1) → 快照间隔 0.65→0.3ms）；SpinWait 等待 40ms/400ms/3s 全超时（freezer 首扫 MEM_PRIVATE >3s + SpinWait 抢核恶性竞争）；ScanSbox 8B ulong 匹配 8x 加速
+- **v22（96782a62）决定性修正**：**ARM 与 sboxScanned 解耦**（相位对齐绝不依赖扫描速度）+ worker Sleep(1) 让核 + 扫描 1.5s 预算 → **armed=1 spins=32 时序首次全对齐**（SBOX#0-2 preInvoke 期扫到 nSbox=3 → ARMED → worker 32ms 唤醒 → Sleep(3) → invoke#0）
+- **v22 残余相位差**：snap[0]@armed+3.9ms（分配+循环开销）vs 解密窗 armed+2.1-2.5 → 差 1.4ms → **v23：worker Sleep(3)→Sleep(6)，解密窗推到 armed+6~7.4 = snap #2-#5**

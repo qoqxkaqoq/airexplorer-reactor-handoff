@@ -1642,8 +1642,8 @@ class Probe2 {
             int spins2 = 0;
             // v22: Sleep(1) 让出核 (v21 SpinWait 与 freezer 扫描抢 CPU 恶性竞争); 相位由 Sleep(3)+快拍模式保证
             while (MT7_invArmed == 0 && spins2 < 5000) { Thread.Sleep(1); spins2++; }
-            // v19: 延迟 3ms 再 bust+ResolveMethod — 解密窗推到快照序列 (#0@+0.3ms, 间隔~0.7ms, 30份) 正中 #3-#6
-            Thread.Sleep(3);
+            // v23: 延迟 6ms — v22 实测 snap[0]@armed+3.9ms 间隔~0.73ms, 解密窗推到 armed+6~7.4 落在 #2-#5
+            Thread.Sleep(6);
             Log("[mtrack7] invoke burst armed=" + MT7_invArmed + " spins=" + spins2 + " → bust+invoke");
         }
         for (int it = 0; it < 3; it++) {
