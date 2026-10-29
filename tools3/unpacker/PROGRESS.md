@@ -2134,3 +2134,18 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **v26（e4bd3e48）pinned managed 缓冲**（GCHandle.Pinned 回退 v24 验证过的分配路径）：job 成功 ✓ 30 份 batch0 落盘；**但 res0head=NO —— self 精确包含判断未命中（30 槽同在一个 2.4GB LOH segment，region 超单槽界）→ 预算仍被 LOH 挤占**
 - **v27（cd0a0d94）重叠即跳**：**res0head@0x3656280 首次出现在快照 ✓（真实进程内存+密文堆）**；50 份落盘暴破中
 - **机制现状**：ARM 与扫描解耦（spins 16-32ms 唤醒）+ 快拍间隔 ~0.3-0.7ms + 30 份/批 × 3 批 + Sleep(6) 相位（解密窗 armed+6~7.4 落 snap#2-#5）+ flood 死锁防护 + 自家缓冲跳过 —— 全链就绪，等待暴破判决
+
+### step248（2026-10-29 续XLII）：v27 全量暴破 NO → res0head 自证证伪 → **res0 明文全量实锤（PT 数组）** → a19b 无密钥 CBC 手术出包
+- **v27 暴破判决（step232 旧判据，50 份全量）**：inv_snap_0-49 全部 res5key=NO res0head=NO，A256/A128 hits=0（.hits.txt 零文件）
+- **v27 res0head 自证证伪**：snap0@0x3656280 的 8B 匹配 `20efb9d7a4dc0500` 实为 JIT 代码 `movabs rcx,imm64` 立即数（前后字节全为 x86 指令：cmp rax,rcx/setne/jne/movabs 0x00405B21060041F5），非 resource 本体；两处 res0[8:16] 命中（0x1a9190/0x1bcd28）= probe 自身 jB0/jB1/jB2 判据常量（MT 指针 0x7fff6d085848 + len=16 对象布局）→ **快照中根本没有 res0 密文本体，判据 B0/B1/B2（res0[8:56]）不含前 8B 故判据逻辑不受影响**
+- **step232 判据缺陷定位**：零值/文本门限（z2≥12||t2 → z3≥20 组合）假设明文块 16-47 富零/富文本；而 res0 明文 = DB 结构（16B 头 + [rva][n][data]），p3 块 = fat 头+IL 二进制 → 真 KEY 会被第二门限漏检 → **精确判据重扫（step235_exact_oracle.py）**：D_K(B1)^B0==out[16:32] && D_K(B2)^B1==out[32:48]（2^-256 假阳性），扫 v27 50 份 + mtk6b 9 份
+- **决定性突破——res0 明文全量到手**：mtk6b 工件（snap_all_3-10）内存留有 **PT 数组（F5410006215B4000 头特征，alen==356328）完整未清零**；8 份快照交叉验证逐字节一致 → `/root/work/step231/res0_plain_full.bin`；CT 数组 == res0 文件字节（358/358 采样全等）；解密输出 = PT[8:]（356320B = 16×22270）；**DB 解析：16B 头（95020000 6e0e5d00 00000000 01000000）+ 14407 条 [rva][n][4n data]，精确闭合于 356320** —— 14407 与历史重建账本吻合，DB 从"重建"升级为"实证"
+- **IV 无需捕获**：IV = P0 ^ D_K(C0)，P0=out[0:16] 已知 → **KEY 是唯一未知数**
+- **a19b 无密钥出包（step236_build_a19b.py）**：CBC 手术原理 P'_j = P_j ^ Δ（Δ 异或进 C_{j-1}，代价 = 前驱块 P_{j-1} 乱码）
+  - P1/P2 文件级（file@0x194524/0x197af0: 0x16→0x17，DB 覆盖区外，运行时保留，a1 同款）
+  - P3/P4/P5 = **DB 记录劫持**：祭品记录 S（16B 对齐、n 不变保走库、后写覆盖先写）改 rva:=目标RVA + data[0:3]:=0a 17 2a（tiny ldc.i4.1;ret）；三祭品 = LocalObjectTree 060038BA/060038BE + LoggerBridge 0600396B（a18 判定已损类型，零边际损害）；**双重祭品条件**：S 与前驱块（乱码块） owning 记录均为已损类型、前驱块 data-only（解析器不受扰）
+  - res0 密文全区仅 **18 字节改动**（3 δ 各 6 非零字节）；DB 走库闭合复验 ✓
+  - 哨兵：**并入 a18 公钥替换**（新 RSA-1024 XML 243B → 已知 key/iv AES-256-CBC 重加密回写 0x6783B0）+ 签名修正（build_a19.py 的 rsautl 裸 H 输入缺 DigestInfo 前缀 = VerifyHash 必败 bug；改 DI||H 输入，a18 同款）；全链自模拟 PASS（解密→XML→PKCS1 结构→H 复算）
+  - 产物 `exes/AirExplorer_a19b.exe` md5=**C6EE8843450B672A5C26A9AD4FF68085**
+- **判定计划**：s5probe mode=trap 期望 ok≈4878 fail=5（缺 DLL）零 "AirExplorer "；mode=ag 期望 fields=6201 链全通；若 trap 过而 ag 的 license 相关字段变绿 = 五补丁生效；劫持若因 first-wins 失效则 license 门不翻（可判别）
+- 资产：work/s5/step235_exact_oracle.py、work/s5/step236_build_a19b.py、work/s5/mem5/res0_plain_full.bin
