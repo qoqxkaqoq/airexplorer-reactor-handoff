@@ -1659,13 +1659,18 @@ class Probe2 {
                 if (MT7_scanBuf != null) MT7_ScanSbox();
                 if (MT7_nSbox > 0) {
                     MT7_SelfArmSbox();
-                    Log("[mtrack7] retrigger token flood 0x06004180-0x060042FF (hunt un-JIT'd sibling → 2nd decrypt with DR armed)...");
+                    // v17: PrepareMethod 强制 JIT (ResolveMethod 仅元数据解析不触发 JIT — v16 零命中根因)
+                    //   JIT-hook 解密 IL → 解密器查 S-box → #DB → VEH 捕获
+                    Log("[mtrack7] retrigger PrepareMethod flood 0x06004180-0x060042FF (force JIT → 2nd decrypt with DR armed)...");
                     int okN = 0, exN = 0;
                     for (int tok = 0x06004180; tok <= 0x060042FF; tok++) {
-                        try { mod2.ResolveMethod(tok); okN++; }
-                        catch { exN++; }
+                        try {
+                            var mh = mod2.ResolveMethod(tok).MethodHandle;
+                            System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(mh);
+                            okN++;
+                        } catch { exN++; }
                     }
-                    Log("[mtrack7] retrigger flood done ok=" + okN + " ex=" + exN);
+                    Log("[mtrack7] retrigger flood done jit=" + okN + " ex=" + exN + " cntNow=" + Marshal.ReadInt64(MT7_cntAddr, 0));
                     Thread.Sleep(400);   // freezer 消费命中 (判据验证+落盘)
                 } else {
                     Log("[mtrack7] sbox scan 0 hits post-invoke#0 — retrigger without DR (fallback snapshot path)");
