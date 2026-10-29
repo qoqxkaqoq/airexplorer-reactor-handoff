@@ -193,6 +193,23 @@ class Probe2 {
 
     // ===================== mode=trap: 全类型 cctor 逐个触发, 死类型打印完整内层异常链+StackTrace =====================
     static void TrapRun(Assembly asm) {
+        // FirstChanceException 钩子: 在原始 throw 点触发 (栈未被任何 catch 重写/重抛改写前),
+        // 用于定位 'AirExplorer ' 守卫的真正构造方 (4523 catch `ldloc.s c; throw` 会重写栈)
+        int fceHits = 0;
+        AppDomain.CurrentDomain.FirstChanceException += delegate(object s, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs ea) {
+            try {
+                var ex3 = ea.Exception;
+                if (ex3 == null || fceHits >= 12) return;
+                if (ex3.GetType() != typeof(System.Exception)) return;
+                var m3 = ex3.Message;
+                if (m3 == null || !m3.StartsWith("AirExplorer")) return;
+                fceHits++;
+                Log("[trap] FCE#" + fceHits + " msg=[" + m3 + "] len=" + m3.Length);
+                var st3 = ex3.StackTrace;
+                if (string.IsNullOrEmpty(st3)) Log("[trap] FCE stack NULL");
+                else Log("[trap] FCE stack: " + st3.Substring(0, Math.Min(st3.Length, 900)));
+            } catch {}
+        };
         Type[] ts = null;
         try { ts = asm.GetTypes(); }
         catch (ReflectionTypeLoadException ex) {
