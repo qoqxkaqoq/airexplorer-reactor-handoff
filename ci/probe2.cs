@@ -80,12 +80,22 @@ class Probe2 {
             } catch (Exception ex) { Log("[mtrack7] preJIT RMTC fail " + ex.Message); }
             MT7_targets[0] = t0; MT7_targets[1] = t1; MT7_targets[2] = t2; MT7_targets[3] = t3;
             Log("[mtrack7] targets: " + t0.ToString("X") + " " + t1.ToString("X") + " " + t2.ToString("X") + " " + t3.ToString("X"));
-            // 2) VEH + 现有线程 DR0-3
+            // 2) 原生 shellcode VEH (managed delegate 在异常派发上下文会 CLR failfast — 必须纯 native)
             try {
-                MT7_vehKeep = new MT7_VehDel(MT7_VehHandler);
-                IntPtr p = Marshal.GetFunctionPointerForDelegate(MT7_vehKeep);
-                MT7_vehHand = AddVectoredExceptionHandler(1, p);
-                Log("[mtrack7] VEH @ " + MT7_vehHand.ToString("X"));
+                byte[] sc = new byte[] { 0x48,0x8B,0x41,0x08,0x48,0x8B,0x50,0x68,0x48,0x85,0xD2,0x0F,0x84,0xA0,0x00,0x00,0x00,0x49,0xBA,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x4C,0x39,0x90,0xF8,0x00,0x00,0x00,0x75,0x7B,0x4C,0x8B,0x98,0x88,0x00,0x00,0x00,0x48,0xB9,0xFF,0xFF,0xFE,0xFF,0xFF,0x7F,0x00,0x00,0x49,0x39,0xCB,0x73,0x65,0x48,0xB9,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x49,0x39,0xCB,0x72,0x56,0x49,0xBA,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x4D,0x8B,0x12,0x48,0xB9,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x49,0x83,0xE2,0x07,0x49,0xC1,0xE2,0x06,0x4C,0x01,0xD1,0xF3,0x41,0x0F,0x6F,0x43,0x10,0xF3,0x0F,0x7F,0x01,0xF3,0x41,0x0F,0x6F,0x4B,0x20,0xF3,0x0F,0x7F,0x49,0x10,0x4C,0x8B,0x98,0xB8,0x00,0x00,0x00,0xF3,0x41,0x0F,0x6F,0x43,0x10,0xF3,0x0F,0x7F,0x41,0x20,0x49,0xBB,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11,0x49,0xFF,0x03,0x48,0xC7,0x40,0x68,0x00,0x00,0x00,0x00,0x81,0x48,0x44,0x00,0x00,0x01,0x00,0x31,0xC0,0xC3,0xB8,0x01,0x00,0x00,0x00,0xC3 };
+                MT7_sc = Marshal.AllocHGlobal(sc.Length);
+                Marshal.Copy(sc, 0, MT7_sc, sc.Length);
+                MT7_bufAddr = Marshal.AllocHGlobal(512);   // 8 槽 x 64B (key32+iv16+pad)
+                MT7_cntAddr = Marshal.AllocHGlobal(8);
+                Marshal.WriteInt64(MT7_cntAddr, 0, 0);
+                Marshal.WriteInt64(MT7_sc, 19, MT7_targets[0].ToInt64());
+                Marshal.WriteInt64(MT7_sc, 75, MT7_cntAddr.ToInt64());
+                Marshal.WriteInt64(MT7_sc, 88, MT7_bufAddr.ToInt64());
+                Marshal.WriteInt64(MT7_sc, 148, MT7_cntAddr.ToInt64());
+                uint oldProt;
+                VirtualProtect(MT7_sc, (IntPtr)sc.Length, 0x40, out oldProt);
+                MT7_vehHand = AddVectoredExceptionHandler(1, MT7_sc);
+                Log("[mtrack7] VEH(shellcode) @ " + MT7_vehHand.ToString("X") + " sc=" + MT7_sc.ToString("X"));
             } catch (Exception ex) { Log("[mtrack7] VEH FAIL " + ex.Message); }
             // 注意: 不在启动期对运行线程 SetThreadContext (与执行竞态会写坏 RIP → AV)。
             // DR 设置全部由 freezer 的 freeze 态完成 (线程已挂起), cycle1 即覆盖 worker。
@@ -1797,15 +1807,13 @@ class Probe2 {
     // x64 CONTEXT 关键偏移: Dr0=72 Dr1=80 Dr2=88 Dr3=96 Dr6=104 Dr7=112
     //   Rax=120 Rcx=128 Rdx=136 Rbx=144 Rsp=152 Rbp=160 Rsi=168 Rdi=176 R8=184 ... Rip=248; EFlags=68
     static IntPtr[] MT7_targets = new IntPtr[4];
-    static byte[][] MT7_keySlots = new byte[16][];
-    static byte[][] MT7_ivSlots = new byte[16][];
-    static long[] MT7_slotRip = new long[16];
-    static long MT7_cnt = 0, MT7_seen = 0;
+    static IntPtr MT7_sc, MT7_bufAddr, MT7_cntAddr;
+    static long MT7_seen = 0;
     static long MT7_nThreadDR = 0;
-    delegate int MT7_VehDel(IntPtr ptrs);
-    static MT7_VehDel MT7_vehKeep;
     static IntPtr MT7_vehHand;
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool VirtualProtect(IntPtr addr, IntPtr size, uint newProt, out uint oldProt);
     [DllImport("kernel32.dll")]
     static extern IntPtr AddVectoredExceptionHandler(uint first, IntPtr handler);
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -1813,39 +1821,6 @@ class Probe2 {
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool SetThreadContext(IntPtr h, byte[] ctx);
     const int MT7_CTXLEN = 1232;
-
-    static int MT7_VehHandler(IntPtr ptrs) {
-        try {
-            if (ptrs == IntPtr.Zero) return 1;
-            IntPtr ctx = Marshal.ReadIntPtr(ptrs, 8);
-            if (ctx == IntPtr.Zero) return 1;
-            long dr6 = Marshal.ReadInt64(ctx, 104);
-            if (dr6 == 0) return 1;
-            long rip = Marshal.ReadInt64(ctx, 248);
-            int slot = -1;
-            for (int i = 0; i < 4; i++) {
-                if ((dr6 & (1 << i)) != 0 && MT7_targets[i] != IntPtr.Zero && rip == MT7_targets[i].ToInt64()) { slot = i; break; }
-            }
-            int s = (int)(MT7_cnt & 15);
-            if (slot >= 0) {
-                long rdx = Marshal.ReadInt64(ctx, 136);
-                long r8 = Marshal.ReadInt64(ctx, 184);
-                if (MT7_keySlots[s] == null) { MT7_keySlots[s] = new byte[32]; MT7_ivSlots[s] = new byte[16]; }
-                if (rdx > 0x10000 && rdx < 0x7FFFFFFEFFFF) {
-                    try { Marshal.Copy(new IntPtr(rdx + 16), MT7_keySlots[s], 0, 32); } catch {}
-                }
-                if (r8 > 0x10000 && r8 < 0x7FFFFFFEFFFF) {
-                    try { Marshal.Copy(new IntPtr(r8 + 16), MT7_ivSlots[s], 0, 16); } catch {}
-                }
-                MT7_slotRip[s] = rip;
-                MT7_cnt++;
-            }
-            // 无论命中与否都清 DR6 + RF 放行 (防卡死)
-            Marshal.WriteInt64(ctx, 104, 0);
-            Marshal.WriteInt32(ctx, 68, (int)(Marshal.ReadInt32(ctx, 68) | 0x10000));
-            return 0; // EXCEPTION_CONTINUE_EXECUTION
-        } catch { return 1; }
-    }
 
     static void MT7_SetThreadDR(IntPtr h) {
         var ctx = new byte[MT7_CTXLEN];
@@ -1901,7 +1876,6 @@ class Probe2 {
         var hs = new List<IntPtr>(64);
         uint myTid = GetCurrentThreadId();
         var proc = Process.GetCurrentProcess();
-        int snapLeft = 3;
         while (!MT3_stop && w.IsAlive) {
             MT3_cycles++;
             hs.Clear();
@@ -1921,23 +1895,25 @@ class Probe2 {
                 MT3_FrozenRange(buf, mbi, sz, 0x2800000, 0x3800000);
             }
             for (int i = 0; i < hs.Count; i++) { ResumeThread(hs[i]); CloseHandle(hs[i]); }
-            // ---- DR 命中处理 (解冻段) ----
-            if (MT7_cnt > MT7_seen) {
-                for (long k = MT7_seen; k < MT7_cnt; k++) {
-                    int s = (int)(k & 15);
-                    if (MT7_keySlots[s] == null) continue;
-                    string kh = MT_Hex(MT7_keySlots[s]);
-                    Log("[mtrack7] *** CREATEDECRYPTOR HIT#" + k + " key=" + kh + " iv=" + MT_Hex(MT7_ivSlots[s]) + " rip=" + MT7_slotRip[s].ToString("X"));
-                    MT_TryAndLog(MT7_keySlots[s], "mt7dr_" + k);
-                    MT_RegIv(MT7_ivSlots[s]);
+            // ---- DR 命中处理 (解冻段, 轮询 shellcode 计数器, 8 槽环形) ----
+            long cnt = Marshal.ReadInt64(MT7_cntAddr, 0);
+            if (cnt > MT7_seen) {
+                byte[] kb = new byte[32], ib = new byte[16];
+                for (long k = MT7_seen; k < cnt; k++) {
+                    long slot = 64 * (k & 7);
+                    Marshal.Copy(new IntPtr(MT7_bufAddr.ToInt64() + slot), kb, 0, 32);
+                    Marshal.Copy(new IntPtr(MT7_bufAddr.ToInt64() + slot + 32), ib, 0, 16);
+                    Log("[mtrack7] *** CREATEDECRYPTOR HIT#" + k + " key=" + MT_Hex(kb) + " iv=" + MT_Hex(ib));
+                    MT_TryAndLog(kb, "mt7dr_" + k);
+                    MT_RegIv(ib);
                 }
-                MT7_seen = MT7_cnt;
-                if (MT7_cnt <= 3 && snapLeft > 0) { snapLeft--; MT4_DumpAll(buf, MT3_cycles); }
+                MT7_seen = cnt;
+                if (cnt == 1) MT4_DumpAll(buf, MT3_cycles);
             }
             MT3_ProcessHits();
             Thread.Sleep(2);
         }
-        Log("[mtrack7] freezer exit cycles=" + MT3_cycles + " suspends=" + MT3_susp + " drHits=" + MT7_cnt
+        Log("[mtrack7] freezer exit cycles=" + MT3_cycles + " suspends=" + MT3_susp + " drHits=" + MT7_seen
             + " threadsDR=" + MT7_nThreadDR + " dumps=" + MT4_nDumps + " keyFound=" + MT_nKey + " uKeys=" + MT_uKeys);
     }
 }
