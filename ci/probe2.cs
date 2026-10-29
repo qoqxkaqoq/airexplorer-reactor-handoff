@@ -1640,7 +1640,10 @@ class Probe2 {
             MT7_preInvoke = 1;
             Log("[mtrack7] pre-invoke flag set, waiting for freezer in-mem burst...");
             int spins2 = 0;
-            while (MT7_invArmed == 0 && spins2 < 5000) { Thread.Sleep(1); spins2++; }
+            // v19: SpinWait 化 (Sleep(1) 粒度 ~1ms 会吃掉快照起点余量)
+            while (MT7_invArmed == 0 && spins2 < 200000) { Thread.SpinWait(200); spins2++; }
+            // v19: 延迟 3ms 再 bust+ResolveMethod — 解密窗推到快照序列 (#0@+0.3ms, 间隔~0.7ms, 30份) 正中 #3-#6
+            Thread.Sleep(3);
             Log("[mtrack7] invoke burst armed=" + MT7_invArmed + " spins=" + spins2 + " → bust+invoke");
         }
         for (int it = 0; it < 3; it++) {
@@ -1883,7 +1886,7 @@ class Probe2 {
     static volatile int MT7_invReq = 0;      // v18: worker 请求追加快照批 (invoke#1/#2 前)
     static int MT7_invBatch = 0;             // v18: 批次号 (落盘命名 inv_snap_{batch*10+i})
     static byte[][] MT7_snapBufs = null;     // 内存快照 (无 IO, freeze 态 RPM 收集)
-    static int[] MT7_snapLen = new int[10];
+    static int[] MT7_snapLen = new int[30];
     static long MT7_pendLo = 0, MT7_pendHi = 0;  // 本轮已消费命中区间 (解冻段转储用)
     // v13: S-box 数据断点 — native AES 必查 AES S-box (MEM_PRIVATE exec), DR0-3=表地址 RW 断点,
     //   解密首次查表即 VEH → KEY 尚在参数寄存器 RCX/RDX/R8/R9 → shellcode deref 捕获 (实时, 零窗口损失)
@@ -2145,7 +2148,7 @@ class Probe2 {
             // 注意: 缓冲分配绝不能在冻结态做 (GC 死锁 — v11 的 20min 假死教训), 分配在解冻段完成
             bool invBurst = MT7_invArmed == 1 && MT7_invLeft > 0;
             if (invBurst) {
-                int idx = 10 - MT7_invLeft;
+                int idx = 30 - MT7_invLeft;
                 int nSnap = MT7_SnapMem(MT7_snapBufs[idx], buf);
                 MT7_snapLen[idx] = nSnap;
                 MT7_invLeft--;
@@ -2154,7 +2157,7 @@ class Probe2 {
                 Log("[mtrack7] inv snap[" + idx + "] bytes=" + nSnap + " cycle=" + MT3_cycles);
                 if (MT7_invLeft > 0) continue;
                 Log("[mtrack7] invoke burst done, flushing in-mem snapshots...");
-                for (int i = 0; i < 10; i++) {
+                for (int i = 0; i < 30; i++) {
                     if (MT7_snapBufs[i] != null && MT7_snapLen[i] > 0) {
                         try {
                             var fs = new FileStream("dump\\inv_snap_" + (MT7_invBatch * 10 + i) + ".bin", FileMode.Create);
@@ -2259,19 +2262,19 @@ class Probe2 {
             // arm 前置: S-box 扫描必须完成 (武装在 armed 后的首轮 freeze; nSbox=0 仍 arm — 快照兜底)
             if (MT7_preInvoke == 1 && MT7_sboxScanned == 1 && MT7_invArmed == 0 && MT7_invDone == 0 && MT7_snapBufs == null) {
                 try {
-                    var bufs = new byte[10][];
-                    for (int i = 0; i < 10; i++) bufs[i] = new byte[80 << 20];
+                    var bufs = new byte[30][];
+                    for (int i = 0; i < 30; i++) bufs[i] = new byte[80 << 20];
                     MT7_snapBufs = bufs;          // 先挂引用再置 armed (volatile 写序保证)
-                    MT7_invArmed = 1; MT7_invLeft = 10; MT7_invDone = 1;
-                    Log("[mtrack7] *** INVOKE BURST ARMED (10x in-mem snapshot, 800MB)");
+                    MT7_invArmed = 1; MT7_invLeft = 30; MT7_invDone = 1;
+                    Log("[mtrack7] *** INVOKE BURST ARMED (30x in-mem snapshot, 2.4GB)");
                 } catch (Exception ex) { Log("[mtrack7] snap buf alloc FAIL " + ex.Message); MT7_invDone = 1; }
             }
             // v18: worker 请求追加快照批 (invoke#1/#2 期 419C IL 执行重建 KEY → 托管堆快照)
             if (MT7_invReq == 1 && MT7_invArmed == 0 && MT7_invLeft == 0 && MT7_snapBufs != null) {
                 try {
-                    for (int i = 0; i < 10; i++) if (MT7_snapBufs[i] == null) MT7_snapBufs[i] = new byte[80 << 20];
-                    MT7_invArmed = 1; MT7_invLeft = 10; MT7_invReq = 0;
-                    Log("[mtrack7] *** SNAP BATCH#" + MT7_invBatch + " ARMED (retrigger)");
+                    for (int i = 0; i < 30; i++) if (MT7_snapBufs[i] == null) MT7_snapBufs[i] = new byte[80 << 20];
+                    MT7_invArmed = 1; MT7_invLeft = 30; MT7_invReq = 0;
+                    Log("[mtrack7] *** SNAP BATCH#" + MT7_invBatch + " ARMED (retrigger, 30x)");
                 } catch (Exception ex) { Log("[mtrack7] snap rebuf alloc FAIL " + ex.Message); MT7_invReq = 0; }
             }
             // ---- 解冻段: 命中转储/登记 (分配/Log 安全) + 首命中全快照 ----
@@ -2295,7 +2298,8 @@ class Probe2 {
             if (MT3_cycles % 200 == 0)
                 Log("[mtrack7] cycles=" + MT3_cycles + " hits=" + Marshal.ReadInt64(MT7_cntAddr, 0) + " seen=" + MT7_seen + " uKeys=" + MT_uKeys);
             MT3_ProcessHits();
-            Thread.Sleep(1);
+            // v19: armed 后快拍模式 — 去 Sleep(1) 把快照 #0 提前到 armed+~0.3ms (解密窗 armed+1.0-1.4ms, v12 实测差 0.6ms)
+            if (MT7_invArmed == 0) Thread.Sleep(1);
         }
         Log("[mtrack7] freezer exit cycles=" + MT3_cycles + " suspends=" + MT3_susp + " drHits=" + MT7_seen
             + " threadsDR=" + MT7_nThreadDR + " dumps=" + MT4_nDumps + " keyFound=" + MT_nKey + " uKeys=" + MT_uKeys);
