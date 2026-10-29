@@ -1986,3 +1986,10 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **期望签名存放点定案（§4-2 完成）**：**exe 0x927C88, 128B, 小端存储（Array.Reverse 后验签）**；v10（ReadBytes 长度）=ReadUInt32@0x04=3?（循环内实际值待 CI 确认，128B 签名区已由官方签名精确命中证实）
 - **A2 首建 a18（step196）**：`exes/AirExplorer_a18.exe` md5=**543B9D0419CA3F0A865C696A35DEF54D** = baseline + 新 RSA-1024 公钥（openssl genrsa，Modulus b64 172B 同长，XML 243B 同格式）经同 key/iv AES-256-CBC 重加密回写 0x6783B0 + 新私钥对 H(a18)=8fdc20570141ef937be16f4de43924bfb61179de 自签（rsautl PKCS#1 v1.5，**勿用 dgst -sign——它会对输入再 SHA1**）Reverse 回写 0x927C88；本地全链模拟（AES 解密→XML→验签）**PASS**
 - **判定计划**：s5probe trap 期望 ok≈4878 fail=5（仅缺 DLL）零 "AirExplorer "；ag 期望 fields=6201。**若过 = 哨兵完全受控，A2 路线打通 → 回接 A1 激活补丁（负载重加密）→ 一次出包**
+
+### a18 判定（runs 40835368252 trap / 40835380362 ag）——**A2 打通，第一哨兵彻底受控** ✅
+- **a18 = baseline + 新RSA-1024公钥(0x6783B0 AES重加密) + 新私钥自签(0x927C88)**，md5=543B9D0419CA3F0A865C696A35DEF54D，commit 1368b87d
+- **trap 判定（run 40835368252）**：probe2 ok 全量行走，**FAIL 仅 5 = StaticTree(BouncyCastle.Crypto 缺DLL) + LocalObjectTree+<>c + LoggerBridge+<>c×3(GongSolutions 缺DLL)——与 baseline 完全一致**；**0 次 "AirExplorer "、0 次 "is tampered."、0 次 InvalidProgram** —— 对比 v7（仅差 13B 补丁即 4×"AirExplorer " 炸）→ **哨兵对新公钥+新签名完全接受**
+- **ag 判定（run 40835380362）**：AG.m_AdaptableModelValueMsg/FinderRecommenderTitle 等 URL 字段全部健康、EvaluateVisibleAttribute OK（no exception）、WriteRequest=inst、配置链 CHAIN dir/label/airexplorer.xml 全通、GenerateAdjustableAggregator=True、globalTemplate.Count=1、LOADEX 仅 WebView2/GongSolutions 环境性缺 DLL、**DONE** —— 主库装载链完全健康（对比 a13 的 5979 全灭）
+- **结论**：①哨兵算法静态复刻与运行时行为**完全一致**（Authenticode 风格自哈希 + 签名区豁免 + 公钥运行时 AES 解密全链受控）；②**A2 施工图验证成功**——任何文件级补丁都可按「补丁→算H→自签→回写0x927C88」三步免迭代通过哨兵；③**无需 p1/p3/p5**（4192 保持官方体，签名匹配即健康路）
+- **下一步（按交接 §5/§6）**：①A1 激活直通回接——06000CEE AssertValidLicense 逻辑在 3.2MB 加密负载内，走 work/decrypt_prng.py 已知明文重加密路线，补丁后再做哨兵三步（改密文/资源/签名一次打包）；②暗桩清单处理随 A1 同包；③ui-probe/a-soak 出窗验证
