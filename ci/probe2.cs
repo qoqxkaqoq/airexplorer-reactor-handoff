@@ -52,6 +52,7 @@ class Probe2 {
         var worker = new Thread(delegate() {
             try {
                 if (mode == "mtrack") RunMTrack(exe);
+                else if (mode == "mtrack2") RunMTrack2(exe);
                 else Run(exe, mode);
                 Log("[probe2] DONE");
             }
@@ -955,6 +956,59 @@ class Probe2 {
             var il = mb.GetMethodBody().GetILAsByteArray();
             Log("[mtrack] P1 body len=" + il.Length + " head=" + BitConverter.ToString(il, 0, Math.Min(16, il.Length)).Replace("-", ""));
         } catch (Exception ex) { Log("[mtrack] P1 body FAIL " + Chain(ex)); }
+    }
+
+    static void RunMTrack2(string exe) {
+        // 与 mtrack 相同的并发扫描, 但在 cctor 后清驱动器缓存并强制重解密, 抓新鲜 transform
+        MT_C1 = new byte[] {0x04,0x65,0xe8,0x5a,0xe8,0xab,0xba,0x16,0xf4,0xf9,0x0e,0x16,0xce,0x3b,0x3d,0xbf};
+        MT_C2 = new byte[] {0x42,0xe4,0xb7,0xf2,0x12,0x84,0x62,0xe4,0x46,0xd9,0x5f,0x36,0xbd,0xbb,0x82,0x8e};
+        MT_C3 = new byte[] {0x07,0x4d,0x8b,0x9b,0x40,0xd5,0x0a,0xa5,0x50,0x49,0xbf,0x72,0x21,0x83,0x62,0x1e};
+        try { Directory.CreateDirectory(DumpDir); } catch {}
+        try { var t0 = new RijndaelManaged().CreateDecryptor(new byte[32], new byte[16]);
+              MT_mtRMCrypt = (ulong)t0.GetType().TypeHandle.Value.ToInt64(); } catch (Exception ex) { Log("[mtrack2] MT calib FAIL " + ex.Message); }
+        try { var ap = new byte[101]; var gh = GCHandle.Alloc(ap, GCHandleType.Pinned);
+              MT_mtByteArr = (ulong)Marshal.ReadIntPtr(new IntPtr(gh.AddrOfPinnedObject().ToInt64() - 16)).ToInt64(); gh.Free(); } catch (Exception ex) { Log("[mtrack2] arr calib FAIL " + ex.Message); }
+        Log("[mtrack2] MT RMCrypt=" + MT_mtRMCrypt.ToString("X") + " byteArr=" + MT_mtByteArr.ToString("X"));
+        var mts = new Thread(MT_ScanLoop); mts.IsBackground = true; mts.Priority = ThreadPriority.AboveNormal; mts.Start();
+
+        Directory.SetCurrentDirectory(Path.GetDirectoryName(exe));
+        var asm = Assembly.LoadFrom(exe);
+        Log("[mtrack2] loaded " + asm.FullName);
+        foreach (var m in asm.GetModules()) {
+            try { RuntimeHelpers.RunModuleConstructor(m.ModuleHandle); Log("[mtrack2] module cctor OK"); }
+            catch (Exception ex) { Log("[mtrack2] module cctor FAIL: " + Chain(ex)); }
+        }
+        // ---- cache bust: 驱动器类静态集合清空 ----
+        try {
+            var diT = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+            var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            Log("[mtrack2] DispatcherInitializer statics:");
+            foreach (var f in diT.GetFields(flags)) {
+                object v = null;
+                try { v = f.GetValue(null); } catch {}
+                string desc = v == null ? "NULL" : (v is string s2 ? ("str len=" + s2.Length) : v.GetType().Name);
+                Log("[mtrack2]   ." + f.Name + " = " + desc);
+                if (v is System.Collections.Hashtable ht) { int n = ht.Count; ht.Clear(); Log("[mtrack2]   CLEARED Hashtable " + f.Name + " (was " + n + ")"); }
+                else if (v is System.Collections.IDictionary dc && !(v is string)) { int n = dc.Count; dc.Clear(); Log("[mtrack2]   CLEARED IDictionary " + f.Name + " (was " + n + ")"); }
+                else if (v is System.Collections.IList il2) { int n = il2.Count; il2.Clear(); Log("[mtrack2]   CLEARED IList " + f.Name + " (was " + n + ")"); }
+                else if (v is Array a2 && !(v is byte[]) && a2.Length > 0 && a2.Length <= 4096) {
+                    // 对象引用数组: 清引用 (byte[] 谨慎保留)
+                    try { Array.Clear(a2, 0, a2.Length); Log("[mtrack2]   CLEARED Array " + f.Name + " len=" + a2.Length); } catch {}
+                }
+            }
+        } catch (Exception ex) { Log("[mtrack2] cache bust FAIL " + Chain(ex)); }
+        // ---- 强制重解密 ----
+        try {
+            var mod2 = asm.GetModules()[0];
+            var mD = (MethodInfo)mod2.ResolveMethod(0x0600419C);
+            Log("[mtrack2] invoking driver (fresh decrypt)...");
+            try { mD.Invoke(null, null); Log("[mtrack2] driver OK"); }
+            catch (Exception ex) { Log("[mtrack2] driver EX " + Chain(ex)); }
+        } catch (Exception ex) { Log("[mtrack2] resolve FAIL " + Chain(ex)); }
+        Thread.Sleep(3000);
+        MT_stop = true;
+        Thread.Sleep(2000);
+        Log("[mtrack2] rounds=" + MT_round + " tf=" + MT_nTf + " key=" + MT_nKey + " b32=" + MT_nB32 + " iv=" + MT_nIv + " i60=" + MT_nI60 + " tbls");
     }
 
     static int MT_Score(byte[] p) { int s = 0; foreach (var b in p) { if (b == 0) s += 2; else if (b < 0x10) s++; } return s; }
