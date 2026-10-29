@@ -1659,11 +1659,13 @@ class Probe2 {
                 if (MT7_scanBuf != null) MT7_ScanSbox();
                 if (MT7_nSbox > 0) {
                     MT7_SelfArmSbox();
-                    Log("[mtrack7] retrigger sibling methods (2nd decrypt with DR armed)...");
-                    foreach (int tok in new int[] { 0x06004192, 0x06004193, 0x06004196, 0x06004181, 0x06004182, 0x06004183 }) {
-                        try { mod2.ResolveMethod(tok); Log("[mtrack7] retrigger " + tok.ToString("X") + " OK"); }
-                        catch (Exception ex) { Log("[mtrack7] retrigger " + tok.ToString("X") + " EX " + ex.GetType().Name); }
+                    Log("[mtrack7] retrigger token flood 0x06004180-0x060042FF (hunt un-JIT'd sibling → 2nd decrypt with DR armed)...");
+                    int okN = 0, exN = 0;
+                    for (int tok = 0x06004180; tok <= 0x060042FF; tok++) {
+                        try { mod2.ResolveMethod(tok); okN++; }
+                        catch { exN++; }
                     }
+                    Log("[mtrack7] retrigger flood done ok=" + okN + " ex=" + exN);
                     Thread.Sleep(400);   // freezer 消费命中 (判据验证+落盘)
                 } else {
                     Log("[mtrack7] sbox scan 0 hits post-invoke#0 — retrigger without DR (fallback snapshot path)");
@@ -1944,16 +1946,20 @@ class Probe2 {
     }
 
     // v14: worker 线程自我武装 S-box 数据断点 (解冻态, 只写 DEBUG_REGISTERS 不碰 RIP 无竞态)
+    // v16: CONTEXT 必须 16B 对齐 — byte[] 不保证, 改 AllocHGlobal (malloc 16 对齐) + IntPtr 重载
     static void MT7_SelfArmSbox() {
+        IntPtr pCtx = IntPtr.Zero;
         try {
-            var ctx = new byte[MT7_CTXLEN];
-            BitConverter.GetBytes(0x10013).CopyTo(ctx, 48);
-            if (!GetThreadContext(GetCurrentThread(), ctx)) { Log("[mtrack7] selfarm sbox GTC fail"); return; }
-            for (int i = 0; i < 4; i++) BitConverter.GetBytes(MT7_sbox[Math.Min(i, MT7_nSbox - 1)].ToInt64()).CopyTo(ctx, 72 + 8 * i);
-            BitConverter.GetBytes((long)0x33330055).CopyTo(ctx, 112);
-            if (SetThreadContext(GetCurrentThread(), ctx)) { MT7_nThreadDR++; Log("[mtrack7] selfarm sbox done dr7=0x33330055"); }
-            else Log("[mtrack7] selfarm sbox STC fail");
+            pCtx = Marshal.AllocHGlobal(MT7_CTXLEN);
+            for (int i = 0; i < MT7_CTXLEN; i += 8) Marshal.WriteInt64(pCtx, i, 0);
+            Marshal.WriteInt32(pCtx, 48, 0x10013);
+            if (!GetThreadContextI(GetCurrentThread(), pCtx)) { Log("[mtrack7] selfarm sbox GTC fail err=" + Marshal.GetLastWin32Error()); return; }
+            for (int i = 0; i < 4; i++) Marshal.WriteInt64(pCtx, 72 + 8 * i, MT7_sbox[Math.Min(i, MT7_nSbox - 1)].ToInt64());
+            Marshal.WriteInt64(pCtx, 112, (long)0x33330055);
+            if (SetThreadContextI(GetCurrentThread(), pCtx)) { MT7_nThreadDR++; Log("[mtrack7] selfarm sbox done dr7=0x33330055 sbox0=" + MT7_sbox[0].ToString("X")); }
+            else Log("[mtrack7] selfarm sbox STC fail err=" + Marshal.GetLastWin32Error());
         } catch (Exception ex) { Log("[mtrack7] selfarm sbox FAIL " + ex.Message); }
+        finally { if (pCtx != IntPtr.Zero) Marshal.FreeHGlobal(pCtx); }
     }
 
 
@@ -1963,8 +1969,12 @@ class Probe2 {
     static extern IntPtr AddVectoredExceptionHandler(uint first, IntPtr handler);
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool GetThreadContext(IntPtr h, byte[] ctx);
+    [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "GetThreadContext")]
+    static extern bool GetThreadContextI(IntPtr h, IntPtr ctx);
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool SetThreadContext(IntPtr h, byte[] ctx);
+    [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "SetThreadContext")]
+    static extern bool SetThreadContextI(IntPtr h, IntPtr ctx);
     [DllImport("kernel32.dll")]
     static extern IntPtr GetCurrentThread();
     const int MT7_CTXLEN = 1232;
