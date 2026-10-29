@@ -1645,13 +1645,22 @@ class Probe2 {
         }
         for (int it = 0; it < 3; it++) {
             MT3_Bust(asm);
+            // v18: invoke#1/#2 前请求追加快照批 (419C IL 每次执行重建 KEY → 托管堆快照可扫)
+            if (it >= 1) {
+                MT7_invReq = 1;
+                int spins3 = 0;
+                while (MT7_invArmed == 0 && spins3 < 5000) { Thread.Sleep(1); spins3++; }
+                // 等 5ms 再 invoke: 快照序列 (armed+2ms 起, 间隔~1.3ms) 中段正好覆盖 419C 执行期 (freeze 拉长)
+                Thread.Sleep(5);
+                Log("[mtrack4] snap batch#" + MT7_invBatch + " armed for invoke#" + it + " spins=" + spins3);
+            }
             try {
                 var mD = (MethodInfo)mod2.ResolveMethod(0x0600419C);
                 Log("[mtrack4] invoke#" + it + " ...");
                 mD.Invoke(null, null);
                 Log("[mtrack4] invoke#" + it + " OK");
             } catch (Exception ex) { Log("[mtrack4] invoke#" + it + " EX " + Chain(ex)); }
-            // v14: invoke#0 后解密器已解压 → 扫 S-box → 自武装 → reTrigger 表内兄弟方法 (KEY 第二次活跃, DR 拦截)
+            // v14: invoke#0 后解密器已解压 → 扫 S-box → 自武装 → PrepareMethod 洪泛 (KEY 第二次活跃, DR 拦截)
             if (it == 0) {
                 Log("[mtrack7] post-invoke#0: scan sbox (decryptor now resident)...");
                 if (MT7_scanBuf == null) { try { MT7_scanBuf = new byte[4 << 20]; } catch (Exception ex) { Log("[mtrack7] scanBuf alloc FAIL " + ex.Message); } }
@@ -1659,18 +1668,20 @@ class Probe2 {
                 if (MT7_scanBuf != null) MT7_ScanSbox();
                 if (MT7_nSbox > 0) {
                     MT7_SelfArmSbox();
-                    // v17: PrepareMethod 强制 JIT (ResolveMethod 仅元数据解析不触发 JIT — v16 零命中根因)
-                    //   JIT-hook 解密 IL → 解密器查 S-box → #DB → VEH 捕获
-                    Log("[mtrack7] retrigger PrepareMethod flood 0x06004180-0x060042FF (force JIT → 2nd decrypt with DR armed)...");
-                    int okN = 0, exN = 0;
-                    for (int tok = 0x06004180; tok <= 0x060042FF; tok++) {
+                    // v18: 全域 PrepareMethod 洪泛 — 任何未 JIT 的 res[0] 域方法 JIT = 解密 = S-box 访问 = VEH
+                    Log("[mtrack7] global PrepareMethod flood 0x06000001-0x0600FFFF (DR armed)...");
+                    int jitN = 0, exN = 0;
+                    for (int tok = 0x06000001; tok <= 0x0600FFFF; tok++) {
                         try {
                             var mh = mod2.ResolveMethod(tok).MethodHandle;
                             System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(mh);
-                            okN++;
+                            jitN++;
                         } catch { exN++; }
+                        if ((tok & 0x1FFF) == 0)
+                            Log("[mtrack7] flood @ " + tok.ToString("X") + " jit=" + jitN + " ex=" + exN + " cnt=" + Marshal.ReadInt64(MT7_cntAddr, 0));
+                        if (Marshal.ReadInt64(MT7_cntAddr, 0) > 0) { Log("[mtrack7] *** flood HIT @ " + tok.ToString("X") + " — stop early"); break; }
                     }
-                    Log("[mtrack7] retrigger flood done jit=" + okN + " ex=" + exN + " cntNow=" + Marshal.ReadInt64(MT7_cntAddr, 0));
+                    Log("[mtrack7] flood done jit=" + jitN + " ex=" + exN + " cnt=" + Marshal.ReadInt64(MT7_cntAddr, 0));
                     Thread.Sleep(400);   // freezer 消费命中 (判据验证+落盘)
                 } else {
                     Log("[mtrack7] sbox scan 0 hits post-invoke#0 — retrigger without DR (fallback snapshot path)");
@@ -1869,6 +1880,8 @@ class Probe2 {
     static volatile int MT7_invArmed = 0;
     static int MT7_invLeft = 0;
     static int MT7_invDone = 0;
+    static volatile int MT7_invReq = 0;      // v18: worker 请求追加快照批 (invoke#1/#2 前)
+    static int MT7_invBatch = 0;             // v18: 批次号 (落盘命名 inv_snap_{batch*10+i})
     static byte[][] MT7_snapBufs = null;     // 内存快照 (无 IO, freeze 态 RPM 收集)
     static int[] MT7_snapLen = new int[10];
     static long MT7_pendLo = 0, MT7_pendHi = 0;  // 本轮已消费命中区间 (解冻段转储用)
@@ -2144,15 +2157,17 @@ class Probe2 {
                 for (int i = 0; i < 10; i++) {
                     if (MT7_snapBufs[i] != null && MT7_snapLen[i] > 0) {
                         try {
-                            var fs = new FileStream("dump\\inv_snap_" + i + ".bin", FileMode.Create);
+                            var fs = new FileStream("dump\\inv_snap_" + (MT7_invBatch * 10 + i) + ".bin", FileMode.Create);
                             fs.Write(MT7_snapBufs[i], 0, MT7_snapLen[i]);
                             fs.Close();
                             MT7_snapBufs[i] = null;
                         } catch (Exception ex) { Log("[mtrack7] inv snap write FAIL " + i + " " + ex.Message); }
                     }
                 }
-                Log("[mtrack7] invoke burst snapshots flushed");
-                MT3_stop = true;   // 任务完成即收工, 防后续空转/挂起
+                Log("[mtrack7] invoke burst snapshots flushed (batch " + MT7_invBatch + ")");
+                MT7_invBatch++;
+                MT7_invArmed = 0;   // 复位: 允许 v18 重触发批
+                // v18: 不再置 MT3_stop — worker 还有 invoke#1/#2 快照批与洪泛, worker 退出后 freezer 自然收工
             }
             // ---- VEH 命中消费 (冻结态; v8 槽: [0 rcxPtr][8 rdxPtr][16 r8Ptr][24 r9Ptr][32 key32(RDX)][64 iv16(R8)][80 key32b(RCX)]) ----
             MT7_pendLo = MT7_pendHi = 0;
@@ -2250,6 +2265,14 @@ class Probe2 {
                     MT7_invArmed = 1; MT7_invLeft = 10; MT7_invDone = 1;
                     Log("[mtrack7] *** INVOKE BURST ARMED (10x in-mem snapshot, 800MB)");
                 } catch (Exception ex) { Log("[mtrack7] snap buf alloc FAIL " + ex.Message); MT7_invDone = 1; }
+            }
+            // v18: worker 请求追加快照批 (invoke#1/#2 期 419C IL 执行重建 KEY → 托管堆快照)
+            if (MT7_invReq == 1 && MT7_invArmed == 0 && MT7_invLeft == 0 && MT7_snapBufs != null) {
+                try {
+                    for (int i = 0; i < 10; i++) if (MT7_snapBufs[i] == null) MT7_snapBufs[i] = new byte[80 << 20];
+                    MT7_invArmed = 1; MT7_invLeft = 10; MT7_invReq = 0;
+                    Log("[mtrack7] *** SNAP BATCH#" + MT7_invBatch + " ARMED (retrigger)");
+                } catch (Exception ex) { Log("[mtrack7] snap rebuf alloc FAIL " + ex.Message); MT7_invReq = 0; }
             }
             // ---- 解冻段: 命中转储/登记 (分配/Log 安全) + 首命中全快照 ----
             for (long k = MT7_pendLo; k < MT7_pendHi; k++) {
