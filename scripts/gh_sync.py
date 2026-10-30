@@ -24,6 +24,7 @@ Token 来源（按优先级）:
 import argparse
 import base64
 import json
+import time
 import os
 import sys
 import urllib.error
@@ -53,12 +54,20 @@ def req(method, path, token, data=None, raw=False):
     r.add_header("User-Agent", UA)
     if body:
         r.add_header("Content-Type", "application/json")
-    try:
-        with urllib.request.urlopen(r, timeout=300) as resp:
-            raw_bytes = resp.read()
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", "replace")[:800]
-        sys.exit("HTTP %s %s -> %s\n%s" % (e.code, method, path, detail))
+    raw_bytes = None
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(r, timeout=300) as resp:
+                raw_bytes = resp.read()
+            break
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:800]
+            sys.exit("HTTP %s %s -> %s\n%s" % (e.code, method, path, detail))
+        except (TimeoutError, OSError) as e:
+            print("[gh_sync] retry %d/%d after %s: %s" % (attempt + 1, 4, type(e).__name__, e), flush=True)
+            if attempt == 3:
+                raise
+            time.sleep(5)
     if raw:
         return raw_bytes
     return json.loads(raw_bytes.decode())
