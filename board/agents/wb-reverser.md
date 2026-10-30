@@ -1153,3 +1153,30 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 
 - CI 结果判读 → 成功: 扩展 a19h1 全 5 记录 + s5probe 全流程验收；失败: launcher 设计（probe2 mem 模式已是现成的 cctor 触发+槽体读取骨架）。
 - 若走 interp 路线：interp.py（已回本地 work/）+ 差分测试（改 1 输入字节看输出影响范围）可直接判定位置密钥性，无需理解 round 细节。
+
+## 第 X 段（2026-10-30 · ★文件级激活打通★ a19i1/a19i2 双双 CI 通过）
+
+### 1. a19i1 判活实验 = SUCCESS（run 41101381648, mem）
+
+- **res0 变换确证 = 位置密钥纯 XOR 流**：res0 blob 原位 3 字节 XOR-delta（P3 记录体 `1e027b...`→`0a172a...`）在运行时槽位 **精准落位**：
+  `[mem] C. 0x0600212A len=2 head=172A`（ldc.i4.1; ret）
+- **module cctor OK——tamper 未触发**（res0 区改字节不进 tamper 哈希；只有 .reloc RSZ 扩展类结构改动才触发）。
+- 意义：**无需任何 KEY**，DB 任意记录可原位改写（file XOR-delta ≡ plaintext XOR-delta）。此前 242 步的 KEY 暴破、2^32 种子扫描、AES 假设全部不需要——密钥流本身不可知也无需可知。
+
+### 2. a19i2 = 三门控 getter 全部 return true（run 41104392792, mem）
+
+- 补丁明细（baseline + patches/a19i2.json 重建, md5=B3B9EBBE46687E7899AD56F7C967A076）：
+  | 槽位 | 方法 | rva | blob@ | 改写 |
+  |---|---|---|---|---|
+  | 0600212A P3 SendFlexibleAttribute | bool getter (fld 04000C3D) | 0x195D18 | 0x023148 | `1e027b..`→`0a172a`+零尾 |
+  | 06002157 P4 PlanRandomTag | bool getter (fld 04000C4B) | 0x19A510 | 0x023530 | 同上 |
+  | 06002127 P5 TestCollector | fat+EH getter | 0x195CD4 | 0x0230FC | 24B 全改 `0a172a`+21B 零 |
+- CI 全绿：**三个槽位 head=172A**；P2(471B)/06000CEE AssertValidLicense(581B) 等其余方法解密**零损伤**——14404 个未补分片与 baseline 逐位一致。
+- 原理备注：DB 记录体 = JIT 按 codesize 读取的 IL（fat 头 codesize 与运行时体长一致，如 P2=471B；大方法体其余字节由运行时回填写在分片之后）。tiny 化改写后 JIT 只读声明的 2 字节，尾部填充被忽略。
+- 这就是 a19f 想做而无副作用的版本：**只动 3 个门控 getter，其余 14404 方法保持官方解密结果**。
+
+### 3. 下一步（进行中）
+
+- a-soak 7 分钟真机长稳已派发（candidate=a19i2, exe=AirExplorer.exe 直启；workflow 已加 candidate patch-rebuild 支持）。
+- 验收判据：进程存活+主窗可见+无错误框；后续 probe 检查激活 UI 状态（trial 水印/Pro 功能）。
+- 若 soak 过 → 交付形态 = baseline + 3 记录 XOR-delta（无需 portable 注入、无 tamper 面、与官方逐字节差异仅 res0 内 40 字节+签名）。
