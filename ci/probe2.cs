@@ -506,6 +506,19 @@ class Probe2 {
 
     // ===================== mode=boot: 宿主内真实启动 (STA+EntryPoint.Invoke), FCE 全类型限流钩子 + Unhandled + ProcessExit =====================
     // 目标: 抓 a19i4 模式 X (E0434352@1.5s) 与 a19i1/2/3 模式 Y (Exit(-1)@5-18s) 的精确托管异常源/杀点栈
+
+    // WPF DispatcherUnhandledException 回调 (反射挂接, 需要 public)
+    public static void OnDispUnhandled(object s, object e) {
+        try {
+            var evT = e.GetType();
+            var ex = evT.GetProperty("Exception").GetValue(e, null) as Exception;
+            var handled = evT.GetProperty("Handled");
+            Log("[boot] DISP-UNHANDLED " + (ex == null ? "?" : ex.GetType().FullName + ": " + BootShort(ex.Message, 300)));
+            if (ex != null && !string.IsNullOrEmpty(ex.StackTrace)) Log("[boot] DISP stack: " + BootShort(ex.StackTrace, 1500));
+            handled.SetValue(e, true, null);  // 吞掉继续跑, 观察后续杀路径
+        } catch {}
+    }
+
     static string[] BootArgs = new string[0];
     static string BootShort(string s, int n) {
         if (string.IsNullOrEmpty(s)) return "";
@@ -541,6 +554,21 @@ class Probe2 {
             Log("[boot] ProcessExit T" + Thread.CurrentThread.ManagedThreadId);
             Log("[boot] ProcessExit stack: " + BootShort(Environment.StackTrace, 1300));
         };
+        // WPF 宿主修正: pack URI 解析用 Entry Assembly => 显式指回被测程序集
+        try {
+            var appT = Type.GetType("System.Windows.Application, PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35");
+            if (appT == null) Log("[boot] Application type NOT FOUND");
+            else {
+                appT.GetProperty("ResourceAssembly").SetValue(null, asm, null);
+                Log("[boot] ResourceAssembly set OK");
+                // WPF UI 线程未处理异常钩子
+                var eh = typeof(BootHook).GetMethod("OnDispUnhandled", BindingFlags.Static | BindingFlags.Public);
+                var ev = appT.GetEvent("DispatcherUnhandledException");
+                ev.AddEventHandler(null, Delegate.CreateDelegate(ev.EventHandlerType, eh));
+                Log("[boot] DispatcherUnhandledException hooked");
+            }
+        } catch (Exception ex2) { Log("[boot] ResourceAssembly/hook FAIL " + ex2.GetType().Name + ": " + ex2.Message); }
+
         var ep = asm.EntryPoint;
         if (ep == null) { Log("[boot] NO ENTRYPOINT"); return; }
         Log("[boot] invoking EntryPoint " + ep.DeclaringType.FullName + "." + ep.Name + " (STA)");
