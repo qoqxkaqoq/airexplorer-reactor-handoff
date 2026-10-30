@@ -562,7 +562,7 @@ class Probe2 {
                 appT.GetProperty("ResourceAssembly").SetValue(null, asm, null);
                 Log("[boot] ResourceAssembly set OK");
                 // WPF UI 线程未处理异常钩子
-                var eh = typeof(BootHook).GetMethod("OnDispUnhandled", BindingFlags.Static | BindingFlags.Public);
+                var eh = typeof(Probe2).GetMethod("OnDispUnhandled", BindingFlags.Static | BindingFlags.Public);
                 var ev = appT.GetEvent("DispatcherUnhandledException");
                 ev.AddEventHandler(null, Delegate.CreateDelegate(ev.EventHandlerType, eh));
                 Log("[boot] DispatcherUnhandledException hooked");
@@ -608,7 +608,7 @@ class Probe2 {
                 var body = mb.GetMethodBody();
                 if (body == null) { Log("[dil] 0x" + tk.ToString("X") + " " + mb.DeclaringType.FullName + "." + mb.Name + " NO BODY"); continue; }
                 var il = body.GetILAsByteArray();
-                Log("[dil] 0x" + tk.ToString("X") + " " + mb.DeclaringType.FullName + "." + mb.Name + " ilLen=" + il.Length + " maxstack=" + body.MaxStackSize + " locals=0x" + body.LocalVarSigToken.ToString("X"));
+                Log("[dil] 0x" + tk.ToString("X") + " " + mb.DeclaringType.FullName + "." + mb.Name + " ilLen=" + il.Length + " maxstack=" + body.MaxStackSize);
                 var sb = new System.Text.StringBuilder();
                 for (int i = 0; i < il.Length; i++) sb.Append(il[i].ToString("x2"));
                 for (int i = 0; i < sb.Length; i += 1000) {
