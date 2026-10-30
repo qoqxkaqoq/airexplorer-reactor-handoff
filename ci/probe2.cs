@@ -295,7 +295,82 @@ class Probe2 {
             LicRun(asm);
         } else if (mode == "fldtest") {
             FldTestRun(asm);
+        } else if (mode == "flddump") {
+            FldDumpRun(asm);
         }
+    }
+
+    // ===================== mode=flddump: 回填后扫 MEM_PRIVATE 定位完整体池(影子区)并 dump =====================
+    static void FldDumpRun(Assembly asm) {
+        var mod = asm.GetModules()[0];
+        var di = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+        try { RuntimeHelpers.RunClassConstructor(di.TypeHandle); Log("[fdu] DI.cctor OK"); }
+        catch (Exception ex) { Log("[fdu] DI.cctor FAIL: " + Chain(ex)); return; }
+        // 特征: 06002133 IL 头(946B 完整体的唯一指纹) + P3 7B 体 + 0600419C IL 头
+        byte[] sig133 = new byte[] { 0x03,0x20,0x8f,0x9f,0x0e,0x36,0x20,0xcd,0x47,0x00,0x13,0x61,0x7e,0xb8,0x20,0x00 };
+        byte[] sigP3  = new byte[] { 0x02,0x7b,0x3d,0x0c,0x00,0x04,0x2a };
+        try { Directory.CreateDirectory(DumpDir); } catch {}
+        var sizeOfMbi = (IntPtr)Marshal.SizeOf(typeof(MBI));
+        long addr = 0x10000;
+        int dumped = 0;
+        byte[] chunk = new byte[1 << 20];
+        while (true) {
+            MBI mbi = new MBI();
+            if (VirtualQuery((IntPtr)addr, ref mbi, sizeOfMbi) == IntPtr.Zero) break;
+            long ba = mbi.BaseAddress.ToInt64();
+            long rsz = mbi.RegionSize.ToInt64();
+            IntPtr next = (IntPtr)(ba + rsz);
+            if (rsz > 0 && rsz < (1L<<31) && (mbi.State & 0x1000) != 0 && (mbi.Type & 0x40000) != 0 && (mbi.Protect & 0x100) == 0) {
+                // MEM_PRIVATE (0x40000) commit
+                long p = ba;
+                while (p < ba + rsz - 16) {
+                    int take = (int)Math.Min(chunk.Length, ba + rsz - p);
+                    if (!SafeReadN((IntPtr)p, chunk, take)) break;
+                    for (int i = 0; i <= take - 16; i++) {
+                        if (chunk[i] == 0x03 && chunk[i+1] == 0x20 && chunk[i+2] == 0x8f) {
+                            bool hit = true;
+                            for (int k = 3; k < 16; k++) if (chunk[i+k] != sig133[k]) { hit = false; break; }
+                            if (hit) {
+                                long hitAddr = p + i;
+                                Log("[fdu] pool133 @0x" + hitAddr.ToString("x"));
+                                // P3 体是否也在附近(±16MB)
+                                long lo = Math.Max(ba, hitAddr - (16L<<20)), hi = Math.Min(ba + rsz, hitAddr + (16L<<20));
+                                byte[] big = new byte[hi - lo];
+                                if (SafeRead((IntPtr)lo, big)) {
+                                    int q = 0, np3 = 0;
+                                    while ((q = IndexOfSeq(big, sigP3, q)) >= 0 && np3 < 8) {
+                                        Log("[fdu] P3body @0x" + (lo + q).ToString("x") + " (pool+" + (lo + q - hitAddr) + ")");
+                                        q++; np3++;
+                                    }
+                                    // dump ±4MB
+                                    long dlo = Math.Max(ba, hitAddr - (2L<<20)), dhi = Math.Min(ba + rsz, hitAddr + (2L<<20));
+                                    byte[] dd = new byte[dhi - dlo];
+                                    if (SafeRead((IntPtr)dlo, dd) && dumped < 4) {
+                                        File.WriteAllBytes(Path.Combine(DumpDir, "pool_" + dumped + "_0x" + dlo.ToString("x") + ".bin"), dd);
+                                        Log("[fdu] dumped pool_" + dumped + " [" + (dhi-dlo) + "B] @0x" + dlo.ToString("x"));
+                                        dumped++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    p += take - 16;
+                }
+            }
+            addr = next.ToInt64();
+            if (addr < ba) break;
+        }
+        Log("[fdu] done dumped=" + dumped);
+    }
+    static int IndexOfSeq(byte[] hay, byte[] needle, int from) {
+        int lim = hay.Length - needle.Length;
+        for (int i = from; i <= lim; i++) {
+            if (hay[i] != needle[0]) continue;
+            bool ok = true;
+            for (int k = 1; k < needle.Length; k++) if (hay[i+k] != needle[k]) { ok = false; break; }
+            if (ok) return i;
+        }
+        return -1;
     }
 
     // ===================== mode=fldtest: 回填照常 + 反射置 license 字段 true → 验证激活语义 =====================
