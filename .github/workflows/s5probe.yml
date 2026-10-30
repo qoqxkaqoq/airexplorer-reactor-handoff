@@ -50,6 +50,9 @@ jobs:
           if (-not (Test-Path $cand)) { Write-Host "MISSING $cand"; exit 1 }
           Write-Host ("md5 = " + (Get-FileHash $cand -Algorithm MD5).Hash)
           New-Item -ItemType Directory -Force -Path app | Out-Null
+          # boot 模式需要完整依赖 DLL (KRBTabControl/BouncyCastle/...), 否则 EntryPoint 在 <Module> cctor 后立即 FileNotFound
+          & "C:\Program Files\7-Zip\7z.exe" x -y -oapp portable/deps.zip | Out-Null
+          Write-Host ("deps extracted: " + (Get-ChildItem app\*.dll | Measure-Object).Count + " dlls")
           Copy-Item $cand app\AirExplorer.exe
           # legacyCorruptedStateExceptionsPolicy: 让 catch(Exception) 能捕获 AV 链 (cctor AV 不再秒杀进程, worker 存活继续收 DR 命中)
           @'
