@@ -291,7 +291,49 @@ class Probe2 {
             R5Run(asm);
         } else if (mode == "trap") {
             TrapRun(asm);
+        } else if (mode == "lic") {
+            LicRun(asm);
         }
+    }
+
+    // ===================== mode=lic: a19c 手术生效验证 — 触发模块 cctor(完整回填)后读目标 RVA 运行时字节 =====================
+    static void LicRun(Assembly asm) {
+        var mod = asm.GetModules()[0];
+        IntPtr ibase = Marshal.GetHINSTANCE(mod);
+        Log("[lic] image base = 0x" + ibase.ToInt64().ToString("x"));
+        // 触发 DispatcherInitializer cctor = 4192 宿主 → module cctor(419C 驱动 + 完整 DB 回填)先行
+        var di = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+        if (di == null) { Log("[lic] DispatcherInitializer NOT FOUND"); return; }
+        try { RuntimeHelpers.RunClassConstructor(di.TypeHandle); Log("[lic] DI.cctor OK (module cctor + backfill done)"); }
+        catch (Exception ex) { Log("[lic] DI.cctor FAIL: " + Chain(ex)); return; }
+        // 验证点: 劫持目标 RVA → 期望 tiny 体前 3B = 0a 17 2a
+        long[] rv = new long[] { 0x195CD4, 0x195D18, 0x19A510 };
+        string[] tg = new string[] { "06002127-P5", "0600212A-P3", "06002157-P4" };
+        int pass = 0, fail = 0;
+        for (int i = 0; i < rv.Length; i++) {
+            IntPtr p = (IntPtr)((long)ibase + rv[i]);
+            int b0 = Marshal.ReadByte(p, 0), b1 = Marshal.ReadByte(p, 1), b2 = Marshal.ReadByte(p, 2);
+            bool ok = (b0 == 0x0A && b1 == 0x17 && b2 == 0x2A);
+            Log("[lic] rva=0x" + rv[i].ToString("x") + " (" + tg[i] + ") bytes=" +
+                b0.ToString("x") + " " + b1.ToString("x") + " " + b2.ToString("x") + " -> " + (ok ? "HIJACK-APPLIED" : "NOT-APPLIED"));
+            if (ok) pass++; else fail++;
+        }
+        // P1/P2 文件级补丁验证 (fat hdr 12B 后 IL+deep)
+        long[] frv = new long[] { 0x196088, 0x1997C4 };
+        long[] fdp = new long[] { 0x290, 0x120 };
+        string[] ftg = new string[] { "06002133-P1", "06002145-P2" };
+        for (int i = 0; i < frv.Length; i++) {
+            IntPtr p = (IntPtr)((long)ibase + frv[i] + 12 + fdp[i]);
+            int b = Marshal.ReadByte(p, 0);
+            bool ok = (b == 0x17);
+            Log("[lic] P-file rva=0x" + frv[i].ToString("x") + "+12+0x" + fdp[i].ToString("x") + " (" + ftg[i] + ") byte=" + b.ToString("x") + " -> " + (ok ? "PATCH-APPLIED" : "NOT-APPLIED"));
+            if (ok) pass++; else fail++;
+        }
+        // 对照组: 祭品 S 原 RVA (060038BA@0x33028C) 应保持文件桩态(不再回填)
+        IntPtr ps = (IntPtr)((long)ibase + 0x33028C);
+        int s0 = Marshal.ReadByte(ps, 0), s1 = Marshal.ReadByte(ps, 1), s2 = Marshal.ReadByte(ps, 2), s3 = Marshal.ReadByte(ps, 3);
+        Log("[lic] sacrificial rva=0x33028C (060038BA) bytes=" + s0.ToString("x") + " " + s1.ToString("x") + " " + s2.ToString("x") + " " + s3.ToString("x") + " (stub expected)");
+        Log("[lic] SUMMARY pass=" + pass + " fail=" + fail);
     }
 
     // ===================== mode=trap: 全类型 cctor 逐个触发, 死类型打印完整内层异常链+StackTrace =====================
