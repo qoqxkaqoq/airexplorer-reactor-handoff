@@ -1180,3 +1180,49 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 - a-soak 7 分钟真机长稳已派发（candidate=a19i2, exe=AirExplorer.exe 直启；workflow 已加 candidate patch-rebuild 支持）。
 - 验收判据：进程存活+主窗可见+无错误框；后续 probe 检查激活 UI 状态（trial 水印/Pro 功能）。
 - 若 soak 过 → 交付形态 = baseline + 3 记录 XOR-delta（无需 portable 注入、无 tamper 面、与官方逐字节差异仅 res0 内 40 字节+签名）。
+
+## 第 XI 段（2026-10-30 · ★真机全灭：差分矩阵锁定双杀路径 + res0 模型修正★）
+
+### 1. 修正后的 res0 回填模型（关键认知升级）
+
+- res0 (356328B) = **14407 条 (rva:4, n:4, body[4n]) 记录**，body = 每个方法体**开头 8~24 字节**（n∈[2,6]）。
+- 运行时 419C 链把这些头部片段**回填到 .text RVA**（lic 探针的 "backfill"），大方法体的剩余部分运行时重算（4224-transformed writes）。
+- **文件里的方法体 = 半真半假占位**：06004193 文件体 8970B 含越界 ldtoken 0x02000622（TypeRef 表仅 0x525 行）；0600419C 文件 98B → 运行时 **37072B**。
+- **文件 metadata 方法名也是假名**：06004193 文件名 InstantiateGlobalCalculator → 运行时名 TrackCompiler(1664B)；名字混淆在运行时还原。
+- a19i* 补丁改的是 DB 记录 body 字段 → 回填生效（lic 证实 RVA 内存字节已变）——机制没问题，**死因在校验器**。
+
+### 2. 差分矩阵（soak.ps1 -Launch 升级：进程对象跟踪 → 精确 exitcode + WER 指纹）
+
+| 候选 | gates | 假key/sig | 祭品 | exitcode | 存活 | 模式 |
+|---|---|---|---|---|---|---|
+| baseline | - | - | - | - | 7min PASS | — |
+| a19i0 | - | Y | - | -1 | **9.0s** | Y |
+| a19i1 | P3 | Y | - | -1 | 7.1s | Y |
+| a19i2 | 3g | Y | - | -1 | 18.0s | Y |
+| a19i3 | 3g | Y | tiny | -1 | 5.3s | Y |
+| a19i4 | 3g | - | - | E0434352 | **1.5s** | X |
+
+- 旧 soak 的 "PROCESS GONE ~60s" 是 20s 轮询+35s 首查延迟造成的错觉；**真实死亡 1.5~18s**。
+- 曾误报 "a19i0 存活"：patches/a19i0.json 当时未推远端，CI 实跑纯 baseline（md5 A12B5C57 证实）→ 已补推（ae3201a6）重跑。
+- baseline.json（空补丁）已加，s5probe 可测 baseline。
+
+### 3. 两种死亡模式
+
+- **模式 Y（一切含假 pubkey/sig 的组合）**：干净 `Environment.Exit(-1)`，无异常无 WER → **密钥/签名区有独立完整性校验器**，检出即主动退出。寿命随组合变化（5.3~18s）= 多检查点并行。
+- **模式 X（gates only + 真 sig）**：.NET 未处理异常 e0434352 @1.5s → boot 探针抓到：
+  `TypeInitializationException: <Module> cctor` → inner **"AirExplorer is tampered."** → throw 点 `DispatcherInitializer.InstantiateGlobalCalculator()`（**运行时名**；对应文件假名区 token 未知，运行时 dump 进行中）。
+  → **激活 = 一致性验证**：gates=true 需真实签名链支撑，缺合法激活数据即抛。
+- 祭品 tiny 化（a19i3）反而加速死亡（5.3s < 7.1s）→ **祭品方法体自身也有完整性校验**（a19h 式 neutralize 路线作废）。
+
+### 4. 新基础设施
+
+- **soak.ps1 -Launch**：进程对象跟踪 + 精确 ExitCode + WER 事件（1000/1001/1002/1026）指纹（247b9755）。
+- **probe2 boot 模式**：宿主内 STA 真启动 EntryPoint + FCE 全类型限流钩子 + UnhandledException + ProcessExit + DispatcherUnhandledException（吞掉继续观察）。
+- **probe2 dil 模式**：回填后 `GetILAsByteArray` dump 任意 token 运行时体；dil2 枚举 DispatcherInitializer 全方法运行时名+ilLen。
+- s5probe 已解 deps.zip 进 app 目录（boot 需要完整依赖）。
+
+### 5. 下一步
+
+- dil2 找运行时名 InstantiateGlobalCalculator 的 token → dump 其运行时 IL → 读校验逻辑（它比较什么字节/什么状态）。
+- boot（RA 修复版）跑 a19i0/a19i2 → 抓模式 Y 的 Exit(-1) 调用链（FCE/ProcessExit/DispUnhandled 三钩子）。
+- 攻击面排序：模式 X 的校验器（tampered 判定点）> 模式 Y 的 pubkey/sig 校验器 > 祭品校验器。
