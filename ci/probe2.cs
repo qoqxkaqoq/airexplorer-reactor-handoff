@@ -170,6 +170,21 @@ class Probe2 {
         Directory.SetCurrentDirectory(Path.GetDirectoryName(exe));
         var asm = Assembly.LoadFrom(exe);
         Log("[probe2] loaded " + asm.FullName);
+        if (mode == "boot") {
+            // boot 模式: 在 module cctor 之前锁定 ResourceAssembly (WPF 首次触碰 Application 即自动锁定为 Entry Assembly)
+            try {
+                var appT = Type.GetType("System.Windows.Application, PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35");
+                if (appT == null) Log("[boot] Application type NOT FOUND");
+                else {
+                    appT.GetProperty("ResourceAssembly").SetValue(null, asm, null);
+                    Log("[boot] ResourceAssembly set EARLY OK");
+                    var eh = typeof(Probe2).GetMethod("OnDispUnhandled", BindingFlags.Static | BindingFlags.Public);
+                    var ev = appT.GetEvent("DispatcherUnhandledException");
+                    ev.AddEventHandler(null, Delegate.CreateDelegate(ev.EventHandlerType, eh));
+                    Log("[boot] DispatcherUnhandledException hooked");
+                }
+            } catch (Exception ex2) { Log("[boot] early RA FAIL " + ex2.GetType().Name + ": " + ex2.Message); }
+        } else {
         // 引导: 模块 cctor(解密链) — 失败不致命, 继续
         foreach (var m in asm.GetModules()) {
             try { RuntimeHelpers.RunModuleConstructor(m.ModuleHandle); Log("[probe2] module cctor OK"); }
@@ -179,6 +194,7 @@ class Probe2 {
                 DumpStack(e2);
             }
         }
+        } // end else (non-boot bootstrap)
 
         if (mode == "ag") {
             var ag = asm.GetType("AirExplorer.Values.ArgumentGateway");
@@ -600,6 +616,27 @@ class Probe2 {
     // ===================== mode=dil: 回填后 dump 指定 token 的运行时 IL (GetILAsByteArray) =====================
     static void DilRun(Assembly asm) {
         var mod = asm.GetModules()[0];
+        // dil2: 枚举 DispatcherInitializer 全方法运行时名+ilLen (文件名是假名, 运行时还原); 目标名+大家伙 dump 全 IL
+        try {
+            var diT = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+            var flags = BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            foreach (var m in diT.GetMethods(flags)) {
+                try {
+                    var body = m.GetMethodBody();
+                    if (body == null) continue;
+                    var il2 = body.GetILAsByteArray();
+                    Log("[dil2] 0x" + m.MetadataToken.ToString("X") + " " + m.Name + " ilLen=" + il2.Length + (m.IsStatic ? " static" : ""));
+                    if (m.Name == "InstantiateGlobalCalculator" || il2.Length > 3000) {
+                        var sb = new System.Text.StringBuilder();
+                        for (int i = 0; i < il2.Length; i++) sb.Append(il2[i].ToString("x2"));
+                        for (int i = 0; i < sb.Length; i += 1000) {
+                            int n = Math.Min(1000, sb.Length - i);
+                            Log("[dil2] IL " + (i / 2).ToString("x5") + " " + sb.ToString(i, n));
+                        }
+                    }
+                } catch (Exception ex3) { Log("[dil2] enum member FAIL " + ex3.Message); }
+            }
+        } catch (Exception ex4) { Log("[dil2] enum FAIL " + ex4.Message); }
         uint[] toks = new uint[] { 0x06004193, 0x06004197, 0x0600419C, 0x060041C5, 0x060041D1, 0x06004217, 0x06004264, 0x06004224, 0x060041F0, 0x060041F1 };
         foreach (var tk in toks) {
             try {
