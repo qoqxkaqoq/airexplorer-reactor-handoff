@@ -297,6 +297,10 @@ class Probe2 {
             TrapRun(asm);
         } else if (mode == "lic") {
             LicRun(asm);
+        } else if (mode == "boot") {
+            string[] rest = new string[a.Length - 3];
+            for (int i = 3; i < a.Length; i++) rest[i - 3] = a[i];
+            BootRun(asm, rest);
         } else if (mode == "fldtest") {
             FldTestRun(asm);
         } else if (mode == "flddump") {
@@ -494,6 +498,69 @@ class Probe2 {
             Log("[lic] sacrificial rva=0x" + srv[i].ToString("x") + " (" + stg[i] + ") bytes=" + q0.ToString("x") + " " + q1.ToString("x") + " " + q2.ToString("x") + " " + q3.ToString("x") + " (stub expected)");
         }
         Log("[lic] SUMMARY pass=" + pass + " fail=" + fail);
+    }
+
+    // ===================== mode=boot: 宿主内真实启动 (STA+EntryPoint.Invoke), FCE 全类型限流钩子 + Unhandled + ProcessExit =====================
+    // 目标: 抓 a19i4 模式 X (E0434352@1.5s) 与 a19i1/2/3 模式 Y (Exit(-1)@5-18s) 的精确托管异常源/杀点栈
+    static string BootShort(string s, int n) {
+        if (string.IsNullOrEmpty(s)) return "";
+        return s.Length <= n ? s : s.Substring(0, n) + "...(" + s.Length + ")";
+    }
+    static void BootRun(Assembly asm, string[] rest) {
+        int fce = 0;
+        var seen = new System.Collections.Generic.HashSet<string>();
+        AppDomain.CurrentDomain.FirstChanceException += delegate(object s, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs ea) {
+            try {
+                var ex = ea.Exception;
+                if (ex == null) return;
+                int c = System.Threading.Interlocked.Increment(ref fce);
+                if (c > 500) return;
+                int tid = Thread.CurrentThread.ManagedThreadId;
+                string tn = ex.GetType().FullName;
+                bool fresh = false;
+                lock (seen) { if (!seen.Contains(tn)) { seen.Add(tn); fresh = true; } }
+                bool appNs = tn != null && !tn.StartsWith("System") && !tn.StartsWith("Microsoft");
+                var stx = ex.StackTrace;
+                bool appFrame = stx != null && (stx.Contains("AirExplorer") || stx.Contains("CloudClient") || stx.Contains("GeneratedInternalTypeHelper"));
+                if (!fresh && !appNs && !appFrame) return;
+                Log("[boot] FCE#" + c + " T" + tid + " " + tn + ": " + BootShort(ex.Message, 220) + (fresh ? " (first)" : (appNs ? " (appns)" : "")));
+                if (appFrame && stx != null) Log("[boot] FCE stack: " + BootShort(stx, 1100));
+            } catch {}
+        };
+        AppDomain.CurrentDomain.UnhandledException += delegate(object s, System.UnhandledExceptionEventArgs ea) {
+            var ex = ea.ExceptionObject as Exception;
+            Log("[boot] UNHANDLED isTerminating=" + ea.IsTerminating + " " + (ex == null ? "?" : ex.GetType().FullName + ": " + BootShort(ex.Message, 300)));
+            if (ex != null && !string.IsNullOrEmpty(ex.StackTrace)) Log("[boot] UNHANDLED stack: " + BootShort(ex.StackTrace, 1500));
+        };
+        AppDomain.CurrentDomain.ProcessExit += delegate(object s, EventArgs ea) {
+            Log("[boot] ProcessExit T" + Thread.CurrentThread.ManagedThreadId);
+            Log("[boot] ProcessExit stack: " + BootShort(Environment.StackTrace, 1300));
+        };
+        var ep = asm.EntryPoint;
+        if (ep == null) { Log("[boot] NO ENTRYPOINT"); return; }
+        Log("[boot] invoking EntryPoint " + ep.DeclaringType.FullName + "." + ep.Name + " (STA)");
+        string[] epArgs = new string[(rest == null ? 0 : rest.Length)];
+        if (rest != null) for (int i = 0; i < rest.Length; i++) epArgs[i] = rest[i];
+        var t = new Thread(delegate() {
+            try {
+                var r = ep.Invoke(null, new object[] { epArgs });
+                Log("[boot] EntryPoint returned " + (r == null ? "null" : r.ToString()));
+            } catch (Exception ex) {
+                Log("[boot] EntryPoint INVOKE EX: " + ex.GetType().FullName + ": " + BootShort(ex.Message, 300));
+                var cur = ex.InnerException;
+                int d = 0;
+                while (cur != null && d < 8) {
+                    Log("[boot]   inner" + d + " " + cur.GetType().FullName + ": " + BootShort(cur.Message, 300));
+                    if (!string.IsNullOrEmpty(cur.StackTrace)) Log("[boot]   stack" + d + ": " + BootShort(cur.StackTrace, 1400));
+                    cur = cur.InnerException; d++;
+                }
+            }
+        });
+        t.SetApartmentState(ApartmentState.STA);
+        t.IsBackground = false;
+        t.Start();
+        t.Join();
+        Log("[boot] main thread joined");
     }
 
     // ===================== mode=trap: 全类型 cctor 逐个触发, 死类型打印完整内层异常链+StackTrace =====================
