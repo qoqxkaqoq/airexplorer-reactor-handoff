@@ -329,10 +329,14 @@ class Probe2 {
             Log("[lic] P-file rva=0x" + frv[i].ToString("x") + "+12+0x" + fdp[i].ToString("x") + " (" + ftg[i] + ") byte=" + b.ToString("x") + " -> " + (ok ? "PATCH-APPLIED" : "NOT-APPLIED"));
             if (ok) pass++; else fail++;
         }
-        // 对照组: 祭品 S 原 RVA (060038BA@0x33028C) 应保持文件桩态(不再回填)
-        IntPtr ps = (IntPtr)((long)ibase + 0x33028C);
-        int s0 = Marshal.ReadByte(ps, 0), s1 = Marshal.ReadByte(ps, 1), s2 = Marshal.ReadByte(ps, 2), s3 = Marshal.ReadByte(ps, 3);
-        Log("[lic] sacrificial rva=0x33028C (060038BA) bytes=" + s0.ToString("x") + " " + s1.ToString("x") + " " + s2.ToString("x") + " " + s3.ToString("x") + " (stub expected)");
+        // 对照组: 三个新祭品原 RVA (06000C48/06000F54/06000F20) 应保持文件桩态(记录被劫持, 不再回填)
+        long[] srv = new long[] { 0x5C944, 0x82EF4, 0x7F84C };
+        string[] stg = new string[] { "06000C48", "06000F54", "06000F20" };
+        for (int i = 0; i < srv.Length; i++) {
+            IntPtr ps2 = (IntPtr)((long)ibase + srv[i]);
+            int q0 = Marshal.ReadByte(ps2, 0), q1 = Marshal.ReadByte(ps2, 1), q2 = Marshal.ReadByte(ps2, 2), q3 = Marshal.ReadByte(ps2, 3);
+            Log("[lic] sacrificial rva=0x" + srv[i].ToString("x") + " (" + stg[i] + ") bytes=" + q0.ToString("x") + " " + q1.ToString("x") + " " + q2.ToString("x") + " " + q3.ToString("x") + " (stub expected)");
+        }
         Log("[lic] SUMMARY pass=" + pass + " fail=" + fail);
     }
 
