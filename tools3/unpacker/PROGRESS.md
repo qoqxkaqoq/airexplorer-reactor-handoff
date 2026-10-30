@@ -2155,3 +2155,15 @@ ldsfld; ldarg.0; callvirt 0600427F(Invoke,rva=0!); ret
 - **a19b trap 判定（run 40974337804，job 2s 即亡）**：`<Module>` cctor `AccessViolationException @ Marshal.WriteInt32 → DispatcherInitializer.DisableBuilder(IntPtr,Int32)` → md5 核对 = 本地 a19b ✓
 - **AV 根因 = CBC XOR 目标 off-by-8**：C_{j-1} 在 res0 中起点 = `8+16*(j-1)`（8B 头之后），step236 初版写在 `16*(j-1)` → δ 后 8 字节（data 补丁段 `0a 17 2a`）落到 **C_{j-2} 尾 8B** → 未审查的 P_{j-2} 块（含结构字段）整块乱码 → DB 走库/写指针脱轨 → WriteInt32 野指针 AV；同时 P_j 的 data 补丁未落位（仅 rva/n 生效）
 - **a19c 修正（同脚本改名）**：XOR 目标改为 `ct[8+16*(j-1)+i]`，全链自模拟 PASS；产物 md5=**D30D067CB7DA6201F8EF05113308E976**；trap 已派发
+
+### step249（2026-10-30）：回填机制全解密 → res0 手术全灭实锤 → **官方桩 return-true 真相 → PATH E (DisableBuilder stub) a19f 出包**
+- **res0head 自证证伪**：v27 snap0@0x3656280 的 8B 匹配 = JIT `movabs rcx,imm64` 立即数巧合；两处 res0[8:16] 命中 = probe 自身 jB0/jB1/jB2 判据常量 → 快照无 res0 本体
+- **res0 明文全量实锤（铁）**：mtk6b snap_all_3-10 内存留有完整 PT 数组（F5410006215B4000 头, alen=356328, 8 份交叉一致）→ `work/s5/mem5/res0_plain_full.bin`；D=PT[8:]=356320B=16×22270；**DB=16B 头+14407 条 [rva][n][4n data] 精确闭合**；data=完整方法体（0600212A data=1e 027b3d0c0004 2a=tiny getter）；IV=P0^D_K(C0) 可推导 → KEY 唯一未知
+- **精确判据终审（step235, 2^-256）**：v27 50 份+mtk6b 9 份 → 59/59 零命中 → **KEY 不在任何已捕获快照，快照捕钥路线正式关闭**
+- **ks=cipher^plain 无周期**（16B-64KB 全测）；C 块全 distinct 无重复对判据；a1patch.cs 复核 = a1 P3/P4/P5 是 bodyswap 路线非 res0 手术（line 1376 delta 法仅理论从未实测）；res1 KEY/IV 解 res0 = NO
+- **419C 结构**：37072B fat 明文体在 .text；**无任何 System.Security.Cryptography 引用**（手写 AES+S-box 运行时构造, PE 静态无 S-box）；资源读取链 = 419C IL+42d4 `ldstr "ErrorReceiver.ValidatorViewer"(0x70000C5A)` → call 06004224 → callvirt 06004268(BinaryReader.ReadInt32 包装) → **走库=BinaryReader 流式**；ManifestResource 6 资源（res0=356328/res1=256/res2=47915/res3=26128/res4=2337031 mainlib/res5=398794 字符串池×8539）
+- **mem 判决（run 41032166900: baseline+a19c / 41036543078: a19d）**：0600212A 运行时体 = 027B3D0C00042A（7B getter）三 exe 全同 → **a19c/a19d 劫持均未被消费**（first-wins/last-wins 双证伪 → 固定 offset 索引语义）→ **res0 DB 手术（任何形式）不可行**
+- **影子区+RVA 重定向机制**：lic 读 .text 恒为桩（假阴性根源）——运行时体来自回填影子缓冲，MethodDef RVA 运行时被改写（lic 直读 base+RVA 永远读 .text 桩）
+- **官方桩真相（点睛）**：.text 0x195D18=0x19A510 桩 = `12 00 00 17 2a` = **nop nop ldc.i4.1 ret = return true 原生**！P5 060021CD4 桩 = initobj-null 坏桩；P1/P2 桩 = void/ldnull ret（P1/P2 补丁语义在桩态下等效全空操作）
+- **DisableBuilder(06004231) @0x407c58**：tiny 15B `nop ldarg.0 ldarg.1 call 0x0A000A24(Marshal.WriteInt32) ret`，**全 exe 仅 419C 两处调用**（file 0x402acc/0x4046e1 = 走库循环）→ a19b AV @ DisableBuilder = 走库写入器实锤
+- **a19f（step238_build_a19f.py）= PATH E**：06004231 stub（IL→nop*14+ret 等长，影子写入+RVA 重定向全废）+ 06002127 桩修 return true（等长 8B）+ P3/P4 桩原样 + a18 哨兵（公钥替换+DI||H 自签）+ res0 零改动；md5=**901653B4E8303135E9461DB79DAB1A44**；预期 mem C: 0600212A len=4 head=0000172a
