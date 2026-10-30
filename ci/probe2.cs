@@ -34,6 +34,10 @@ class Probe2 {
         string exe = Path.GetFullPath(a[0]);
         string mode = a[1];
         if (a.Length > 2) TimeoutSec = int.Parse(a[2]);
+        if (a.Length > 3) {
+            BootArgs = new string[a.Length - 3];
+            for (int i = 3; i < a.Length; i++) BootArgs[i - 3] = a[i];
+        }
         if (File.Exists(OutFile)) File.Delete(OutFile);
         using (var md5 = MD5.Create())
         using (var fs = File.OpenRead(exe))
@@ -298,9 +302,7 @@ class Probe2 {
         } else if (mode == "lic") {
             LicRun(asm);
         } else if (mode == "boot") {
-            string[] rest = new string[a.Length - 3];
-            for (int i = 3; i < a.Length; i++) rest[i - 3] = a[i];
-            BootRun(asm, rest);
+            BootRun(asm, BootArgs);
         } else if (mode == "fldtest") {
             FldTestRun(asm);
         } else if (mode == "flddump") {
@@ -502,6 +504,7 @@ class Probe2 {
 
     // ===================== mode=boot: 宿主内真实启动 (STA+EntryPoint.Invoke), FCE 全类型限流钩子 + Unhandled + ProcessExit =====================
     // 目标: 抓 a19i4 模式 X (E0434352@1.5s) 与 a19i1/2/3 模式 Y (Exit(-1)@5-18s) 的精确托管异常源/杀点栈
+    static string[] BootArgs = new string[0];
     static string BootShort(string s, int n) {
         if (string.IsNullOrEmpty(s)) return "";
         return s.Length <= n ? s : s.Substring(0, n) + "...(" + s.Length + ")";
