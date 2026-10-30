@@ -10,6 +10,10 @@ on:
         description: "被测对象: app 内相对路径 (AirExplorer_Portable.cmd 或 AirExplorer.exe)"
         required: false
         default: "AirExplorer_Portable.cmd"
+      candidate:
+        description: "候选短名: patches/<candidate>.json 存在时应用到 baseline (留空=纯基线)"
+        required: false
+        default: ""
       minutes:
         description: "soak 分钟数"
         required: false
@@ -31,6 +35,19 @@ jobs:
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force -Path app | Out-Null
           Copy-Item exes/AirExplorer_baseline_verified.exe app/AirExplorer.exe -Force
+          $cand = "${{ inputs.candidate }}"
+          if ($cand -and (Test-Path "patches\$cand.json")) {
+            Write-Host "REBUILD candidate $cand from baseline + patch"
+            $bytes = [System.IO.File]::ReadAllBytes("app\AirExplorer.exe")
+            foreach ($e in (Get-Content "patches\$cand.json" -Raw | ConvertFrom-Json)) {
+              $off = [Convert]::ToInt64($e.off, 16)
+              $hexv = $e.hex
+              for ($i = 0; $i -lt $hexv.Length; $i += 2) {
+                $bytes[$off + [int]($i / 2)] = [Convert]::ToByte($hexv.Substring($i, 2), 16)
+              }
+            }
+            [System.IO.File]::WriteAllBytes("app\AirExplorer.exe", $bytes)
+          }
           Copy-Item portable/AirExplorer_Portable.cmd app/ -Force
           & "C:\Program Files\7-Zip\7z.exe" x -y -oapp portable/deps.zip | Out-Null
           if (-not (Test-Path "app\BouncyCastle.Crypto.dll")) { throw "deps extract failed" }
