@@ -1,0 +1,1 @@
+# soak target: AirExplorer.exe  base md5: B3B9EBBE46687E7899AD56F7C967A076
