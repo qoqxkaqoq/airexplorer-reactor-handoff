@@ -1264,3 +1264,42 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 
 - soak.ps1 -Launch（ExitCode+WER 指纹）、probe2 boot（early ResourceAssembly + 三异常钩子 + STA 宿主真启动）、dil/dil2（运行时 IL dump + 名字枚举）、patches/baseline.json（s5probe 基线化）。
 - 单门/多门/组件差分方法论已固化：任何新候选先 lic（内存字节）→ boot（异常源）→ soak（真实指纹）三连。
+
+## 第 XIII 段（2026-10-31 · ★IGC tampered 判定 nop：进程首次存活但卡启动期★）
+
+### 1. a19i8/a19i10 实验（runs 41141597533/41141605225 + v2 41144129589）
+
+- **patch**：`0x3F92D2: 38 77 09 00 00 → 00×5`（IGC @IL+0xF6 的 `br 0xa72` tampered 跳转 → 5×nop，fallthrough 0xFB）
+- 依据：全文件仅 1 处 " is tampered."（US 0x70000A26，IGC 内）；到达 0xa72 的分支**全方法唯一**（0xF6 br）；文件 IL 与运行时 IL **0 diff**（0x3F91DC..0x3FB4E6 与 dil dump 一致）。
+- **结果**：a19i10（仅 nop，控制组）与 a19i8（+3 门）进程 **7min 全程存活**——无退出、无崩溃、无 WER 事件。**"AirExplorer is tampered." 机制正式死亡**。
+- 但 `window=(none)`、可见窗口 0、线程 3-5 → 进程卡在启动早期（WPF UI 未起），soak 判 FAIL(window never seen)。
+- boot 宿主模式仍受 RA 锁定干扰（ResourceAssembly cannot be changed），秒死信息不可用。
+
+### 2. 判定块完整语义（dil2 + 静态）
+
+- `0xD3: ldloc.s 0xc(v12); ...; v0 += 0x4F47852B; brfalse dispatcher`——**brfalse 弹的是 v12**（v12=校验失败标志，非计数器：0x996/0x228A 置 1 异常路径，0x9ED/0xA6B 置 0 通过路径，0x4E3 = `ceq` 后 stloc）。
+- 通过出口：0x9EC `v12=0; br 0x2309(ret)`；第二判定 0x9F4 `ldloc 0xc; brtrue dispatcher`。
+- 校验点 A @0x4CB：`ldsfld RSA(0x4001FCD); ...; call 0x60041ED/0x60041EE; ceq; stloc 0xc`（结果==0 → v12=1）。
+- 失败块材料：`ldtoken 0x2000622 → GetTypeFromHandle → get_Assembly` 拼 "... is tampered."（0x2000622 在运行时表有效，文件表越界——运行时 metadata 重建的又一证据）。
+- nop 后失配路径预测已验证安全：v1f=21 超出 switch 14 目标 → IL switch 语义 fallthrough 到 0x53（RSA 检查块）→ RSA 已自初始化 → ret。
+
+### 3. 门状态链语义（dil v4：P1/P2/setter 运行时体，长度与文件 codesize 一致）
+
+- **0600212E（231B）**= 许可字段拷贝器：`this.C3x = ((AccessibleClient)arg).M_0600212x()` ×5（C3A/C3B/C3D/C3E/C3F）。
+- **C3D `_IsDecoratorProvider` = bool（门）**；**C3E `_SpecTokenDescr` = string（token 数据）**；C3E 的 getter 06003ACA 文件体 = `ldnull; ret`（运行时体 dil v5 在途）。
+- **P1（06002133，946B）**= 配置字典加载：反复 `解密字符串(ldc xor ldsfld 0x40020B8; ldfld 0x40020xx; xor; call 0x6004196) → dict ContainsKey/get_Item → castclass → stfld 字段`——按解密 key 从设置字典取值填字段。
+- 门字段写入者：0600212E @0x195DD0（拷贝）、06002133 @0x196325/0x196379（P1 直接写）。
+- 0x3DFB44 区 = shard 池（stub 方法 + 碎片化体材料，`br 0` 自旋占位），callvirt P3 的碎片在 stub 间隙。
+
+### 4. 环境侦察（B 路线）
+
+- deps.zip 71 文件：无 license/config 激活项；`AirExplorer.exe.config` 仅 runtime/startup 设置。
+- 依赖特征：AWSSDK.S3 + Azure Blob + Renci.SshNet + WebView2 → **网盘客户端，激活大概率绑定账号/在线验证**（解释 a19i8 存活无窗口：门=true 后可能发起在线校验挂起）。
+- BouncyCastle.Crypto.dll 在依赖中（1.5MB）——验签实现可能用 BC。
+
+### 5. 下一步
+
+1. dil v5：确认 06003ACA/06003ACC（C3E/C3A getter）运行时真体是否仍 ldnull。
+2. **在线验证假说**：soak 加 netstat 抓 a19i8 进程的 TCP 连接（DNS/443），或 boot 模式挂 HttpWebRequest FCE——若门=true 触发在线校验，需 mock 服务器或断网行为对比。
+3. UI 挂点定位：probe2 加 `procdump` 类线程栈快照（PowerShell 调 miniDumpWriteDump 抓 a19i8 进程 dump → 分析卡点）。
+4. 若 C3E getter 运行时 = ldnull：a19i12 = a19i8 + 06003ACA patch（tiny 扩体 newobj/box 返回非 null string），补齐"gates=true + token 非空"一致性。
