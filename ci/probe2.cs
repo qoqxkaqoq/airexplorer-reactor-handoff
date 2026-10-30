@@ -852,7 +852,7 @@ class Probe2 {
         } catch (Exception ex) { Log("[mem] B il_all FAIL " + Chain(ex)); }
 
         // ---- C. 已知明文 sanity (内存 IL vs dump_16598) ----
-        foreach (var tok in new[] { 0x0600212A, 0x06002157, 0x06002145, 0x06000CEE }) {
+        foreach (var tok in new[] { 0x0600212A, 0x06002157, 0x06002127, 0x06002145, 0x06000CEE }) {
             try {
                 var mb = mod.ResolveMethod(tok);
                 var il = mb.GetMethodBody().GetILAsByteArray();
