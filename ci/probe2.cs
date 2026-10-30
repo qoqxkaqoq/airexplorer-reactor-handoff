@@ -301,6 +301,8 @@ class Probe2 {
             TrapRun(asm);
         } else if (mode == "lic") {
             LicRun(asm);
+        } else if (mode == "dil") {
+            DilRun(asm);
         } else if (mode == "boot") {
             BootRun(asm, BootArgs);
         } else if (mode == "fldtest") {
@@ -564,6 +566,29 @@ class Probe2 {
         t.Start();
         t.Join();
         Log("[boot] main thread joined");
+    }
+
+
+    // ===================== mode=dil: 回填后 dump 指定 token 的运行时 IL (GetILAsByteArray) =====================
+    static void DilRun(Assembly asm) {
+        var mod = asm.GetModules()[0];
+        uint[] toks = new uint[] { 0x06004193, 0x06004197, 0x0600419C, 0x060041C5, 0x060041D1, 0x06004217, 0x06004264, 0x06004224, 0x060041F0, 0x060041F1 };
+        foreach (var tk in toks) {
+            try {
+                var mb = mod.ResolveMethod((int)tk);
+                if (mb == null) { Log("[dil] 0x" + tk.ToString("X") + " RESOLVE NULL"); continue; }
+                var body = mb.GetMethodBody();
+                if (body == null) { Log("[dil] 0x" + tk.ToString("X") + " " + mb.DeclaringType.FullName + "." + mb.Name + " NO BODY"); continue; }
+                var il = body.GetILAsByteArray();
+                Log("[dil] 0x" + tk.ToString("X") + " " + mb.DeclaringType.FullName + "." + mb.Name + " ilLen=" + il.Length + " maxstack=" + body.MaxStackSize + " locals=0x" + body.LocalVarSigToken.ToString("X"));
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < il.Length; i++) sb.Append(il[i].ToString("x2"));
+                for (int i = 0; i < sb.Length; i += 1000) {
+                    int n = Math.Min(1000, sb.Length - i);
+                    Log("[dil] IL " + (i / 2).ToString("x5") + " " + sb.ToString(i, n));
+                }
+            } catch (Exception ex) { Log("[dil] 0x" + tk.ToString("X") + " FAIL " + ex.GetType().Name + ": " + ex.Message); }
+        }
     }
 
     // ===================== mode=trap: 全类型 cctor 逐个触发, 死类型打印完整内层异常链+StackTrace =====================
