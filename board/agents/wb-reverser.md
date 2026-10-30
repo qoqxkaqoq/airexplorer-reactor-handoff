@@ -1123,3 +1123,33 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 
 - "A 线唯一路 = TTD 抓回填例程" 不变，但 **06004282 全 body IL 目标作废**（它根本不在启动窗口回填）——key 来源改从 P3 解密循环反汇编直接读（rsi=0x6e51d6f8 恒定值优先怀疑）
 
+
+## 第 IX 段（2026-10-30 · res0 KEY 全模型证伪 + 419C 解密循环定位 + a19i1 位置密钥判活实验）
+
+### 1. res0（ErrorReceiver.ValidatorViewer, 356328B DB）密钥/模型搜索——全部负结果，别再重试
+
+- **step242 快照暴破完成：0 hits**。60 份快照 4.2GB、8B 步进 32B 窗（key‖iv 相邻假设）、真判据 `D_K(C1)^C0==DB[16:32] && D_K(C2)^C1==DB[32:48]`。注意 step242 代码 bug：注释写 16B+32B 双宽但 tasks 只调度了 w=32——16B AES-128 从未跑过。
+- **ECB 已彻底排除**：密文 22270 块全部唯一，而明文有 387 个重复块（ECB 下必产生重复密文块）。
+- **prng_round 轨道自校验 0/99**：若 res0 = 同 round 任意种子的词流 XOR，K=CT^PT 的字序列必构成轨道（与种子无关）——K@0/K@8/BE/stride2/stride4/加减组合/byteswap 全部 0 命中。
+- **全 2³² 种子扫描 = 0 命中**（numpy 向量化 vround，oracle: `round(seed)==0xD1B9AED5`，即 CTw0^PTw0）。结论：**res0 不可能是"已知 prng_round + 词对齐 + 任意种子"的单流直接变换**。
+- step241 的"res0 AES-CBC(KEY0/IV0) 重加密"前提**从未被验证**（KEY0 只是 res1/pubkey 容器的 key，A2 公钥替换路径专用）。
+
+### 2. 419C = res0 的读取器+解密器（已实锤）
+
+- `ldstr 0x70000C5A 'ErrorReceiver.ValidatorViewer'` @419C IL_042D4 → `call 06004217(MatchTransaction=GetManifestResourceStream 转发)` → `newobj 06004264` → v63 经 `call 06004224` 读取。
+- 419C 体内有**与 TrackCompiler 完全相同的 PRNG 常数** K1/K2/K3/K4 @IL_46DE/46E7/46F0/46FD（间距 9/9/13 同构）+ K1B 更新块 @0x8F81（三分量立即数全同）。
+- round 语义与 decrypt_prng.prng_round 逐条一致（flat.py 块 IL_6B5F 全解）。
+- **组合点不在词层**：IL_35C4 `out[v50+v37] = (u1)((v94 & v102) >> (v95 & 31))`（v94 = v38 ^ v6 @IL_6C11）——逐字节位提取；另有状态清零点 IL_7609（v38=0）与附加 `v38 += v49` @IL_1251。=> 解密是**更复杂的位级/分段方案**，非常量不同，而是馈送结构不同。
+- 工具：`/tmp/dump_419c.bin`（24B 头假 dump）+ `flat.py 27 72`（v27=滚动状态、v72=派发，625 块 switch）；全块转储 /tmp/blocks_419c.txt。419C 全部 060042xx helper = 文件内明文 tiny 转发器（RVA 0x407924..0x407ED4）。
+
+### 3. a19i1 = 位置密钥判活实验（run 41101381648, mem 模式）
+
+- **无需 KEY 的文件级补丁**：对 res0 blob 原位 3 字节 XOR-delta（file 0x64450C，P3=0600212A SendFlexibleAttribute @rva 0x195D18 的 DB 记录体 `1e027b3d0c00042a` → `0a172a3d0c00042a` = tiny ldc.i4.1;ret，delta 14 15 51）。
+- 若 res0 变换是**位置密钥纯 XOR 流**（任何 PRNG/常量），file XOR-delta ≡ plaintext XOR-delta → CI mem 应见 cctor OK + slot 0600212A 运行时体 = `17 2a`。
+- 构建：step243_build_a19i1.py（token↔rva 校验、blob==ref 校验、sentinel 重签、patch JSON 966B 本地回放 byte-identical）。md5=CF560591EA85733EC39A3E992F49ECE4。
+- **成功 ⇒ P1-P5 五条记录全部可原位补，文件级激活达成**（P1/P2=nop-ret、P4 同 P3、P5=return-true；随后整流验证）。**失败 ⇒ 非纯 XOR（位级组合确认）⇒ 转 runtime launcher**（cctor 后经重定向 MethodDef RVA 定位 shadow 区、签名校验后重写 5 体——exe 保持官方零改动，无 tamper 面）。
+
+### 4. 下一手
+
+- CI 结果判读 → 成功: 扩展 a19h1 全 5 记录 + s5probe 全流程验收；失败: launcher 设计（probe2 mem 模式已是现成的 cctor 触发+槽体读取骨架）。
+- 若走 interp 路线：interp.py（已回本地 work/）+ 差分测试（改 1 输入字节看输出影响范围）可直接判定位置密钥性，无需理解 round 细节。
