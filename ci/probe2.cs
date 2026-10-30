@@ -169,7 +169,11 @@ class Probe2 {
         // 引导: 模块 cctor(解密链) — 失败不致命, 继续
         foreach (var m in asm.GetModules()) {
             try { RuntimeHelpers.RunModuleConstructor(m.ModuleHandle); Log("[probe2] module cctor OK"); }
-            catch (Exception ex) { Log("[probe2] module cctor FAIL: " + (ex.InnerException ?? ex).GetType().FullName + ": " + (ex.InnerException ?? ex).Message); }
+            catch (Exception ex) {
+                var e2 = ex.InnerException ?? ex;
+                Log("[probe2] module cctor FAIL: " + e2.GetType().FullName + ": " + e2.Message);
+                DumpStack(e2);
+            }
         }
 
         if (mode == "ag") {
@@ -1203,6 +1207,26 @@ class Probe2 {
             if (e.InnerException != null) sb.Append("  <--  ");
         }
         return sb.ToString();
+    }
+
+    // v133: cctor 异常全帧 dump — MethodBase.MetadataToken 定位混淆方法体 (tamper 校验器归因)
+    static void DumpStack(Exception e) {
+        try {
+            var st = new StackTrace(e, true);
+            Log("[probe2] --- stack of " + e.GetType().FullName + " (" + st.FrameCount + " frames) ---");
+            for (int i = 0; i < st.FrameCount; i++) {
+                var f = st.GetFrame(i);
+                var mb = f.GetMethod();
+                if (mb == null) { Log("[probe2]   f" + i + " <native/null>"); continue; }
+                string tn = "?";
+                try { tn = mb.DeclaringType != null ? mb.DeclaringType.FullName : "<nomodule>"; } catch { }
+                Log("[probe2]   f" + i + " tok=0x" + mb.MetadataToken.ToString("X8")
+                    + " il=" + f.GetILOffset() + " " + tn + "::" + mb.Name);
+            }
+            // 附加: 异常消息自身的字符串特征已在日志, 再 dump 嵌套链的栈
+            var inner = e.InnerException;
+            if (inner != null) DumpStack(inner);
+        } catch (Exception x) { Log("[probe2] DumpStack fail " + x.Message); }
     }
 
     // ==================== mtrack: 并发抓解密窗口的 transform/KEY ====================
