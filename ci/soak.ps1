@@ -24,6 +24,42 @@ function Get-TreePids([int]$Root) {
     return $out
 }
 
+
+# 枚举目标进程的全部可见顶层窗口标题 (捕捉无标题判定遗漏的对话框)
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Collections.Generic;
+public class WinEnum {
+    public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr lp);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder sb, int max);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    public static List<string> Titles(uint targetPid) {
+        var outp = new List<string>();
+        EnumWindows((h, lp) => {
+            uint pid; GetWindowThreadProcessId(h, out pid);
+            if (pid == targetPid && IsWindowVisible(h)) {
+                var sb = new StringBuilder(256);
+                GetWindowText(h, sb, 256);
+                outp.Add(sb.ToString());
+            }
+            return true;
+        }, IntPtr.Zero);
+        return outp;
+    }
+}
+'@
+function Dump-AllWindows([int]$Pid2) {
+    try {
+        $ts = [WinEnum]::Titles([uint32]$Pid2)
+        $vis = @($ts | Where-Object { $_ -ne '' })
+        if ($vis.Count -gt 0) { Write-Host ("    [wins] " + (($vis | Select-Object -First 8) -join ' | ')) }
+        else { Write-Host '    [wins] (no visible titled windows)' }
+    } catch { Write-Host ('    [wins] enum fail: ' + $_.Exception.Message) }
+}
+
 # WER/Application 事件日志指纹: 崩溃 (1000) / 挂起 (1002) / .NET 未处理异常 (1026) / WER 汇报 (1001)
 function Dump-DeathEvents([datetime]$Since, [string]$ProcName) {
     try {
@@ -103,7 +139,8 @@ while ((Get-Date) -lt $deadline) {
         Write-Host ("[{0}] alive pid={1} window='{2}'" -f (Get-Date -Format 'HH:mm:ss'), $tgt.Id, $title)
         if ($title -like '*Error detected*') { $errors += $title }
     } else {
-        Write-Host ("[{0}] alive pid={1} window=(none)" -f (Get-Date -Format 'HH:mm:ss'), $tgt.Id)
+        Write-Host ("[{0}] alive pid={1} window=(none) threads={2}" -f (Get-Date -Format 'HH:mm:ss'), $tgt.Id, $tgt.Threads.Count)
+        if ($samples % 3 -eq 0) { Dump-AllWindows $tgt.Id }
     }
 }
 
