@@ -1226,3 +1226,41 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 - dil2 找运行时名 InstantiateGlobalCalculator 的 token → dump 其运行时 IL → 读校验逻辑（它比较什么字节/什么状态）。
 - boot（RA 修复版）跑 a19i0/a19i2 → 抓模式 Y 的 Exit(-1) 调用链（FCE/ProcessExit/DispUnhandled 三钩子）。
 - 攻击面排序：模式 X 的校验器（tampered 判定点）> 模式 Y 的 pubkey/sig 校验器 > 祭品校验器。
+
+## 第 XII 段（2026-10-30 · ★IGC 校验器逆向完成：路径签名 v0 累计机制破译★）
+
+### 1. 运行时名定位（dil2 枚举 208 方法）
+
+- **运行时 token 0x06004192 = InstantiateGlobalCalculator（8970B, static）**——文件表整体错位 1 行（0x600419B 运行时=InstantiateLogicalExtractor 98B ↔ 文件 0x0600419C 98B，多例吻合）。
+- 运行时名 ≠ 文件名（0x06004193 运行时叫 TrackCompiler 1664B）——名字混淆运行时还原。
+- 0x0600419C 运行时 37072B（= 旧会话 flat 分析的 419C dump 本体）。
+
+### 2. IGC（06004192 运行时体）结构破译
+
+- **flatten 形态**：v0=状态累加器（初值 0x68537B95 @ prologue 0x1-4），v1f=switch 索引（初值 8），dispatcher@0x12（14 目标 switch）。
+- **路径签名机制**：每块执行 `v1f += K1; v0 += K2; br dispatcher`——v0 同时驱动路由（v1f = v0+K1）与校验。
+- **唯一 tampered 判定点 @0xD3-0xF6**：`v0 += 0x4F47852B; brfalse dispatcher; br 0xa72 → " is tampered."(US 0xA26) → newobj Exception → throw`。
+- 0x54: `ldsfld 0x4001FCD; brtrue 0x2367`——**0x4001FCD = Field m_ExtendedSchemaTemplate（DI 的 RSA 静态实例）**：RSA 就绪 → 直接 ret 跳过校验；未就绪 → 走校验路径（内含 0x8879 stsfld 自初始化 RSA）。
+- 全方法仅 24 个条件分支；try/EH 4 个 fat clause。
+- **机理总结**：gates 被改 → 校验路径中某个读激活状态的条件走了不同路径 → v0 累计 ≠ 期望 → tampered。三个门**各自独立**被覆盖（a19i5/6/7 单门 soak：P3=1.7s / P4=1.6s / P5=2.6s，全 E0434352）。
+
+### 3. 单门差分（runs 41123732193/41123743439/41123754661）
+
+| 候选 | 补丁 | exitcode | 存活 |
+|---|---|---|---|
+| a19i5 | 仅 P3 | E0434352 | 1.7s |
+| a19i6 | 仅 P4 | E0434352 | 1.6s |
+| a19i7 | 仅 P5 | E0434352 | 2.6s |
+
+**结论：三套完整性校验（①门 getter 体 ②pubkey/sig 区 ③IGC 路径签名）形成闭环，任何"改被监护体"的直接路线全部封死。**
+
+### 4. 剩余可行方向（按成本排序）
+
+1. **IGC flatten 完整仿真**：写 8970B flatten VM（v0/v1f/c/d 状态机），枚举全部路径常数，找到"合法已激活路径"的 v0 终值与输入条件 → 再决定从哪里注入该状态。
+2. **环境侧激活**：激活状态可能有持久化存储（注册表/ProgramData/license 文件）——若门 getter 读本地存储而非硬编码，改环境即可，exe 零改动。需先定位存储。
+3. **运行时 hook**：launcher 注入，回填完成后 patch 内存中的判定块（0xD3 判定 brfalse→nop 恒走 dispatcher）——交付形态变为带注入器的启动器（a19h 遗产的变体）。
+
+### 5. 本阶段基础设施沉淀
+
+- soak.ps1 -Launch（ExitCode+WER 指纹）、probe2 boot（early ResourceAssembly + 三异常钩子 + STA 宿主真启动）、dil/dil2（运行时 IL dump + 名字枚举）、patches/baseline.json（s5probe 基线化）。
+- 单门/多门/组件差分方法论已固化：任何新候选先 lic（内存字节）→ boot（异常源）→ soak（真实指纹）三连。
