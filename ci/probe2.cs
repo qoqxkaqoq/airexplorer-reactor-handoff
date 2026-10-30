@@ -293,7 +293,84 @@ class Probe2 {
             TrapRun(asm);
         } else if (mode == "lic") {
             LicRun(asm);
+        } else if (mode == "fldtest") {
+            FldTestRun(asm);
         }
+    }
+
+    // ===================== mode=fldtest: 回填照常 + 反射置 license 字段 true → 验证激活语义 =====================
+    static object FldFindInstance(Type dt) {
+        var fs = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        foreach (var sf in dt.GetFields(fs)) {
+            if (sf.FieldType == dt) { try { var v = sf.GetValue(null); if (v != null) return v; } catch {} }
+        }
+        foreach (var sf in dt.GetFields(fs)) {
+            if (!sf.FieldType.IsPrimitive && sf.FieldType != typeof(string)) {
+                try { var v = sf.GetValue(null); if (v != null && dt.IsInstanceOfType(v)) return v; } catch {}
+            }
+        }
+        return null;
+    }
+    static void FldTestRun(Assembly asm) {
+        var mod = asm.GetModules()[0];
+        var di = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+        try { RuntimeHelpers.RunClassConstructor(di.TypeHandle); Log("[fld] DI.cctor OK (backfill done)"); }
+        catch (Exception ex) { Log("[fld] DI.cctor FAIL: " + Chain(ex)); return; }
+        long[] toks = new long[] { 0x04000C3D, 0x04000C4B };
+        FieldInfo[] infos = new FieldInfo[2];
+        object[] insts = new object[2];
+        for (int i = 0; i < 2; i++) {
+            try { infos[i] = mod.ResolveField((int)toks[i]); } catch (Exception ex) { Log("[fld] resolve 0x" + toks[i].ToString("X") + " FAIL " + ex.Message); continue; }
+            FieldInfo f = infos[i];
+            Log("[fld] 0x" + toks[i].ToString("X8") + " = " + f.DeclaringType.FullName + "::" + f.Name +
+                " static=" + f.IsStatic + " type=" + f.FieldType.Name);
+            if (f.IsStatic) {
+                insts[i] = null;
+            } else {
+                insts[i] = FldFindInstance(f.DeclaringType);
+                if (insts[i] == null) {
+                    try { RuntimeHelpers.RunClassConstructor(f.DeclaringType.TypeHandle); } catch {}
+                    insts[i] = FldFindInstance(f.DeclaringType);
+                }
+                Log("[fld] field " + f.Name + " instance = " + (insts[i] == null ? "NOT-FOUND" : "OK"));
+            }
+        }
+        for (int i = 0; i < 2; i++) {
+            if (infos[i] == null) continue;
+            try { infos[i].SetValue(insts[i], true); Log("[fld] SET " + infos[i].Name + " = true"); }
+            catch (Exception ex) { Log("[fld] SET " + infos[i].Name + " FAIL " + Chain(ex)); }
+        }
+        object tgt = insts[0] ?? insts[1];
+        Log("[fld] getter target = " + (tgt == null ? "NULL(static-try)" : tgt.GetType().FullName));
+        foreach (long t in new long[] { 0x0600212A, 0x06002157, 0x06002127 }) {
+            try {
+                var mb = mod.ResolveMethod((int)t);
+                object r;
+                try { r = mb.Invoke(tgt, new object[0]); }
+                catch (TargetException) { r = mb.Invoke(null, new object[0]); }
+                catch (TargetInvocationException tie) {
+                    var inner = tie.InnerException;
+                    if (inner is TargetException) r = mb.Invoke(null, new object[0]);
+                    else throw;
+                }
+                Log("[fld] getter 0x" + t.ToString("X8") + " (" + mb.Name + ") -> " + r);
+            } catch (Exception ex) { Log("[fld] getter 0x" + t.ToString("X8") + " FAIL " + Chain(ex)); }
+        }
+        var ag = asm.GetType("AirExplorer.Values.ArgumentGateway");
+        try { RuntimeHelpers.RunClassConstructor(ag.TypeHandle); Log("[fld] AG.cctor OK"); }
+        catch (Exception ex) { Log("[fld] AG.cctor FAIL: " + Chain(ex)); }
+        var mEva = ag.GetMethod("EvaluateVisibleAttribute", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public, null, Type.EmptyTypes, null);
+        if (mEva != null) {
+            try { mEva.Invoke(null, null); Log("[fld] EVA OK"); }
+            catch (Exception ex) { Log("[fld] EVA FAIL: " + Chain(ex)); }
+        }
+        var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        int nonNull = 0, total = 0;
+        foreach (var f in ag.GetFields(flags)) {
+            total++;
+            try { if (f.GetValue(null) != null) nonNull++; } catch {}
+        }
+        Log("[fld] AG fields nonNull=" + nonNull + "/" + total);
     }
 
     // ===================== mode=lic: a19c 手术生效验证 — 触发模块 cctor(完整回填)后读目标 RVA 运行时字节 =====================
