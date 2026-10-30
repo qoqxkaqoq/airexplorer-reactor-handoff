@@ -320,8 +320,8 @@ class Probe2 {
             long ba = mbi.BaseAddress.ToInt64();
             long rsz = mbi.RegionSize.ToInt64();
             IntPtr next = (IntPtr)(ba + rsz);
-            if (rsz > 0 && rsz < (1L<<31) && (mbi.State & 0x1000) != 0 && (mbi.Type & 0x40000) != 0 && (mbi.Protect & 0x100) == 0) {
-                // MEM_PRIVATE (0x40000) commit
+            if (rsz > 0 && rsz < (1L<<31) && (mbi.State & 0x1000) != 0 && (mbi.Protect & 0x100) == 0) {
+                // 所有 commit 可读区 (MEM_PRIVATE/MAPPED/IMAGE 全扫)
                 long p = ba;
                 while (p < ba + rsz - 16) {
                     int take = (int)Math.Min(chunk.Length, ba + rsz - p);
