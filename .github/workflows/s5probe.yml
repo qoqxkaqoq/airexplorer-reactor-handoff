@@ -32,6 +32,21 @@ jobs:
           $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           & $csc /nologo /target:exe /out:probe2.exe /r:System.dll ci\probe2.cs 2>&1 | Out-String | Write-Host
           $cand = "exes\AirExplorer_${{ matrix.exe }}.exe"
+          # patch 重建: 无 exe 但有 patches/<name>.json 时, baseline + diff patch 现场生成 (byte-identical)
+          $patch = "patches\${{ matrix.exe }}.json"
+          if ((-not (Test-Path $cand)) -and (Test-Path $patch)) {
+            Write-Host "REBUILD from baseline + $patch"
+            $bytes = [System.IO.File]::ReadAllBytes("exes\AirExplorer_baseline_verified.exe")
+            foreach ($e in (Get-Content $patch -Raw | ConvertFrom-Json)) {
+              $off = [Convert]::ToInt64($e.off, 16)
+              $hexv = $e.hex
+              for ($i = 0; $i -lt $hexv.Length; $i += 2) {
+                $bytes[$off + [int]($i / 2)] = [Convert]::ToByte($hexv.Substring($i, 2), 16)
+              }
+              Write-Host ("  patch " + $e.off + " len=" + ($hexv.Length / 2))
+            }
+            [System.IO.File]::WriteAllBytes($cand, $bytes)
+          }
           if (-not (Test-Path $cand)) { Write-Host "MISSING $cand"; exit 1 }
           Write-Host ("md5 = " + (Get-FileHash $cand -Algorithm MD5).Hash)
           New-Item -ItemType Directory -Force -Path app | Out-Null
