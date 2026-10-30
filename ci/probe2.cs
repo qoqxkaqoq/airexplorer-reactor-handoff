@@ -637,7 +637,7 @@ class Probe2 {
                 } catch (Exception ex3) { Log("[dil2] enum member FAIL " + ex3.Message); }
             }
         } catch (Exception ex4) { Log("[dil2] enum FAIL " + ex4.Message); }
-        uint[] toks = new uint[] { 0x06004193, 0x06004197, 0x0600419C, 0x060041C5, 0x060041D1, 0x06004217, 0x06004264, 0x06004224, 0x060041F0, 0x060041F1, 0x06002133, 0x06002145, 0x0600212E, 0x06002161, 0x06002144 };
+        uint[] toks = new uint[] { 0x06004193, 0x06004197, 0x0600419C, 0x060041C5, 0x060041D1, 0x06004217, 0x06004264, 0x06004224, 0x060041F0, 0x060041F1, 0x06002133, 0x06002145, 0x0600212E, 0x06002161, 0x06002144, 0x06003ACA, 0x06003ACC, 0x0600212B, 0x0600212C, 0x0600212D };
         foreach (var tk in toks) {
             try {
                 var mb = mod.ResolveMethod((int)tk);
