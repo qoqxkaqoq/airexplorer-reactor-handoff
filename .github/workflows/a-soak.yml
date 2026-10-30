@@ -55,21 +55,19 @@ jobs:
           Write-Host "base md5 = $md5"
           "# soak target: ${{ inputs.exe }}  base md5: $md5" | Out-File -Encoding utf8 app/_candidate.txt
 
-      - name: 启动被测对象
+      - name: 校验被测对象
         shell: pwsh
         run: |
           $target = "app\${{ inputs.exe }}"
           if (-not (Test-Path $target)) { throw "target not found: $target" }
-          Write-Host "starting $target"
-          Start-Process -FilePath (Resolve-Path $target).Path -WorkingDirectory (Resolve-Path 'app').Path
-          Start-Sleep -Seconds 15
+          Write-Host "target ok: $target"
 
-      - name: Soak（7 分钟长稳监测）
+      - name: Soak（7 分钟长稳监测, 含启动与死亡指纹）
         shell: pwsh
         run: |
           $m = "${{ inputs.minutes }}"
           if ([string]::IsNullOrWhiteSpace($m)) { $m = "7" }
-          ./ci/soak.ps1 -ExePath "app\AirExplorer.exe" -Minutes ([int]$m) -DataDir "app\data"
+          ./ci/soak.ps1 -ExePath "app\AirExplorer.exe" -Minutes ([int]$m) -DataDir "app\data" -Launch
 
       - name: 数据目录落盘快照
         if: always()

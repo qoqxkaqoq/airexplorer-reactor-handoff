@@ -1,9 +1,11 @@
 # soak.ps1 — long-run stability probe: process alive + window present for N minutes.
-# usage: soak.ps1 -ExePath <exe> -Minutes 7 -DataDir <dir>
+# usage: soak.ps1 -ExePath <exe> -Minutes 7 -DataDir <dir> [-Launch]
+#   -Launch: 启动进程并持有 Process 对象 (死亡时能拿到精确 ExitCode), 否则仅按进程名监控。
 param(
     [Parameter(Mandatory=$true)][string]$ExePath,
     [int]$Minutes = 7,
-    [string]$DataDir = ""
+    [string]$DataDir = "",
+    [switch]$Launch
 )
 $ErrorActionPreference = 'Continue'
 
@@ -22,6 +24,26 @@ function Get-TreePids([int]$Root) {
     return $out
 }
 
+# WER/Application 事件日志指纹: 崩溃 (1000) / 挂起 (1002) / .NET 未处理异常 (1026) / WER 汇报 (1001)
+function Dump-DeathEvents([datetime]$Since, [string]$ProcName) {
+    try {
+        $ids = @(1000, 1001, 1002, 1023, 1026)
+        $evs = Get-WinEvent -FilterHashtable @{ LogName='Application'; Id=$ids; StartTime=$Since } -ErrorAction SilentlyContinue
+        if (-not $evs) { Write-Host "  [death-events] none in Application log"; return }
+        foreach ($e in ($evs | Select-Object -First 6)) {
+            $msg = ""
+            try { $msg = $e.Message } catch {}
+            $hit = ($msg -and $msg -match [regex]::Escape($ProcName))
+            $head = ($msg -replace "`r`n", " | ")
+            if ($head.Length -gt 500) { $head = $head.Substring(0, 500) }
+            Write-Host ("  [death-events] {0} id={1} prov={2} hit={3}" -f $e.TimeCreated, $e.Id, $e.ProviderName, $hit)
+            Write-Host ("    msg: {0}" -f $head)
+        }
+    } catch {
+        Write-Host ("  [death-events] query failed: {0}" -f $_.Exception.Message)
+    }
+}
+
 $exeName = [System.IO.Path]::GetFileNameWithoutExtension($ExePath)
 $deadline = (Get-Date).AddMinutes($Minutes)
 $checkEverySec = 20
@@ -30,17 +52,49 @@ $winSeen = 0
 $aliveGaps = 0
 $errors = @()
 $started = Get-Date
-Write-Host "soak: $exeName for $Minutes min (started $started)"
+$procObj = $null
+Write-Host "soak: $exeName for $Minutes min (started $started) launch=$Launch"
 
+if ($Launch) {
+    $full = (Resolve-Path $ExePath).Path
+    $wd = Split-Path $full -Parent
+    Write-Host "launching: $full (wd=$wd)"
+    $procObj = Start-Process -FilePath $full -WorkingDirectory $wd -PassThru
+    Write-Host ("launched pid={0}" -f $procObj.Id)
+    Start-Sleep -Seconds 10
+}
+
+$deathReported = $false
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds $checkEverySec
     $samples++
-    $tgt = Get-Process -Name $exeName -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $tgt) {
-        $aliveGaps++
-        Write-Host ("[{0}] PROCESS GONE" -f (Get-Date -Format 'HH:mm:ss'))
-        if ($aliveGaps -gt 3) { Write-Host "FAIL: process repeatedly gone"; exit 2 }
-        continue
+    $tgt = $null
+    if ($procObj) {
+        try { $procObj.Refresh() } catch {}
+        if (-not $procObj.HasExited) {
+            $tgt = $procObj
+        } else {
+            # 死亡: 精确退出码 + 存活时长 + 事件日志
+            $ec = $null
+            try { $ec = $procObj.ExitCode } catch { $ec = "unreadable" }
+            $life = $null
+            try { $life = ($procObj.ExitTime - $procObj.StartTime).TotalSeconds } catch {}
+            Write-Host ("[{0}] PROCESS EXITED exitcode={1} lifetime={2:N1}s" -f (Get-Date -Format 'HH:mm:ss'), $ec, $life)
+            Dump-DeathEvents $started $exeName
+            $aliveGaps++
+            $deathReported = $true
+            if ($aliveGaps -gt 3) { Write-Host "FAIL: process repeatedly gone"; break }
+            continue
+        }
+    } else {
+        $tgt = Get-Process -Name $exeName -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $tgt) {
+            $aliveGaps++
+            Write-Host ("[{0}] PROCESS GONE" -f (Get-Date -Format 'HH:mm:ss'))
+            if (-not $deathReported) { Dump-DeathEvents $started $exeName; $deathReported = $true }
+            if ($aliveGaps -gt 3) { Write-Host "FAIL: process repeatedly gone"; break }
+            continue
+        }
     }
     $title = ""
     try { $tgt.Refresh(); $title = $tgt.MainWindowTitle } catch {}
@@ -51,6 +105,11 @@ while ((Get-Date) -lt $deadline) {
     } else {
         Write-Host ("[{0}] alive pid={1} window=(none)" -f (Get-Date -Format 'HH:mm:ss'), $tgt.Id)
     }
+}
+
+if ($aliveGaps -gt 3) {
+    # 死亡退出, 上面已 dump 过, 直接失败返回
+    exit 2
 }
 
 $elapsed = ((Get-Date) - $started).TotalMinutes
