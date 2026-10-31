@@ -703,13 +703,11 @@ class Probe2 {
         object cont = null; Type contT = null;
         foreach (var t in asm.GetTypes()) {
             if (!t.FullName.Contains("<Module>{")) continue;
-            contT = t;
-            try { System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(t.TypeHandle); Log("[p1id] cctor ran for " + t.FullName); }
-            catch (Exception ex) { Log("[p1id] cctor EX: " + (ex.InnerException ?? ex).Message); }
+            try { System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(t.TypeHandle); }
+            catch (Exception ex) { Log("[p1id] cctor EX on " + t.FullName + ": " + (ex.InnerException ?? ex).Message); }
             var cf = t.GetField("m_0d0b145be2b94a7c8e4fcaf9a9649f1f", flags);
-            if (cf != null) cont = cf.GetValue(null);
-            if (cont == null) { Log("[p1id] container field null; statics:"); foreach (var ff in t.GetFields(flags)) Log("[p1id]   static " + ff.FieldType.Name + " " + ff.Name); }
-            break;
+            Log("[p1id] modtype " + t.FullName + " field=" + (cf != null));
+            if (cf != null) { cont = cf.GetValue(null); contT = t; break; }
         }
         if (cont == null) { Log("[p1id] container NOT FOUND"); return; }
         Log("[p1id] container type=" + cont.GetType().Name);
