@@ -1435,3 +1435,51 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 4. **待挖**：激活成功后的状态存储（06003EA9 About 显示的 Pro 判断来源；AccessibleClient._IsDecoratorProvider(C3D 门) 语义复验——fldtest 模式可测）；failure 消费者行为（显示/限制/退出）。
 
 **工具链沉淀**：ildasm.py（CIL 反汇编+token 解析）、getil.py（il_all 提取）、scan_itp2.py（ITP 常量扫描）、offline_dec.py（离线明文重建）均在 /tmp；probe2 dil=ALLIL+deepdump+strdec 已入库（commit 4d84e963）。
+
+### XV 补充 4：验证触发链全景 + 私钥推导判死（B 方案终审）
+
+## 触发链（接口 dispatch 盲区突破）
+
+第一轮 xref 显示 AwakeParameter/MoveNext 零调用者——原因是**接口 dispatch 的 callvirt 直接用接口 MethodDef token**（非实现 token、非 MemberRef）。补扫后全链还原：
+
+```
+TreeFunction.CompressController (0x06002CAF, 804B)
+  ├─ 前置门: ExecuteExplorer(CheckCustomizableTransmitter/VerifyCentralLocator/VerifyPortableProcessor…) — 是否需要验证
+  ├─ RequestList.ValidateInspector (0x06000CBB, 7B) = `return new ExpandableCommand()` ← 验证命令工厂
+  ├─ RequestList.JoinDecorator(EC)      → ConvertTemplate 工厂入队【过期步骤】
+  ├─ EC.DeleteDispatcher()  [IRequestState 0600C9E 接口调用] → EC.AttachEvent() 入队
+  ├─ RequestList.Signature(EC, V0)      → 入队【签名步骤】
+  │    步骤闭包 <>c__DisplayClass4_0.SendSegmentedCache (0600CD4):
+  │      return license.CollectAutomatedProject(publicKey)  = License.VerifySignature(publicKey)
+  ├─ V0 = ReadGateway(内嵌公钥串 id 269594)  ← 公钥经 ITP 加密硬编码在 CompressController
+  ├─ EC.AwakeParameter() [IOperationalRequester 0600C9F 接口调用] → new <AssertValidLicense>d__8
+  └─ foreach (failure in d__8)                       ← GetEnumerator/MoveNext/get_Current
+       └─ PatchStruct(ExecuteExplorer(SplitInterpreter, failure))   ← failure 消费者
+```
+
+MoveNext 语义（581B 去平坦化）：`while (queue.Count > 0) { step = Dequeue(); f = step.StoreCustomizableModule(); if (f != null) yield f; } queue 空 → AttachEvent() 重新填充；循环`，兜底 yield GeneralValidationFailure('License validation failed!')。= Portable.Licensing LicenseValidationChain 变体。
+
+## 签名验证本体（0x06000C48 CollectAutomatedProject = License.VerifySignature，456B）
+
+- XML 取 Signature 元素 → 公钥对象（ReflectIterator 3321 处理 arg1）→ 提取签名数据（CheckSortedContainer/CheckDetachedField）→ ECDsa 验证（ValidatePortableLocator）→ return 结果
+- **公钥 = ECDSA P-256 显式参数 SPKI（302B base64），ITP 加密内嵌（id 269594），运行时不可替换**（此前误判 P-521，实为 P-256）
+- 验证流程含 **'uhid'（硬件指纹）**（SaveLiteralFunction('uhid') id 270406）——license 与机器绑定语义
+
+## 私钥推导路线判死（证据链）
+
+1. PL 修复前 KeyGenerator（0d78d0d, 2013-01）无 SetSeed（IL 证实），但内嵌 BC 的 SecureRandom/GetInstance 构造链**注入系统熵**（PL 1.0.0 实测 3 次输出全不同）
+2. NuGet Portable.Licensing 1.0.0/1.1.0 实测均有熵（每次生成不同 key）
+3. 无熵确定性复现（SHA256PRNG 无 seed）试遍 BC 1.7.4114（AirExplorer 引用 build，官方 bccrypto-net-1.7-bin.zip）/NuGet 1.7.0/1.8.1/1.8.2/1.8.5/1.8.9，keySize 192/224/239/256/384/521 全组合——**无一生成目标公钥**（X=de7b8dedfa9c25d7…, Y=9946546c90df…）
+4. 测试仓库 fixture 为动态 key（无固定 pair）
+→ **开发者私钥不可推导，license.xml 伪造不可行，B 方案终审判死。**
+
+## 结论
+
+- **方案 A（文件补丁）**：IGC 自校验+陷阱 → 判死
+- **方案 B（license.xml 伪造）**：ECDSA P-256 + 私钥不可推导 → **判死**
+- **方案 C（运行时干预）唯一可行**，干预点（按破坏面最小排序）：
+  1. 消费侧：CompressController 的 foreach failure 循环——ExecuteExplorer(SplitInterpreter, failure) 前清空/跳过
+  2. 注册侧：RequestList.JoinDecorator/Signature/CEB(0600CBF 系) 开头 ret（步骤不入队 → MoveNext 队列空→AttachEvent 再空转 → 零 failure）
+  3. AttachEvent(0600CE4) 本身 ret（队列永空 → 全部步骤跳过）
+  4. VerifySignature 返回值（06000C48 return V5 → ldc.i4.1）
+- 待挖：About Pro 判断的激活态存储（CompressController 前置门 VerifyCentralLocator 等静态字段 FL#8538/8571/8729/8749 语义）、failure 消费者 PatchStruct 行为
