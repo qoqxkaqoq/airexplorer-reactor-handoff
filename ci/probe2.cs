@@ -321,6 +321,8 @@ class Probe2 {
             DilRun(asm);
         } else if (mode == "boot") {
             BootRun(asm, BootArgs);
+        } else if (mode == "itpfull") {
+            ItpFullRun(asm);
         } else if (mode == "fldtest") {
             FldTestRun(asm);
         } else if (mode == "flddump") {
@@ -612,6 +614,82 @@ class Probe2 {
         Log("[boot] main thread joined");
     }
 
+
+
+    // ===================== mode=itpfull: ITP 解密器全表扫描 (反射重置限流计数) + IterableDicAggregator 静态字典 dump =====================
+    static void ItpFullRun(Assembly asm) {
+        var diT = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+        var aggT = asm.GetType("AirExplorer.Processing.IterableDicAggregator");
+        var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        var itp = diT.GetMethod("InstantiateTransferableProgram", flags);
+        if (itp == null) { Log("[itpfull] ITP resolve FAIL"); return; }
+        Log("[itpfull] ITP resolved: " + itp.ToString());
+        // DispatcherInitializer 静态字段清单(找串表 byte[] 与限流计数 int)
+        int[] intFields = new int[0];
+        var statInts = new System.Collections.Generic.List<FieldInfo>();
+        foreach (var fld in diT.GetFields(flags)) {
+            try {
+                var v = fld.GetValue(null);
+                if (fld.FieldType == typeof(int)) { statInts.Add(fld); Log("[itpfull] DI static int " + fld.Name + " = " + v); }
+                else if (fld.FieldType == typeof(byte[])) { var ba = (byte[])v; Log("[itpfull] DI static byte[] " + fld.Name + " len=" + (ba == null ? -1 : ba.Length)); }
+                else if (fld.FieldType.IsClass && v != null) Log("[itpfull] DI static " + fld.FieldType.Name + " " + fld.Name + " = " + v.GetType().Name);
+            } catch (Exception ex) { Log("[itpfull] DI." + fld.Name + " FAIL " + ex.Message); }
+        }
+        // 全表扫描: id 0..20000, 每 60 次重置全部 int 静态字段 (绕 0x4B 限流)
+        int got = 0, err = 0, empty = 0;
+        var results = new System.Collections.Generic.List<string>();
+        for (int id = 0; id <= 20000; id++) {
+            if (id % 60 == 0) {
+                foreach (var f in statInts) { try { f.SetValue(null, 0); } catch {} }
+            }
+            try {
+                var r = itp.Invoke(null, new object[] { id });
+                var s = r as string;
+                if (s == null) { empty++; }
+                else if (s.Length == 0) { empty++; }
+                else { got++; results.Add(id + "\t" + s.Replace("\r", "\\r").Replace("\n", "\\n")); }
+            } catch (Exception ex) {
+                err++;
+                if (err < 6) Log("[itpfull] ITP(" + id + ") EX: " + (ex.InnerException ?? ex).Message);
+            }
+            if (id % 2000 == 0) Log("[itpfull] progress id=" + id + " got=" + got + " empty=" + empty + " err=" + err);
+        }
+        Log("[itpfull] SCAN DONE got=" + got + " empty=" + empty + " err=" + err);
+        foreach (var line in results) Log("[STR] " + line);
+        // IterableDicAggregator 静态字段全 dump (设置存储本体)
+        if (aggT != null) {
+            Log("[itpfull] == IterableDicAggregator statics ==");
+            foreach (var fld in aggT.GetFields(flags)) {
+                try {
+                    var v = fld.GetValue(null);
+                    if (v == null) { Log("[agg] " + fld.FieldType.Name + " " + fld.Name + " = NULL"); continue; }
+                    var t = v.GetType();
+                    if (t.Name.StartsWith("Dictionary")) {
+                        var kv = (System.Collections.IEnumerable)v;
+                        int n = 0;
+                        foreach (var e in kv) {
+                            var kvp = e.GetType().GetProperty("Key").GetValue(e) + " => " + e.GetType().GetProperty("Value").GetValue(e);
+                            Log("[agg] " + fld.Name + "[" + n + "] " + kvp);
+                            n++;
+                            if (n > 40) { Log("[agg] " + fld.Name + " ... (truncated)"); break; }
+                        }
+                        if (n == 0) Log("[agg] " + fld.Name + " (empty dict)");
+                    } else {
+                        Log("[agg] " + t.Name + " " + fld.Name + " = " + v);
+                    }
+                } catch (Exception ex) { Log("[agg] " + fld.Name + " FAIL " + ex.Message); }
+            }
+        } else Log("[itpfull] IterableDicAggregator type not found");
+        // AccessibleClient 静态字段
+        var acT = asm.GetType("CloudClient.Networking.AccessibleClient");
+        if (acT != null) {
+            Log("[itpfull] == AccessibleClient statics ==");
+            foreach (var fld in acT.GetFields(flags)) {
+                try { var v = fld.GetValue(null); Log("[ac] " + fld.FieldType.Name + " " + fld.Name + " = " + (v == null ? "NULL" : v.ToString())); }
+                catch (Exception ex) { Log("[ac] " + fld.Name + " FAIL " + ex.Message); }
+            }
+        }
+    }
 
     // ===================== mode=dil: 回填后 dump 指定 token 的运行时 IL (GetILAsByteArray) =====================
     static void DilRun(Assembly asm) {
