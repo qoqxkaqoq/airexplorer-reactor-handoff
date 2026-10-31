@@ -1379,3 +1379,59 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 - ITP(id) 全表扫描 0..20000；**每 60 次反射重置 DispatcherInitializer 全部 static int 字段**（绕 75 限流）
 - 同时 dump：DI 静态字段清单（串表 byte[] 长度）、**IterableDicAggregator 静态字典全内容（store 实际键值对）**、AccessibleClient 静态字段
 - 预期一次 run 拿到：全部配置键明文、store 里实际存在的键（未激活态）、license 语义键的值格式 → **B 方案落点判定**
+
+### XV 补充 2：重大架构修正 + 激活真链浮出（p1id run 41165415006 + itpfull 602 串）
+
+1. **p1id 精确解密成功**（容器 F 值反射读取 + 17 块 id 公式：k1 op1 k2 先结合、再 op k3、再 ^F；修正了此前的栈序误读）。P1 的 17 键 = `name/size/sha1/shared_link/parent/content_created_at/content_modified_at/lock/tags` ——**是云盘 API 字段（疑 Box）！**
+   **AccessibleClient 不是 license 类，是云盘 API 客户端状态类**（clientDistributorDic/_ClientDriverTxt/... 全是 API 语义）。**此前"门字段=license"的认知作废——a19 系列改的 gates 与激活无关**（它们只是被完整性校验监护的 API 配置）。
+2. **ITP 解密器确认**：参数=串表字节偏移（不是索引）；id=0 正确解出 `{{ alg = {0}, typ = {1} }}`；盲扫 602 串含大量 mojibake（偏移错位）+ 完整 license 错误串（`Licensing for this product has expired!` 等 reactor License 模块标准文案，大量重复=多份嵌入配置）。
+3. **US 明文串（license.xml/activate.php/checklic.php/ECDSA 公钥/ADDACCOUNTSPRO 等）无任何 ldstr 直接引用**——应用层字符串全部经 ITP 解密链（reactor 混淆），US 是混淆前残留。
+4. **激活真链锁定**：
+   - 应用使用 **Portable.Licensing** 框架（ILMerge 进主程序集，namespace 已混淆改名；泛型实例名 `Portable.Licensing.Validation.IValidationFailure` 在方法名里残留暴露）
+   - 验证入口 **AssertValidLicense**（假名类 `AirExplorer.Execution.ExpandableCommand` #147），编译器状态机 `<AssertValidLicense>d__8`(#148)
+   - **MoveNext(0x06000CEE) 文件体=4B 假体（00 00 17 2A）——真身由 res0 回填运行时重算**，必须运行时 dump
+   - license 文件=license.xml（Portable.Licensing XML+ECDSA 签名格式），在线激活=activate.php/checklic.php（应用层）
+5. dil run 41166540737：dump 0x06000CEE/CEA/CEB/CF2 运行时真身 → 读验证逻辑（签名检查强度/检查哪些字段/失败行为）→ **B 方案落点判定（license.xml 能否合法构造）**。
+
+### XV 补充 3：license 验证链全景还原（ALLIL 全量 dump + strdec 全程序字符串解密）
+
+**方法论突破**：dil 模式新增三段式——
+1. **ALLIL**：RunClassConstructor 后全量 dump 22930 个运行时真身 IL（il_all.bin 4.2MB + il_index.tsv）→ artifact
+2. **deepdump**：关键类型 RunClassConstructor+PrepareMethod 强制回填（RequestList/ValueAllocator/AggregatorWrapper/ExpandableCommand 等 13 类 144 方法）
+3. **strdec**：**自动扫描 il_all 中 ITP 常量模式**（`ldc A;[not;]ldc B;op;ldsfld 040020B8;ldfld F;xor;call 06004196`）→ 12512 调用点 → 运行时算 id（F 值从容器 `<Module>{a8c2e9b2}` 实例反射读取，124 个 int 字段 FDIC 全 dump）→ **5924 个唯一字符串全部解出，0 失败**（[DEC] id+串 / [DECSRC] id+首调用点 / [FDIC] F 字典）→ **离线精确重建任意调用点明文**
+
+**run 41174263619 / 41173568791（commit 4d84e963）**
+
+## 激活/license 链最终架构（假名→真身对照）
+
+| 假名 | Token | 真身（Portable.Licensing） |
+|---|---|---|
+| `CloudClient.Monitoring.CentralMonitor` | #308 | **License**（XML 根持有者，ctor= new AggregatorWrapper 即 License 元素；StoreExternalPool=SetSignature 链式） |
+| `AirExplorer.Processing.AggregatorWrapper` | #300 | License XML 元素访问器：.ctor=CustomerData、C39=License、StopCache(C3D)=Type(Trial/Standard)、FormatPublisher=Quantity、SumStatelessMapper=Feature、CreateSchema=Customer、SumTransformableRecommender=LicenseAttributes、ParseTag(C44)=Expiration（**默认 DateTime.MaxValue**）、CollectCommonCalc(C47)=Signature |
+| `AirExplorer.Execution.ExpandableCommand` | #327 | **验证步骤容器+License.Validate()**：detailedCommand=Queue<ValueAllocator> 验证步骤队列、editableCommand=AggregatorWrapper 回调、PlanClient=自类型静态单例（**全程序无 stsfld——恒 null**）、AwakeParameter(0600CE7)=**AssertValidLicense 本体**（new d__8(254)+this 绑定） |
+| `<AssertValidLicense>d__8` | 06000CEE | MoveNext 581B：队列消费迭代器 → Dequeue→StopChecker→FormatNode→editableCommand.Invoke→**yield GeneralValidationFailure（最终失败串 id 393922 'License validation failed!'）**；实现 IEnumerable<Portable.Licensing.Validation.IValidationFailure> |
+| `AirExplorer.Values.ValueAllocator` | #310 | **验证步骤对象**（标签 ITP 串+delegate+参数，实现 IRegAggregator/IProcessorConfiguration） |
+| `AirExplorer.Networking.RequestList` | — | **步骤注册 API**：JoinDecorator(0600CBC)=**过期验证步骤注册**、Signature(0600CBF)=**签名验证步骤注册**、SendExternalValue/SendAdjustableEnumerator；闭包（<>c.SendActivePolicy/DisplayClass2_0.CloseFinder/DisplayClass4_0.SendSegmentedCache）=步骤 lambda |
+| `AirExplorer.Values.ArgumentGateway` | 06002F91 cctor | **URL 仓库**：checklic.php?hd=(m_AdaptableModelValueMsg 04001317)、checkversion、sendbug.php |
+| `CloudClient.Templating.EfficientTemplate.IncludeWriter` | 06001260 | **license.xml 加载**：GetFolderPath(LocalApplicationData)+sep+…+license.xml → 存在则开流读；**否则嵌入资源 fallback**（RequestActiveProc+DisplayExternalQueue） |
+| `ConnectedAggregatorValidator` | #— | **MulticastDelegate 替身**（CombineImpl/RemoveImpl/GetInvocationList/StoreDynamicMethod——delegate 防篡改 wrapper，reactor 反注入层） |
+
+## 验证语义（failure 消息全集，调用点精确）
+
+- 过期：'Licensing for this product has expired!' + 'Your license is expired. Please contact…'（JoinDecorator 注册的步骤）
+- 签名：'License signature validation error!' + 'The license signature and data does not match…'（Signature 步骤）
+- 兜底：'License validation failed!'（MoveNext 最终 yield，id 393922）
+- 功能限制：220582 'Air Explorer Pro version is required to upload files to '（0600249A）、358420 'This feature is only available for the Pro version.'（06003F22）
+- UI：FormActivation/ACTIVATEPRO/'Buy the Pro version'/email:（06003EAD/06003EB6）；About 显示 'Pro version valid until 12/12/2015'/'Licensed to Pepe (paosd@ospoidid.com)'（**开发者测试模板串**，06003EA9）
+
+## B 方案落点判定（结论）
+
+1. **license.xml 直接伪造 = 不可行**：Portable.Licensing ECDSA P-521 签名（Signature 元素）无私钥不可伪造；签名失败即 yield failure。
+2. **文件补丁（方案 A）已判死**（IGC 自校验+陷阱）；res0 回填使文件 IL 不可见。
+3. **可行落点 = 运行时（方案 C）**，三个精确干预点：
+   - **干预点 1（最优）**：AssertValidLicense 是惰性枚举+队列消费——**消费前清空 detailedCommand 队列 → 零 failure = 验证通过**（步骤注册 RequestList.JoinDecorator/Signature 也是运行时，可 hook）
+   - **干预点 2**：RequestList 注册方法（0600CBC/CBD/CBE/CBF）开头直接 ret（运行时 patch，非文件）
+   - **干预点 3**：功能限制判断（0600249A/06003F22）+ PlanClient 恒 null 语义（StartRequester()=(PlanClient==null) 恒 true——**未激活态判断从未由 license 驱动，激活态另存**）
+4. **待挖**：激活成功后的状态存储（06003EA9 About 显示的 Pro 判断来源；AccessibleClient._IsDecoratorProvider(C3D 门) 语义复验——fldtest 模式可测）；failure 消费者行为（显示/限制/退出）。
+
+**工具链沉淀**：ildasm.py（CIL 反汇编+token 解析）、getil.py（il_all 提取）、scan_itp2.py（ITP 常量扫描）、offline_dec.py（离线明文重建）均在 /tmp；probe2 dil=ALLIL+deepdump+strdec 已入库（commit 4d84e963）。
