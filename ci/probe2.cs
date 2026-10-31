@@ -830,11 +830,14 @@ class Probe2 {
             } catch (Exception ex) { Log("[dil] 0x" + tk.ToString("X") + " FAIL " + ex.GetType().Name + ": " + ex.Message); }
         }
         // 全量运行时 IL dump (回填后 ground truth): il_index.tsv + il_all.bin -> app/dump/ (artifact 上传)
+        List<int[]> idxLocal = new List<int[]>();   // {token, ilLen, offset}
+        byte[] ilBlob = null;
         try {
             System.IO.Directory.CreateDirectory(DumpDir);
             int n = 0, okB = 0;
-            using (var ix = new StreamWriter(Path.Combine(DumpDir, "il_index.tsv")))
-            using (var bl = new FileStream(Path.Combine(DumpDir, "il_all.bin"), FileMode.Create)) {
+            var ms = new MemoryStream();
+            var bw = new BinaryWriter(ms);
+            using (var ix = new StreamWriter(Path.Combine(DumpDir, "il_index.tsv"))) {
                 for (int rid = 1; rid <= 30912; rid++) {
                     MethodBase mb = null;
                     try { mb = mod.ResolveMethod(0x06000000 | rid); } catch {}
@@ -843,14 +846,18 @@ class Probe2 {
                     try {
                         var il = mb.GetMethodBody().GetILAsByteArray();
                         if (il == null || il.Length == 0) continue;
-                        long pos = bl.Position;
-                        bl.Write(il, 0, il.Length);
+                        long pos = ms.Position;
+                        bw.Write(il, 0, il.Length);
+                        idxLocal.Add(new int[] { 0x06000000 | rid, il.Length, (int)pos });
                         ix.WriteLine("0x{0:X8}\t{1}\t{2}\t{3}\t{4}", 0x06000000 | rid, il.Length, mb.DeclaringType == null ? "" : mb.DeclaringType.FullName, mb.Name, pos);
                         okB++;
                     } catch {}
                 }
             }
-            Log("[dil] ALLIL: resolved=" + n + " bodies=" + okB + " -> " + DumpDir + "/il_all.bin");
+            bw.Flush();
+            ilBlob = ms.ToArray();
+            File.WriteAllBytes(Path.Combine(DumpDir, "il_all.bin"), ilBlob);
+            Log("[dil] ALLIL: resolved=" + n + " bodies=" + okB + " blob=" + ilBlob.Length + " -> " + DumpDir + "/il_all.bin");
         } catch (Exception ex) { Log("[dil] ALLIL FAIL " + ex.Message); }
         // deepdump: 关键类型 RunClassConstructor + PrepareMethod 强制回填/JIT, 再 dump 全部方法 IL (激活链闭包/步骤类)
         try {
@@ -885,6 +892,73 @@ class Probe2 {
             }
             Log("[deep] DONE types=" + tHit + " methods=" + mDump);
         } catch (Exception ex) { Log("[deep] FAIL " + ex.Message); }
+        // strdec: 从 il_all.bin 扫描 ITP 常量模式, 运行时算 id 并批量解密全程序字符串
+        try {
+            var itpM = asm.GetType("CloudClient.Templating.DispatcherInitializer").GetMethod("InstantiateTransferableProgram", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            var diT2 = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+            var flags2 = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            var statInts2 = new System.Collections.Generic.List<FieldInfo>();
+            foreach (var fld in diT2.GetFields(flags2)) { if (fld.FieldType == typeof(int)) statInts2.Add(fld); }
+            var fldContainer = mod.ResolveField(0x040020B8);
+            var containerObj = fldContainer.GetValue(null);
+            Log("[strdec] container=" + (containerObj == null ? "NULL" : containerObj.GetType().FullName));
+            var seen = new System.Collections.Generic.HashSet<int>();
+            int siteN = 0, uniq = 0, failN = 0;
+            var outLines = new System.Collections.Generic.List<string>();
+            foreach (var ent in idxLocal) {
+                int tok = ent.Item1; int ilen = ent.Item2; long off = ent.Item5;
+                byte[] code = new byte[ilen];
+                Array.Copy(ilBlob, off, code, 0, ilen);
+                for (int i = 0; i + 27 <= code.Length; i++) {
+                    if (code[i] != 0x20) { continue; }
+                    int skip = 5;
+                    if (code[i + 5] == 0x66) skip = 6;
+                    if (i + skip + 5 + 1 + 5 + 1 + 5 + 5 + 1 + 5 > code.Length) continue;
+                    if (code[i + skip] != 0x20) continue;
+                    int p2 = i + skip + 5;
+                    byte op = code[p2];
+                    if (!(op == 0x61 || op == 0x58 || op == 0x59 || op == 0x5D || op == 0x5F || op == 0x60 || op == 0x5A)) continue;
+                    if (code[p2 + 1] != 0x7E || code[p2 + 2] != 0xB8 || code[p2 + 3] != 0x20 || code[p2 + 4] != 0x00 || code[p2 + 5] != 0x04) continue;
+                    if (code[p2 + 6] != 0x7B) continue;
+                    int ffldTok = BitConverter.ToInt32(code, p2 + 7);
+                    if (code[p2 + 11] != 0x61) continue;
+                    if (code[p2 + 12] != 0x28 || BitConverter.ToInt32(code, p2 + 13) != 0x06004196) continue;
+                    int A = BitConverter.ToInt32(code, i + 1);
+                    if (skip == 6) A = ~A;
+                    int B = BitConverter.ToInt32(code, i + skip + 1);
+                    siteN++;
+                    int id = 0; string s = null; string err = null;
+                    try {
+                        int ab = 0;
+                        switch (op) {
+                            case 0x61: ab = A ^ B; break;
+                            case 0x58: ab = unchecked(A + B); break;
+                            case 0x59: ab = unchecked(A - B); break;
+                            case 0x5D: ab = (B == 0) ? 0 : A % B; break;
+                            case 0x5F: ab = A & B; break;
+                            case 0x60: ab = A | B; break;
+                            case 0x5A: ab = unchecked(A * B); break;
+                        }
+                        var fi = mod.ResolveField(ffldTok);
+                        int F = (int)fi.GetValue(containerObj);
+                        id = unchecked(ab ^ F);
+                        if (id >= 0 && seen.Add(id)) {
+                            uniq++;
+                            if (uniq % 60 == 0) { foreach (var f in statInts2) { try { f.SetValue(null, 0); } catch {} } }
+                            try { s = (string)itpM.Invoke(null, new object[] { id }); }
+                            catch (Exception ex7) { err = (ex7.InnerException ?? ex7).Message; failN++; }
+                        }
+                    } catch (Exception ex6) { err = (ex6.InnerException ?? ex6).Message; failN++; }
+                    if (s != null) {
+                        string esc = s.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
+                        outLines.Add(id + "\t" + esc);
+                    }
+                }
+            }
+            Log("[strdec] sites=" + siteN + " uniqIds=" + uniq + " fail=" + failN);
+            foreach (var l in outLines) Log("[DEC] " + l);
+            Log("[strdec] done");
+        } catch (Exception ex) { Log("[strdec] FAIL " + ex.Message); }
     }
 
     // ===================== mode=trap: 全类型 cctor 逐个触发, 死类型打印完整内层异常链+StackTrace =====================
