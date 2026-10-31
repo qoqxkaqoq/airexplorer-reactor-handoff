@@ -906,7 +906,7 @@ class Probe2 {
             int siteN = 0, uniq = 0, failN = 0;
             var outLines = new System.Collections.Generic.List<string>();
             foreach (var ent in idxLocal) {
-                int tok = ent.Item1; int ilen = ent.Item2; long off = ent.Item5;
+                int tok = ent[0]; int ilen = ent[1]; long off = ent[2];
                 byte[] code = new byte[ilen];
                 Array.Copy(ilBlob, off, code, 0, ilen);
                 for (int i = 0; i + 27 <= code.Length; i++) {
