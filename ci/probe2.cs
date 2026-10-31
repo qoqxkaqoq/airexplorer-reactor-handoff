@@ -903,6 +903,7 @@ class Probe2 {
             var containerObj = fldContainer.GetValue(null);
             Log("[strdec] container=" + (containerObj == null ? "NULL" : containerObj.GetType().FullName));
             var seen = new System.Collections.Generic.HashSet<int>();
+            var seenTok = new System.Collections.Generic.Dictionary<int, string>();
             int siteN = 0, uniq = 0, failN = 0;
             var outLines = new System.Collections.Generic.List<string>();
             foreach (var ent in idxLocal) {
@@ -951,12 +952,20 @@ class Probe2 {
                     } catch (Exception ex6) { err = (ex6.InnerException ?? ex6).Message; failN++; }
                     if (s != null) {
                         string esc = s.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
+                        if (!seenTok.ContainsKey(id)) seenTok[id] = tok.ToString("X8");
                         outLines.Add(id + "\t" + esc);
                     }
                 }
             }
             Log("[strdec] sites=" + siteN + " uniqIds=" + uniq + " fail=" + failN);
             foreach (var l in outLines) Log("[DEC] " + l);
+            foreach (var kv in seenTok) Log("[DECSRC] " + kv.Key + "\t0x" + kv.Value);
+            // dump 容器全部 int 实例字段值 (F 字典)
+            try {
+                foreach (var fi2 in containerObj.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
+                    if (fi2.FieldType == typeof(int)) Log("[FDIC] " + fi2.Name + " = 0x" + Convert.ToString((int)fi2.GetValue(containerObj), 16));
+                }
+            } catch (Exception ex5) { Log("[FDIC] FAIL " + ex5.Message); }
             Log("[strdec] done");
         } catch (Exception ex) { Log("[strdec] FAIL " + ex.Message); }
     }
