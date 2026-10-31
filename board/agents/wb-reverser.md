@@ -1303,3 +1303,40 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 2. **在线验证假说**：soak 加 netstat 抓 a19i8 进程的 TCP 连接（DNS/443），或 boot 模式挂 HttpWebRequest FCE——若门=true 触发在线校验，需 mock 服务器或断网行为对比。
 3. UI 挂点定位：probe2 加 `procdump` 类线程栈快照（PowerShell 调 miniDumpWriteDump 抓 a19i8 进程 dump → 分析卡点）。
 4. 若 C3E getter 运行时 = ldnull：a19i12 = a19i8 + 06003ACA patch（tiny 扩体 newobj/box 返回非 null string），补齐"gates=true + token 非空"一致性。
+
+## 第 XIV 段（2026-10-31 · ★a19i 卡点破案：IGC 自校验 + 失配陷阱；文件补丁路线判死★）
+
+### 1. 决定性实验矩阵（今日 3 个新 run）
+
+| run | 候选 | 结果 | 结论 |
+|---|---|---|---|
+| 41147934322 | a19i10 + 卡点诊断 | 存活 4min 无窗口，**[tcp] no sockets 全程、[dns] 无任何厂商域名**、[thr] 2xWait/UserRequest+1xWait/EventPairLow+1xRunning | **在线验证假说否决**（零 socket） |
+| 41149408594 | **a19i10b**（tampered 块内部 ldtoken nop，正常路径死代码） | **1.4s E0434352 秒死** | **IGC 路径签名含自身字节 hash**——任何 IGC 改动（哪怕死代码）即失配 |
+| 41149404432 | s5probe dil @a19i10 | probe2 加载后 `WATCHDOG TIMEOUT`（300s 无输出） | a19i10 卡死在 cctor，连探针回填都进不去 |
+
+### 2. minidump 破案（run 41147934322 artifact，135MB，0x1103 全内存型）
+
+- **WPF 三件套（PresentationFramework/Core/WindowsBase）未加载**，依赖（AWSSDK/BC 等）全部未加载 → 进程死在 **<Module>.cctor 阶段，Main 之前**。
+- 已加载：CLR 全家 + **crypt32/bcrypt/rsaenh/cryptsp**（cctor 内做加密运算）。
+- 3 线程：tid=6748 26KB 深栈恒 Running（cctor 自旋主体）；另 2 线程 KERNELBASE wait。无线程在等网络。
+- **从 dump 直接读 AirExplorer.exe 内存映像**（base 0x0183047c0000，f2r: file 0x3F91DC→RVA 0x3FAFDC）：运行时 IGC IL 与文件 a19i10 版**逐字节一致**（含 +0xF6=00×5 生效；+0x54 `ldsfld 0x04001FCD` 与静态分析吻合）→ 回填不改 IGC 体。
+- **卡死机制定案**：baseline +0xF1..F5 本就是 `39 1c ff ff ff`=`br 0x12`(dispatcher)，+0xF6 才是 `38 77 09 00 00`=`br 0xa72`(tampered)。失配流到达 0xF6 后 nop → fallthrough `20 aa b0 3b 2b`=`ldc.i4 0x2B3BB0AA`（下一块常数）继续加进 v0 → v0 彻底岔掉 → dispatcher 路由进未定义块（疑 shard 池 br 0 自旋）→ cctor 永不返回 → WPF 永不加载。
+
+### 3. IGC 三态行为总结（完整自洽）
+
+- 改 gates（a19i4）→ 失配 → 0xF6 br 完好 → " is tampered." throw → 1.5s E0434352。
+- 改 IGC 死代码（a19i10b）→ 失配（自 hash 参与）→ 同上 → 1.4s E0434352。
+- 改 IGC + nop 失配出口（a19i8/i10）→ 失配 → 出口没了 → v0 污染 → **陷阱自旋**（"存活 7min"是假象）。
+- **方案 A（文件补丁）对 IGC 正式判死**：失配出口被 nop 后是陷阱而非安全路径；唯一不改体（零文件改动）的路只剩运行时干预。
+
+### 4. 剩余活路（按优先级重排）
+
+1. **方案 C（运行时内存干预，文件零改动）★首选**：元数据 IL 不动 → 三层校验（体 hash/路径签名/pubkey）全部天然通过；注入器等目标方法 JIT 后 patch **JIT 原生码**（门 getter ldc.i4.0→1 / 或校验点强制 v12 路径）。交付=launcher+注入器。probe2 fldtest 曾验证"反射置 license 字段 true"的激活语义（结果待复核）。
+2. **方案 B（环境侧零补丁）★零成本潜力**：P1（06002133）= 配置字典加载器，`解密字符串(xor ldsfld 0x40020B8; ldfld 0x40020xx; xor; call 0x6004196) → dict ContainsKey/get_Item → stfld 门字段`。若 dict 数据源是本地配置/注册表 → **伪造正确的键值即可开门**，所有校验器看到的全是"合法数据"。下一步：dump P1 完整解密链定位 dict 数据源（配置文件路径/注册表键名）。
+3. 方案 A 残余（完整仿真 IGC 8970B 状态机+构造合法激活输入）：不动点难题（改体→hash 变→v0 变），除非只改"输入状态"不改体——但 gates 改动也失配，实质等价于方案 B/C。
+
+### 5. 基础设施沉淀
+
+- soak.ps1：无窗口期自动 `Dump-StuckDiagnostics`（TCP owned sockets + DNS cache + 线程 ThreadState/WaitReason 指纹）+ 一次性 `Invoke-MiniDump`（MiniDumpWriteDump 0x1103）→ artifact。a-soak.yml artifact 含 minidump。
+- Linux 端 minidump 解析工具链：`pip install minidump`；parse_dmp.py（线程栈→模块映射）、read_mem.py（从 dump 读 PE 内存映像，f2r 文件偏移→RVA）——**无需 cctor 即可读"回填后"内存字节**，绕过卡死探针的利器。
+- 沙箱 .git 曾丢失：gh_sync.py（API 推送）不受影响；本地已 re-init + fetch origin + mixed reset 对齐（工作树无损）。
