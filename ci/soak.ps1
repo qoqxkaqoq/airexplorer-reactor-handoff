@@ -60,6 +60,47 @@ function Dump-AllWindows([int]$Pid2) {
     } catch { Write-Host ('    [wins] enum fail: ' + $_.Exception.Message) }
 }
 
+# 卡点诊断: 进程活着但无窗口时 — TCP / DNS / 线程状态指纹
+function Dump-StuckDiagnostics([System.Diagnostics.Process]$p) {
+    try {
+        $conns = Get-NetTCPConnection -OwningProcess $p.Id -ErrorAction SilentlyContinue
+        if ($conns) {
+            $conns | Select-Object -First 12 | ForEach-Object {
+                Write-Host ("    [tcp] {0}:{1} -> {2}:{3} state={4}" -f $_.LocalAddress, $_.LocalPort, $_.RemoteAddress, $_.RemotePort, $_.State)
+            }
+        } else { Write-Host '    [tcp] no sockets owned' }
+    } catch { Write-Host ('    [tcp] fail: ' + $_.Exception.Message) }
+    try {
+        $dns = Get-DnsClientCache -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Entry -Unique | Select-Object -First 20
+        if ($dns) { Write-Host ('    [dns] ' + (($dns) -join ', ')) }
+    } catch {}
+    try {
+        $p.Refresh()
+        $st = $p.Threads | Group-Object { "{0}/{1}" -f $_.ThreadState, $_.WaitReason } | Sort-Object Count -Descending
+        Write-Host ('    [thr] ' + (($st | ForEach-Object { "{0}x{1}" -f $_.Count, $_.Name }) -join '  '))
+    } catch { Write-Host ('    [thr] fail: ' + $_.Exception.Message) }
+}
+
+# minidump (线程栈内存+线程信息, 不含堆) — 抓启动期卡点的线程调用栈
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class MiniDumper {
+    [DllImport("dbghelp.dll", SetLastError=true)]
+    public static extern bool MiniDumpWriteDump(IntPtr hProc, uint pid, IntPtr hFile, uint type, IntPtr exc, IntPtr user, IntPtr comm);
+}
+'@
+function Invoke-MiniDump([int]$Pid2, [string]$OutPath) {
+    try {
+        $p = Get-Process -Id $Pid2 -ErrorAction Stop
+        $fs = [System.IO.File]::Create($OutPath)
+        $ok = [MiniDumper]::MiniDumpWriteDump($p.Handle, [uint32]$Pid2, $fs.Handle, [uint32]4355, [IntPtr]::Zero, [IntPtr]::Zero, [IntPtr]::Zero)
+        $fs.Close()
+        if ($ok) { Write-Host ('    [dump] saved ' + $OutPath + ' size=' + (Get-Item $OutPath).Length) }
+        else { Write-Host ('    [dump] FAILED win32err=' + [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()) }
+    } catch { Write-Host ('    [dump] fail: ' + $_.Exception.Message) }
+}
+
 # WER/Application 事件日志指纹: 崩溃 (1000) / 挂起 (1002) / .NET 未处理异常 (1026) / WER 汇报 (1001)
 function Dump-DeathEvents([datetime]$Since, [string]$ProcName) {
     try {
@@ -89,6 +130,7 @@ $aliveGaps = 0
 $errors = @()
 $started = Get-Date
 $procObj = $null
+$dumpedPid = 0
 Write-Host "soak: $exeName for $Minutes min (started $started) launch=$Launch"
 
 if ($Launch) {
@@ -141,6 +183,11 @@ while ((Get-Date) -lt $deadline) {
     } else {
         Write-Host ("[{0}] alive pid={1} window=(none) threads={2}" -f (Get-Date -Format 'HH:mm:ss'), $tgt.Id, $tgt.Threads.Count)
         if ($samples % 3 -eq 0) { Dump-AllWindows $tgt.Id }
+        Dump-StuckDiagnostics $tgt
+        if ($samples -ge 3 -and $dumpedPid -ne $tgt.Id) {
+            $dumpedPid = $tgt.Id
+            Invoke-MiniDump $tgt.Id ("app\minidump_{0}.dmp" -f $tgt.Id)
+        }
     }
 }
 

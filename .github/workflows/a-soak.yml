@@ -87,6 +87,7 @@ jobs:
           path: |
             soak_data.txt
             app/_candidate.txt
+            app/minidump_*.dmp
           retention-days: 14
 
       - name: 回传结果到 ci-results 分支
