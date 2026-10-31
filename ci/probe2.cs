@@ -852,6 +852,39 @@ class Probe2 {
             }
             Log("[dil] ALLIL: resolved=" + n + " bodies=" + okB + " -> " + DumpDir + "/il_all.bin");
         } catch (Exception ex) { Log("[dil] ALLIL FAIL " + ex.Message); }
+        // deepdump: 关键类型 RunClassConstructor + PrepareMethod 强制回填/JIT, 再 dump 全部方法 IL (激活链闭包/步骤类)
+        try {
+            string[] keys = { "RequestList", "ValueAllocator", "AggregatorWrapper", "ExpandableCommand", "CustomizableModel", "ConnectedAggregator", "IProcessorConfiguration" };
+            var flags = BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            int tHit = 0, mDump = 0;
+            foreach (var t in mod.GetTypes()) {
+                string fn = null; try { fn = t.FullName; } catch { continue; }
+                if (fn == null) continue;
+                bool hit = false;
+                foreach (var k in keys) { if (fn.Contains(k)) { hit = true; break; } }
+                if (!hit) continue;
+                tHit++;
+                try { RuntimeHelpers.RunClassConstructor(t.TypeHandle); } catch (Exception ex9) { Log("[deep] cctor FAIL " + fn + ": " + ex9.Message); }
+                foreach (var m in t.GetMethods(flags)) {
+                    try {
+                        RuntimeHelpers.PrepareMethod(m.MethodHandle);
+                        var body = m.GetMethodBody();
+                        if (body == null) continue;
+                        var il = body.GetILAsByteArray();
+                        if (il == null || il.Length == 0) continue;
+                        var sb = new System.Text.StringBuilder();
+                        for (int i = 0; i < il.Length; i++) sb.Append(il[i].ToString("x2"));
+                        Log("[deep] 0x" + m.MetadataToken.ToString("X") + " " + fn + "." + m.Name + " ilLen=" + il.Length);
+                        for (int i = 0; i < sb.Length; i += 1000) {
+                            int nn = Math.Min(1000, sb.Length - i);
+                            Log("[deep] IL " + (i / 2).ToString("x5") + " " + sb.ToString(i, nn));
+                        }
+                        mDump++;
+                    } catch (Exception ex8) { Log("[deep] 0x" + m.MetadataToken.ToString("X") + " " + fn + "." + m.Name + " PREP FAIL " + ex8.GetType().Name + " " + ex8.Message); }
+                }
+            }
+            Log("[deep] DONE types=" + tHit + " methods=" + mDump);
+        } catch (Exception ex) { Log("[deep] FAIL " + ex.Message); }
     }
 
     // ===================== mode=trap: 全类型 cctor 逐个触发, 死类型打印完整内层异常链+StackTrace =====================
