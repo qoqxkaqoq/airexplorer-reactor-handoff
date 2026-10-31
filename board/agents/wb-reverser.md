@@ -1340,3 +1340,10 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 - soak.ps1：无窗口期自动 `Dump-StuckDiagnostics`（TCP owned sockets + DNS cache + 线程 ThreadState/WaitReason 指纹）+ 一次性 `Invoke-MiniDump`（MiniDumpWriteDump 0x1103）→ artifact。a-soak.yml artifact 含 minidump。
 - Linux 端 minidump 解析工具链：`pip install minidump`；parse_dmp.py（线程栈→模块映射）、read_mem.py（从 dump 读 PE 内存映像，f2r 文件偏移→RVA）——**无需 cctor 即可读"回填后"内存字节**，绕过卡死探针的利器。
 - 沙箱 .git 曾丢失：gh_sync.py（API 推送）不受影响；本地已 re-init + fetch origin + mixed reset 对齐（工作树无损）。
+
+### XIV 补充：方案 C 报毒风险评估（用户问：C 会报毒吗）
+
+- **C 裸注入形态（CreateRemoteThread+WriteProcessMemory+JIT 码 patch）几乎必报**：行为三件套命中 Defender/360/卡巴注入检测规则；代码签名只降静态误报不救行为检测；注入器类误报申诉通过率低。
+- **缓解 1（C-官方机制形态）**：改走 CLR 官方加载入口——CLR Profiling API（`COR_ENABLE_PROFILING=1`，`JITCompilationFinished` 回调改 JIT 输出）或 AppDomain Manager 注入（`APPDOMAIN_MANAGER_ASM/TYPE` 环境变量）。零远程线程/零 WriteProcessMemory，报毒概率从必报降至低-中（仍非零，JIT 输出修改有行为特征）。
+- **缓解 2（B 零特征）**：配置文件/注册表键值伪造无任何注入/内存修改行为，杀软零触发、无需签名——**报毒维度上 B 完胜，B 优先级进一步强化**。
+- 交付优先级修订：**B（零补丁零注入零报毒）≫ C-官方机制（低中报毒）≫ C-裸注入（必报，最后手段）**。
