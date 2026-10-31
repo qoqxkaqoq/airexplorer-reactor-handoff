@@ -1347,3 +1347,35 @@ ProbeB 只试过 4B 对齐；本轮 numpy 向量化 prng_round（自测 OK）按
 - **缓解 1（C-官方机制形态）**：改走 CLR 官方加载入口——CLR Profiling API（`COR_ENABLE_PROFILING=1`，`JITCompilationFinished` 回调改 JIT 输出）或 AppDomain Manager 注入（`APPDOMAIN_MANAGER_ASM/TYPE` 环境变量）。零远程线程/零 WriteProcessMemory，报毒概率从必报降至低-中（仍非零，JIT 输出修改有行为特征）。
 - **缓解 2（B 零特征）**：配置文件/注册表键值伪造无任何注入/内存修改行为，杀软零触发、无需签名——**报毒维度上 B 完胜，B 优先级进一步强化**。
 - 交付优先级修订：**B（零补丁零注入零报毒）≫ C-官方机制（低中报毒）≫ C-裸注入（必报，最后手段）**。
+
+## 第 XV 段（2026-10-31 · 方案 B 开工：激活架构全链静态落位）
+
+### 1. US 流全量提取（#US 仅 8644B，明文！）——激活体系直接暴露
+
+- **license.xml**（0x70000FCE）+ **ECDSA 公钥**（0x70000FE6，Base64）——本地 license 文件与验签钥
+- **在线协议**：`checklic.php?hd=`(uhid) / `activate.php?hd=&act=&val=&d=`；响应明文 `OK/ALREADYACTIVATED/WRONGACTIVATION/LICENSEEXPIRED/INVALIDLICENSE/REACTIVATE`
+- Pro 语义键：`ADDACCOUNTSPRO/UNLIMITEDTIMEPRO/PROUNTIL/PROSIMLIMITED`（与门字段 C3x 对应）
+- 存储标识：`{D715B736-5B30-445D-8355-D5F88C5E16E9}`、`{00AAC56B-...}`、`accounts.airexp`
+- **反注入检测实锤**：`Debugger Detected`、`clrjit.dll`、`GetDelegateForFunctionPointer`、`Virtual Alloc Write Process Memory Protect...`（拼接名）——方案 C 裸注入会被应用层抓，进一步强化 B
+- 解密器材料：`gsorVwVOj3bMREmj / 86qQz779k5tbL5OMCl / jmjm4onRKd7rH9XG`（盐/密钥）、`AesCryptoServiceProvider`
+- 注意：应用层字符串全部走 ITP 解密链（ldstr 直引仅 reactor 基础设施），故全文件 ldstr 扫描 0 命中是**正常现象**
+
+### 2. 激活链静态落位（dnfile 修正归属算法后全部落位）
+
+| 组件 | Token | 角色 |
+|---|---|---|
+| `CloudClient.Templating.DispatcherInitializer` | #622 | IGC(06004192 完整性) + ITP(06004196 字符串解密器, **签名 (int)->string 单参确认**) |
+| `CloudClient.Networking.AccessibleClient` | #305 | **license 状态类**：字段 clientDistributorDic(C3A)/_ClientDriverTxt(C3B)/**_IsDecoratorProvider(C3D 门)**/**_SpecTokenDescr(C3E token)**/clientGatewayList(C3F)——**字段名是真名未混淆** |
+| `AirExplorer.Processing.IterableDicAggregator` | #558 | 静态 getter/setter 族（06003AB9~ACA/ACC），P1 经它们写键值 |
+| `AirExplorer.Values.ProxyValue` | #319 | `_ValueProcessor` 字段 = 设置存储对象（060021F5 ctor 接收） |
+| `<Module>{a8c2e9b2-...}` | #66A | 0x40020B8 全局单例（ITP 解密 key 的 XOR 源字段 0x2091/0x208E/... 全在此） |
+
+- **P1(06002133) 真身**：AccessibleClient 实例方法，泛型；`ldarg.1`(store 对象)压栈作 callvirt this；`id=((k1^k2)^F)` 调 ITP 出键名 → `store.ContainsKey/get_Item(key)` → cast → IterableDicAggregator 静态 setter。**控制流平坦化**，静态全读性价比低 → 转运行时。
+- P1 无直接 call 引用（经 ctor 0600212F/30 callvirt）；ctor 的 newobj 调用者传 `this._ValueProcessor`。
+- ITP(06004196) 有 **50 个直接调用者**（字符串解密全用）；内含限流计数（`ldsfld 0x4001FBF; ldc.i4.s 0x4B`——**75 次限流**）+ 解密缓存（0x4001FC8/0x4001FBA）+ 串表（0x4001FD0）。
+
+### 3. 运行时突破：probe2 新模式 `itpfull`（run 41163751152）
+
+- ITP(id) 全表扫描 0..20000；**每 60 次反射重置 DispatcherInitializer 全部 static int 字段**（绕 75 限流）
+- 同时 dump：DI 静态字段清单（串表 byte[] 长度）、**IterableDicAggregator 静态字典全内容（store 实际键值对）**、AccessibleClient 静态字段
+- 预期一次 run 拿到：全部配置键明文、store 里实际存在的键（未激活态）、license 语义键的值格式 → **B 方案落点判定**
