@@ -829,6 +829,29 @@ class Probe2 {
                 }
             } catch (Exception ex) { Log("[dil] 0x" + tk.ToString("X") + " FAIL " + ex.GetType().Name + ": " + ex.Message); }
         }
+        // 全量运行时 IL dump (回填后 ground truth): il_index.tsv + il_all.bin -> app/dump/ (artifact 上传)
+        try {
+            System.IO.Directory.CreateDirectory(DumpDir);
+            int n = 0, okB = 0;
+            using (var ix = new StreamWriter(Path.Combine(DumpDir, "il_index.tsv")))
+            using (var bl = new FileStream(Path.Combine(DumpDir, "il_all.bin"), FileMode.Create)) {
+                for (int rid = 1; rid <= 30912; rid++) {
+                    MethodBase mb = null;
+                    try { mb = mod.ResolveMethod(0x06000000 | rid); } catch {}
+                    if (mb == null) continue;
+                    n++;
+                    try {
+                        var il = mb.GetMethodBody().GetILAsByteArray();
+                        if (il == null || il.Length == 0) continue;
+                        long pos = bl.Position;
+                        bl.Write(il, 0, il.Length);
+                        ix.WriteLine("0x{0:X8}\t{1}\t{2}\t{3}\t{4}", 0x06000000 | rid, il.Length, mb.DeclaringType == null ? "" : mb.DeclaringType.FullName, mb.Name, pos);
+                        okB++;
+                    } catch {}
+                }
+            }
+            Log("[dil] ALLIL: resolved=" + n + " bodies=" + okB + " -> " + DumpDir + "/il_all.bin");
+        } catch (Exception ex) { Log("[dil] ALLIL FAIL " + ex.Message); }
     }
 
     // ===================== mode=trap: 全类型 cctor 逐个触发, 死类型打印完整内层异常链+StackTrace =====================
