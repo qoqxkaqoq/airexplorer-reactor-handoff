@@ -323,6 +323,8 @@ class Probe2 {
             BootRun(asm, BootArgs);
         } else if (mode == "itpfull") {
             ItpFullRun(asm);
+        } else if (mode == "p1id") {
+            P1IdRun(asm);
         } else if (mode == "fldtest") {
             FldTestRun(asm);
         } else if (mode == "flddump") {
@@ -689,6 +691,100 @@ class Probe2 {
                 catch (Exception ex) { Log("[ac] " + fld.Name + " FAIL " + ex.Message); }
             }
         }
+    }
+
+
+    // ===================== mode=p1id: 精确计算 P1(06002133) 17 个键名 id -> ITP 解密 =====================
+    static void P1IdRun(Assembly asm) {
+        var diT = asm.GetType("CloudClient.Templating.DispatcherInitializer");
+        var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        var itp = diT.GetMethod("InstantiateTransferableProgram", flags);
+        // <Module> 容器: 静态字段 m_0d0b145be2b94a7c8e4fcaf9a9649f1f -> 实例; 其 int 实例字段 = F 值
+        object cont = null; Type contT = null;
+        foreach (var t in asm.GetTypes()) {
+            if (!t.FullName.Contains("<Module>{")) continue;
+            contT = t;
+            var cf = t.GetField("m_0d0b145be2b94a7c8e4fcaf9a9649f1f", flags);
+            if (cf != null) cont = cf.GetValue(null);
+            break;
+        }
+        if (cont == null) { Log("[p1id] container NOT FOUND"); return; }
+        Log("[p1id] container type=" + cont.GetType().Name);
+        var fnames = new string[] {
+            "m_1ec6e0c19ff642cf8881e04165450387", // 0x2091
+            "m_ced1f886f4234190a85daedd2e19e0c3", // 0x208E
+            "m_6e2a7c5e10594cd79a322602add4f51e", // 0x20D6
+            "m_e1a4151a727a4192ba7b5051c55aff1f", // 0x20F4
+            "m_8df647fcfee4427fa1d0bffd392ec315", // 0x20F9
+            "m_4ef85080673349fdb1828515a560f11d", // 0x2100
+            "m_df3c7fc7b59446b3bbd6fba79ee72703", // 0x20E4
+            "m_c83ca030bb70455f85acf4e2ac4628ec", // 0x20A0
+            "m_137064ba81a4482baa8c08de11beba48", // 0x20A7
+            "m_a590c312911b4c2ebed6cf46cf085641", // 0x208F
+            "m_c31ba9c13556448e81aede55df9e838d", // 0x20B2
+            "m_960a21f674324764a1daa3858d2e5a34", // 0x20AD
+            "m_a806c15544f9429390193c3752c43c33", // 0x2099
+            "m_cfc60205e7fb4167a53d9cdeafc1b7a0", // 0x20D0
+            "m_99767bf60f46425bac29a9eaab2d1d91", // 0x20C9
+            "m_644425433fa740cea6f5017fee2d8b72"  // 0x20A9
+        };
+        var fvals = new System.Collections.Generic.Dictionary<string,int>();
+        var ifields = cont.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        foreach (var fn in fnames) {
+            var fi = cont.GetType().GetField(fn, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (fi == null) { Log("[p1id] field missing: " + fn); continue; }
+            var v = fi.GetValue(cont);
+            int iv = v is int ? (int)v : 0;
+            fvals[fn] = iv;
+            Log("[p1id] F " + fn.Substring(2, 8) + " = 0x" + iv.ToString("X"));
+        }
+        // 17 块: (k1,k2,k3,fnidx,kind) kind:0=(k1^k2)^F 1=((k1+k2)^k3)^F 2=((k1^k2)^k3)^F 3=((k1-k2)^k3)^F 4=blk6 5=conv 枚举
+        int[,] B = {
+            {unchecked((int)0x360E9F8F),unchecked((int)0x130047CD),0,0,0},
+            {unchecked((int)0x5C81B045),unchecked((int)0x4A72BF8B),0,1,0},
+            {unchecked((int)0xFEED4DCE),unchecked((int)0xAEB22E2C),unchecked((int)0xE3D3E55C),2,1},
+            {unchecked((int)0x61B790C9),unchecked((int)0x5B85C3F4),unchecked((int)0x54C7F584),3,2},
+            {unchecked((int)0x394A6C1C),unchecked((int)0x70D856C5),0,4,0},
+            {unchecked((int)0xF648DEDE),1,unchecked((int)0xD8D800AB),5,4},
+            {unchecked((int)0x6C1A7EA3),unchecked((int)0xFEC3AF88),unchecked((int)0x66FC906C),6,3},
+            {unchecked((int)0x38B09BDF),unchecked((int)0xCEDCDDC9),0,7,5},
+            {unchecked((int)0xCF7E8B93),unchecked((int)0x3E1B9CB6),0,8,5},
+            {unchecked((int)0xDD655B4D),unchecked((int)0xB48F4424),0,9,0},
+            {unchecked((int)0xC4DAD496),unchecked((int)0xE5592BBC),unchecked((int)0xE3A52101),4,1},
+            {0x00F4FAF5,unchecked((int)0x65963013),0x0D924B22,10,2},
+            {unchecked((int)0xAAFDE7EA),unchecked((int)0x5CD1A863),0,11,5},
+            {unchecked((int)0x6B40840E),unchecked((int)0x43B1C219),0,12,0},
+            {unchecked((int)0x2F450632),unchecked((int)0x456F6DEA),0,13,0},
+            {unchecked((int)0xFD5A78C7),unchecked((int)0xF565B453),unchecked((int)0x62AB135E),14,3},
+            {unchecked((int)0xDD655B4D),unchecked((int)0x9E3FBC6C),0,15,0}
+        };
+        var cands = new System.Collections.Generic.SortedDictionary<int,string>();
+        for (int b = 0; b < 17; b++) {
+            int k1 = B[b,0], k2 = B[b,1], k3 = B[b,2];
+            int F = fvals.ContainsKey(fnames[B[b,3]]) ? fvals[fnames[B[b,3]]] : 0;
+            var ids = new System.Collections.Generic.List<int>();
+            int kind = B[b,4];
+            if (kind == 0) ids.Add((k1 ^ k2) ^ F);
+            else if (kind == 1) { ids.Add(((k1 + k2) ^ k3) ^ F); ids.Add(((k1 ^ k2) ^ k3) ^ F); }
+            else if (kind == 2) { ids.Add(((k1 ^ k2) ^ k3) ^ F); }
+            else if (kind == 3) { ids.Add(((k1 - k2) ^ k3) ^ F); ids.Add(((k1 ^ k2) ^ k3) ^ F); }
+            else if (kind == 4) { ids.Add(k3 ^ F); ids.Add((k1 ^ k3) ^ F); ids.Add((k1 ^ k2 ^ k3) ^ F); ids.Add((k2 ^ k3) ^ F); }
+            else { ids.Add((k1 ^ k2) ^ F); ids.Add(((k1 & 0xFF) ^ k2) ^ F); ids.Add(((k1 & 0xFFFF) ^ k2) ^ F); ids.Add(((k1 / 2) ^ k2) ^ F); }
+            foreach (var id in ids) {
+                string tag = "blk" + (b+1);
+                if (!cands.ContainsKey(id)) cands[id] = tag; else cands[id] = cands[id] + "," + tag;
+            }
+        }
+        Log("[p1id] candidate ids: " + cands.Count);
+        foreach (var kv in cands) {
+            int id = kv.Key;
+            try {
+                var r = itp.Invoke(null, new object[] { id }) as string;
+                if (r != null && r.Length > 0)
+                    Log("[P1KEY] " + kv.Value + " id=" + id + " -> [" + r + "]");
+            } catch (Exception ex) { Log("[P1KEY] " + kv.Value + " id=" + id + " EX " + (ex.InnerException ?? ex).Message); }
+        }
+        Log("[p1id] done");
     }
 
     // ===================== mode=dil: 回填后 dump 指定 token 的运行时 IL (GetILAsByteArray) =====================
